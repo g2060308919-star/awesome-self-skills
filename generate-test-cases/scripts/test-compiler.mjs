@@ -543,18 +543,140 @@ var init_behavior_views_schema = __esm({
             relations: { $ref: "#/$defs/v3Artifact/properties/views/items/properties/relations" }
           }
         },
+        v4DesignBatch: {
+          type: "object",
+          additionalProperties: false,
+          required: ["batch_id", "sequence", "status", "source_claim_ids", "rule_group_ids"],
+          properties: {
+            batch_id: { $ref: "#/$defs/text" },
+            sequence: { type: "integer", minimum: 1 },
+            status: { const: "complete" },
+            source_claim_ids: { $ref: "#/$defs/idArray" },
+            rule_group_ids: { $ref: "#/$defs/idArray" }
+          }
+        },
+        v4DesignRuleGroup: {
+          type: "object",
+          additionalProperties: false,
+          required: ["rule_group_id", "batch_id", "source_claim_ids", "objective", "method", "candidate_ids"],
+          properties: {
+            rule_group_id: { $ref: "#/$defs/text" },
+            batch_id: { $ref: "#/$defs/text" },
+            source_claim_ids: { $ref: "#/$defs/idArray" },
+            objective: { $ref: "#/$defs/text" },
+            method: { enum: ["equivalence_partitioning", "boundary_value_analysis", "decision_table", "state_transition", "scenario", "permission_matrix", "contract_analysis"] },
+            candidate_ids: { $ref: "#/$defs/idArray" }
+          }
+        },
+        v4CandidateResponsibility: {
+          type: "object",
+          additionalProperties: false,
+          required: ["candidate_id", "rule_group_id", "responsibility", "source_claim_ids"],
+          properties: {
+            candidate_id: { $ref: "#/$defs/text" },
+            rule_group_id: { $ref: "#/$defs/text" },
+            responsibility: { $ref: "#/$defs/text" },
+            source_claim_ids: { $ref: "#/$defs/idArray" }
+          }
+        },
+        v4CandidateDisposition: { oneOf: [
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["candidate_id", "disposition", "retained_element_ids", "rationale"],
+            properties: {
+              candidate_id: { $ref: "#/$defs/text" },
+              disposition: { const: "retained" },
+              retained_element_ids: { $ref: "#/$defs/idArray" },
+              rationale: { $ref: "#/$defs/text" }
+            }
+          },
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["candidate_id", "disposition", "retained_candidate_id", "rationale"],
+            properties: {
+              candidate_id: { $ref: "#/$defs/text" },
+              disposition: { enum: ["representative_value", "equivalent_merge"] },
+              retained_candidate_id: { $ref: "#/$defs/text" },
+              rationale: { $ref: "#/$defs/text" }
+            }
+          },
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["candidate_id", "disposition", "source_claim_ids", "rationale"],
+            properties: {
+              candidate_id: { $ref: "#/$defs/text" },
+              disposition: { const: "evidence_exclusion" },
+              source_claim_ids: { $ref: "#/$defs/idArray" },
+              rationale: { $ref: "#/$defs/text" }
+            }
+          },
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["candidate_id", "disposition", "semantic_gap_id", "rationale"],
+            properties: {
+              candidate_id: { $ref: "#/$defs/text" },
+              disposition: { const: "semantic_gap" },
+              semantic_gap_id: { $ref: "#/$defs/text" },
+              rationale: { $ref: "#/$defs/text" }
+            }
+          },
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["candidate_id", "disposition", "exploratory_ref", "rationale"],
+            properties: {
+              candidate_id: { $ref: "#/$defs/text" },
+              disposition: { const: "exploratory" },
+              exploratory_ref: { $ref: "#/$defs/text" },
+              rationale: { $ref: "#/$defs/text" }
+            }
+          }
+        ] },
+        v4ImpactedPriorBatch: {
+          type: "object",
+          additionalProperties: false,
+          required: ["batch_id", "trigger_rule_group_ids", "source_claim_ids", "rationale"],
+          properties: {
+            batch_id: { $ref: "#/$defs/text" },
+            trigger_rule_group_ids: { $ref: "#/$defs/idArray" },
+            source_claim_ids: { $ref: "#/$defs/idArray" },
+            rationale: { $ref: "#/$defs/text" }
+          }
+        },
+        v4DesignAssurance: {
+          type: "object",
+          additionalProperties: false,
+          required: ["plan_revision", "batches", "rule_groups", "candidate_responsibilities", "candidate_dispositions", "impacted_prior_batches"],
+          properties: {
+            plan_revision: { type: "integer", minimum: 1 },
+            batches: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4DesignBatch" } },
+            rule_groups: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4DesignRuleGroup" } },
+            candidate_responsibilities: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4CandidateResponsibility" } },
+            candidate_dispositions: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4CandidateDisposition" } },
+            impacted_prior_batches: { type: "array", items: { $ref: "#/$defs/v4ImpactedPriorBatch" } }
+          }
+        },
         v4Artifact: {
           type: "object",
           additionalProperties: false,
           required: ["schema_version", "source_revision", "views", "interaction_matrix", "interaction_candidates", "obligation_inputs"],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
             source_revision: { type: "integer", minimum: 0 },
             views: { type: "array", items: { $ref: "#/$defs/v4View" } },
             interaction_matrix: { $ref: "#/$defs/v3Artifact/properties/interaction_matrix" },
             interaction_candidates: { $ref: "#/$defs/v3Artifact/properties/interaction_candidates" },
-            obligation_inputs: { $ref: "#/$defs/v3Artifact/properties/obligation_inputs" }
-          }
+            obligation_inputs: { $ref: "#/$defs/v3Artifact/properties/obligation_inputs" },
+            design_assurance: { $ref: "#/$defs/v4DesignAssurance" }
+          },
+          oneOf: [
+            { properties: { schema_version: { enum: ["4.0.0", "4.2.0"] } }, not: { required: ["design_assurance"] } },
+            { required: ["design_assurance"], properties: { schema_version: { const: "4.3.0" } } }
+          ]
         }
       }
     };
@@ -902,6 +1024,136 @@ var init_case_drafts_schema = __esm({
             }
           },
           additionalProperties: false
+        },
+        reviewerIdentity: {
+          type: "object",
+          additionalProperties: false,
+          required: ["identity_class", "separation_basis"],
+          properties: {
+            identity_class: { enum: ["independent_context", "independent_agent", "qualified_external_reviewer"] },
+            separation_basis: { $ref: "#/$defs/nonBlank" }
+          }
+        },
+        sourceFirstTargetInput: {
+          type: "object",
+          additionalProperties: false,
+          required: ["target_kind", "acceptance_role", "objective", "source_claim_ids", "decision_ids"],
+          properties: {
+            target_kind: { enum: ["business_result", "condition_distinction", "required_relation"] },
+            acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
+            objective: { $ref: "#/$defs/nonBlank" },
+            source_claim_ids: { $ref: "#/$defs/stringSet" },
+            decision_ids: { $ref: "#/$defs/stringSet" }
+          }
+        },
+        sourceFirstTargetIssued: {
+          type: "object",
+          additionalProperties: false,
+          required: ["target_id", "target_kind", "acceptance_role", "objective", "source_claim_ids", "decision_ids"],
+          properties: {
+            target_id: { type: "string", pattern: "^IRT-[0-9a-f]{64}$" },
+            target_kind: { enum: ["business_result", "condition_distinction", "required_relation"] },
+            acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
+            objective: { $ref: "#/$defs/nonBlank" },
+            source_claim_ids: { $ref: "#/$defs/stringSet" },
+            decision_ids: { $ref: "#/$defs/stringSet" }
+          }
+        },
+        reviewItemRef: {
+          type: "object",
+          additionalProperties: false,
+          required: ["item_kind", "item_id"],
+          properties: {
+            item_kind: { enum: ["fact", "view", "formal_test_point", "candidate_responsibility", "case", "precondition", "data_condition", "step", "oracle"] },
+            item_id: { $ref: "#/$defs/nonBlank" }
+          }
+        },
+        passedReviewRecheck: {
+          type: "object",
+          additionalProperties: false,
+          required: ["status", "affected_items"],
+          properties: {
+            status: { const: "passed" },
+            affected_items: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/reviewItemRef" } }
+          }
+        },
+        reviewRecheck: {
+          oneOf: [
+            { $ref: "#/$defs/passedReviewRecheck" },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["status", "affected_items"],
+              properties: {
+                status: { const: "not_required" },
+                affected_items: { type: "array", maxItems: 0 }
+              }
+            }
+          ]
+        },
+        reviewTargetAssessment: {
+          type: "object",
+          additionalProperties: false,
+          required: ["target_id", "disposition", "affected_items", "source_claim_ids", "decision_ids", "rationale", "required_recheck"],
+          properties: {
+            target_id: { type: "string", pattern: "^IRT-[0-9a-f]{64}$" },
+            disposition: { enum: ["verified", "semantic_gap", "evidence_excluded"] },
+            affected_items: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/reviewItemRef" } },
+            source_claim_ids: { $ref: "#/$defs/stringSet" },
+            decision_ids: { $ref: "#/$defs/stringSet" },
+            semantic_gap_ids: { $ref: "#/$defs/idArray" },
+            rationale: { $ref: "#/$defs/nonBlank" },
+            required_recheck: { $ref: "#/$defs/passedReviewRecheck" }
+          }
+        },
+        reviewFinding: {
+          type: "object",
+          additionalProperties: false,
+          required: ["finding_kind", "source_first_target_ids", "source_claim_ids", "decision_ids", "issue", "impact", "affected_items", "adjudication", "disposition", "rationale", "required_recheck"],
+          properties: {
+            finding_kind: { enum: ["omission", "unsupported_assertion"] },
+            source_first_target_ids: { $ref: "#/$defs/stringSet" },
+            source_claim_ids: { $ref: "#/$defs/stringSet" },
+            decision_ids: { $ref: "#/$defs/stringSet" },
+            issue: { $ref: "#/$defs/nonBlank" },
+            impact: { $ref: "#/$defs/nonBlank" },
+            affected_items: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/reviewItemRef" } },
+            adjudication: { enum: ["confirmed", "rejected"] },
+            disposition: { enum: ["fixed_and_rechecked", "rejected_with_evidence"] },
+            rationale: { $ref: "#/$defs/nonBlank" },
+            required_recheck: { $ref: "#/$defs/reviewRecheck" }
+          }
+        },
+        independentReview: {
+          oneOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["protocol_version", "status", "review_mode", "reviewer_identity", "source_first_targets"],
+              properties: {
+                protocol_version: { const: "1.0.0" },
+                status: { const: "pending" },
+                review_mode: { const: "independent_source_first" },
+                reviewer_identity: { $ref: "#/$defs/reviewerIdentity" },
+                source_first_targets: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/sourceFirstTargetInput" } }
+              }
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["protocol_version", "status", "review_mode", "reviewer_identity", "source_first_targets", "review_target_digest", "target_assessments", "findings"],
+              properties: {
+                protocol_version: { const: "1.0.0" },
+                status: { const: "completed" },
+                review_mode: { const: "independent_source_first" },
+                reviewer_identity: { $ref: "#/$defs/reviewerIdentity" },
+                source_first_targets: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/sourceFirstTargetIssued" } },
+                review_target_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+                target_assessments: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/reviewTargetAssessment" } },
+                findings: { type: "array", uniqueItems: true, items: { $ref: "#/$defs/reviewFinding" } }
+              }
+            }
+          ]
         }
       },
       type: "object",
@@ -915,7 +1167,8 @@ var init_case_drafts_schema = __esm({
           enum: [
             "3.0.0",
             "4.0.0",
-            "4.2.0"
+            "4.2.0",
+            "4.3.0"
           ]
         },
         source_revision: {
@@ -3539,6 +3792,9 @@ var init_case_drafts_schema = __esm({
               }
             ]
           }
+        },
+        independent_review: {
+          $ref: "#/$defs/independentReview"
         }
       },
       oneOf: [
@@ -3555,10 +3811,17 @@ var init_case_drafts_schema = __esm({
         },
         {
           properties: {
-            schema_version: {
-              enum: ["4.0.0", "4.2.0"]
-            }
+            schema_version: { enum: ["4.0.0", "4.2.0"] }
           },
+          allOf: [
+            { not: { required: ["obligation_dispositions"] } },
+            { not: { required: ["exploratory_candidates"] } },
+            { not: { required: ["independent_review"] } }
+          ]
+        },
+        {
+          required: ["independent_review"],
+          properties: { schema_version: { const: "4.3.0" } },
           allOf: [
             { not: { required: ["obligation_dispositions"] } },
             { not: { required: ["exploratory_candidates"] } }
@@ -3589,7 +3852,8 @@ var init_evidence_claims_schema = __esm({
           enum: [
             "3.0.0",
             "4.0.0",
-            "4.2.0"
+            "4.2.0",
+            "4.3.0"
           ]
         },
         source_revision: {
@@ -3667,7 +3931,7 @@ var init_evidence_claims_schema = __esm({
               ],
               properties: {
                 schema_version: {
-                  enum: ["4.0.0", "4.2.0"]
+                  enum: ["4.0.0", "4.2.0", "4.3.0"]
                 },
                 claims: {
                   items: {
@@ -3680,7 +3944,23 @@ var init_evidence_claims_schema = __esm({
                 semantic_gaps: {
                   items: { $ref: "#/$defs/v4SemanticGapInput" }
                 }
-              }
+              },
+              allOf: [{
+                oneOf: [
+                  {
+                    properties: {
+                      schema_version: { enum: ["4.0.0", "4.2.0"] },
+                      semantic_gaps: { items: { not: { required: ["acceptance_impact"] } } }
+                    }
+                  },
+                  {
+                    properties: {
+                      schema_version: { const: "4.3.0" },
+                      semantic_gaps: { items: { required: ["acceptance_impact"] } }
+                    }
+                  }
+                ]
+              }]
             }
           ]
         }
@@ -3974,8 +4254,45 @@ var init_evidence_claims_schema = __esm({
             risk_level: { enum: ["critical", "high", "medium", "low"] },
             source_claim_ids: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string", minLength: 1 } },
             discovery_phase: { enum: ["pre_case", "post_case"] },
-            affected_test_point_ids: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } }
+            affected_test_point_ids: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } },
+            acceptance_impact: { $ref: "#/$defs/v4AcceptanceImpact" }
           }
+        },
+        v4AcceptanceImpact: {
+          oneOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["classification", "criteria", "rationale"],
+              properties: {
+                classification: { const: "critical" },
+                criteria: {
+                  type: "array",
+                  minItems: 1,
+                  uniqueItems: true,
+                  items: { enum: ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"] }
+                },
+                rationale: { $ref: "#/$defs/v4Text" }
+              }
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["classification", "criteria", "rationale"],
+              properties: {
+                classification: { const: "noncritical" },
+                criteria: {
+                  type: "array",
+                  minItems: 1,
+                  maxItems: 1,
+                  uniqueItems: true,
+                  prefixItems: [{ const: "does_not_change_required_acceptance" }],
+                  items: false
+                },
+                rationale: { $ref: "#/$defs/v4Text" }
+              }
+            }
+          ]
         },
         v4SourceSha256: {
           type: "string",
@@ -8045,7 +8362,8 @@ var init_source_pack_schema = __esm({
           enum: [
             "3.0.0",
             "4.0.0",
-            "4.2.0"
+            "4.2.0",
+            "4.3.0"
           ]
         },
         source_revision: {
@@ -8928,7 +9246,7 @@ var init_source_pack_schema = __esm({
           ],
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             execution_events: {
               type: "array",
@@ -9438,7 +9756,7 @@ var init_source_capture_audit = __esm({
 
 // src/contracts.mjs
 function validateCanonicalManifestRelations(manifest) {
-  if (!["4.0.0", "4.2.0"].includes(manifest.schema_version)) return [];
+  if (!["4.0.0", "4.2.0", "4.3.0"].includes(manifest.schema_version)) return [];
   const diagnostics2 = [];
   if (manifest.delivery_intent === "case_document" && ["delivered_with_gaps", "blocked_only"].includes(manifest.result_kind) && manifest.closed_for_delivery_root_count !== manifest.blocked_root_count) {
     diagnostics2.push({
@@ -11129,7 +11447,7 @@ var init_checkpoint_schema = __esm({
             affected_facts: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string", minLength: 1 } },
             answer_options: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string", minLength: 1 } },
             risk_level: { enum: ["critical", "high", "medium", "low"] },
-            available_actions: { type: "array", minItems: 4, maxItems: 4, prefixItems: [{ const: "answer_question_part" }, { const: "defer_question_part" }, { const: "mark_question_unknown" }, { const: "request_delivery" }], items: false },
+            available_actions: { type: "array", minItems: 1, maxItems: 4, uniqueItems: true, items: { enum: ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] } },
             action_context: {
               type: "object",
               additionalProperties: false,
@@ -11151,7 +11469,7 @@ var init_checkpoint_schema = __esm({
               additionalProperties: false,
               required: ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
               properties: {
-                schema_version: { enum: ["4.0.0", "4.2.0"] },
+                schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
                 presentation_id: { type: "string", pattern: "^PRES-[0-9a-f]{64}$" },
                 phase: { enum: ["requirements_analysis", "case_design"] },
                 supersedes_presentation_id: { type: ["string", "null"], pattern: "^PRES-[0-9a-f]{64}$" },
@@ -11172,7 +11490,26 @@ var init_checkpoint_schema = __esm({
                   }
                 },
                 question_parts: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4_question_part" } }
-              }
+              },
+              allOf: [{
+                oneOf: [
+                  {
+                    properties: {
+                      schema_version: { enum: ["4.0.0", "4.2.0"] },
+                      question_parts: { items: { properties: {
+                        available_actions: {
+                          type: "array",
+                          minItems: 4,
+                          maxItems: 4,
+                          prefixItems: [{ const: "answer_question_part" }, { const: "defer_question_part" }, { const: "mark_question_unknown" }, { const: "request_delivery" }],
+                          items: false
+                        }
+                      } } }
+                    }
+                  },
+                  { properties: { schema_version: { const: "4.3.0" } } }
+                ]
+              }]
             }
           ]
         },
@@ -11198,8 +11535,33 @@ var init_checkpoint_schema = __esm({
             source_claim_ids: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string", minLength: 1 } },
             affected_test_point_ids: { $ref: "#/$defs/v4_string_set" },
             affected_facts: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string", minLength: 1 } },
-            discovery_phase: { enum: ["pre_case", "post_case"] }
+            discovery_phase: { enum: ["pre_case", "post_case"] },
+            acceptance_impact: { $ref: "#/$defs/v4_acceptance_impact" }
           }
+        },
+        v4_acceptance_impact: {
+          oneOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["classification", "criteria", "rationale"],
+              properties: {
+                classification: { const: "critical" },
+                criteria: { type: "array", minItems: 1, uniqueItems: true, items: { enum: ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"] } },
+                rationale: { type: "string", minLength: 1, pattern: "\\S" }
+              }
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["classification", "criteria", "rationale"],
+              properties: {
+                classification: { const: "noncritical" },
+                criteria: { type: "array", minItems: 1, maxItems: 1, prefixItems: [{ const: "does_not_change_required_acceptance" }], items: false },
+                rationale: { type: "string", minLength: 1, pattern: "\\S" }
+              }
+            }
+          ]
         },
         v4_root_state: {
           type: "object",
@@ -11301,8 +11663,8 @@ var init_checkpoint_schema = __esm({
           additionalProperties: false,
           required: ["schema_version", "compiler_version", "run_id", "revision", "commit_profile", "source_review_witness", "fact_ledger_digest", "scope_manifest_digest", "behavior_views_digest", "case_drafts_digest", "base_checkpoint_digest", "semantic_gap_ledger", "clarification_state"],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
-            compiler_version: { enum: ["0.5.0", "0.7.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+            compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
             run_id: { type: "string", minLength: 1 },
             revision: { type: "integer", minimum: 0 },
             commit_profile: { enum: ["pre_case_pending", "post_case_pending", "final"] },
@@ -11352,8 +11714,9 @@ var init_checkpoint_schema = __esm({
           allOf: [
             {
               oneOf: [
-                { properties: { schema_version: { const: "4.0.0" }, compiler_version: { const: "0.5.0" } } },
-                { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } }
+                { properties: { schema_version: { const: "4.0.0" }, compiler_version: { const: "0.5.0" }, semantic_gap_ledger: { items: { not: { required: ["acceptance_impact"] } } } } },
+                { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" }, semantic_gap_ledger: { items: { not: { required: ["acceptance_impact"] } } } } },
+                { properties: { schema_version: { const: "4.3.0" }, compiler_version: { const: "0.8.0" }, semantic_gap_ledger: { items: { required: ["acceptance_impact"] } } } }
               ]
             },
             {
@@ -11527,15 +11890,10 @@ var init_presentation_schema = __esm({
             risk_level: { enum: ["critical", "high", "medium", "low"] },
             available_actions: {
               type: "array",
-              minItems: 4,
+              minItems: 1,
               maxItems: 4,
-              prefixItems: [
-                { const: "answer_question_part" },
-                { const: "defer_question_part" },
-                { const: "mark_question_unknown" },
-                { const: "request_delivery" }
-              ],
-              items: false
+              uniqueItems: true,
+              items: { enum: ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] }
             },
             action_context: { $ref: "#/$defs/v4ActionContext" }
           }
@@ -11557,7 +11915,7 @@ var init_presentation_schema = __esm({
           additionalProperties: false,
           required: ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
             presentation_id: { type: "string", pattern: "^PRES-[0-9a-f]{64}$" },
             phase: { enum: ["requirements_analysis", "case_design"] },
             supersedes_presentation_id: { type: ["string", "null"], pattern: "^PRES-[0-9a-f]{64}$" },
@@ -11567,7 +11925,26 @@ var init_presentation_schema = __esm({
             run_actions: { type: "array", minItems: 1, maxItems: 1, prefixItems: [{ const: "cancel_run" }], items: false },
             recovery: { $ref: "#/$defs/v4Recovery" },
             question_parts: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4QuestionPart" } }
-          }
+          },
+          allOf: [{
+            oneOf: [
+              {
+                properties: {
+                  schema_version: { enum: ["4.0.0", "4.2.0"] },
+                  question_parts: { items: { properties: {
+                    available_actions: {
+                      type: "array",
+                      minItems: 4,
+                      maxItems: 4,
+                      prefixItems: [{ const: "answer_question_part" }, { const: "defer_question_part" }, { const: "mark_question_unknown" }, { const: "request_delivery" }],
+                      items: false
+                    }
+                  } } }
+                }
+              },
+              { properties: { schema_version: { const: "4.3.0" } } }
+            ]
+          }]
         }
       },
       oneOf: [
@@ -11575,6 +11952,63 @@ var init_presentation_schema = __esm({
         { $ref: "#/$defs/v4SemanticPresentation" }
       ]
     };
+  }
+});
+
+// src/v4-contract.mjs
+function v4ContractForSchema(schemaVersion) {
+  return CONTRACTS.find((item) => item.schema_version === schemaVersion) ?? null;
+}
+function v4ContractForIdentity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const identity2 = (
+    /** @type {Record<string, unknown>} */
+    value
+  );
+  return CONTRACTS.find((item) => item.schema_version === identity2.schema_version && item.compiler_version === identity2.compiler_version) ?? null;
+}
+function isV4SchemaVersion(schemaVersion) {
+  return v4ContractForSchema(schemaVersion) !== null;
+}
+function isCandidateV4Contract(value) {
+  return v4ContractForIdentity(value)?.candidate === true;
+}
+function isCandidateV4SchemaVersion(schemaVersion) {
+  return v4ContractForSchema(schemaVersion)?.candidate === true;
+}
+function isGeneralQualityV4Contract(value) {
+  return v4ContractForIdentity(value) === GENERAL_QUALITY_V4_CONTRACT;
+}
+function requireV4Contract(value) {
+  const contract2 = v4ContractForIdentity(value);
+  if (!contract2) throw new TypeError("V4_CONTRACT_UNSUPPORTED");
+  return contract2;
+}
+var LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, GENERAL_QUALITY_V4_CONTRACT, CONTRACTS;
+var init_v4_contract = __esm({
+  "src/v4-contract.mjs"() {
+    "use strict";
+    LEGACY_V4_CONTRACT = Object.freeze({
+      schema_version: "4.0.0",
+      compiler_version: "0.5.0",
+      candidate: false
+    });
+    CANDIDATE_V4_CONTRACT = Object.freeze({
+      schema_version: "4.2.0",
+      compiler_version: "0.7.0",
+      candidate: true
+    });
+    GENERAL_QUALITY_V4_CONTRACT = Object.freeze({
+      schema_version: "4.3.0",
+      compiler_version: "0.8.0",
+      candidate: true,
+      strict_semantic_delivery: true
+    });
+    CONTRACTS = Object.freeze([
+      LEGACY_V4_CONTRACT,
+      CANDIDATE_V4_CONTRACT,
+      GENERAL_QUALITY_V4_CONTRACT
+    ]);
   }
 });
 
@@ -11692,7 +12126,8 @@ function compileSemanticGapRootsV4(input) {
       "risk_level",
       "source_claim_ids",
       "discovery_phase",
-      "affected_test_point_ids"
+      "affected_test_point_ids",
+      "acceptance_impact"
     ], "SEMANTIC_GAP_CANDIDATE_INVALID");
     if (candidate.discovery_phase !== input.discovery_phase) throw new TypeError("SEMANTIC_GAP_PHASE_INVALID");
     const subjectFactIds = canonicalStringSetV4(candidate.subject_fact_ids, "SEMANTIC_GAP_FACT_REFS_INVALID");
@@ -11710,6 +12145,24 @@ function compileSemanticGapRootsV4(input) {
       risk_level: canonicalTextV4(candidate.risk_level, "SEMANTIC_GAP_RISK_INVALID")
     };
     if (!RISK.has(semantic.risk_level)) throw new TypeError("SEMANTIC_GAP_RISK_INVALID");
+    let acceptanceImpact;
+    if (isGeneralQualityV4Contract(input.contract)) {
+      const impact = record2(candidate.acceptance_impact);
+      if (!impact || Object.keys(impact).some((key) => !["classification", "criteria", "rationale"].includes(key)) || !["critical", "noncritical"].includes(String(impact.classification))) {
+        throw new TypeError("SEMANTIC_IMPACT_REQUIRED");
+      }
+      const criteria = canonicalStringSetV4(impact.criteria, "SEMANTIC_IMPACT_INVALID");
+      const allowed = impact.classification === "critical" ? /* @__PURE__ */ new Set(["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"]) : /* @__PURE__ */ new Set(["does_not_change_required_acceptance"]);
+      if (criteria.some((item) => !allowed.has(item))) throw new TypeError("SEMANTIC_IMPACT_INVALID");
+      acceptanceImpact = {
+        classification: impact.classification,
+        criteria,
+        rationale: canonicalTextV4(impact.rationale, "SEMANTIC_IMPACT_INVALID")
+      };
+      semantic.acceptance_impact = acceptanceImpact;
+    } else if (candidate.acceptance_impact !== void 0) {
+      throw new TypeError("SEMANTIC_IMPACT_UNSUPPORTED");
+    }
     const answerOptions = canonicalStringSetV4(candidate.answer_options, "SEMANTIC_GAP_OPTIONS_INVALID");
     const sourceClaimIds = canonicalStringSetV4(candidate.source_claim_ids, "SEMANTIC_GAP_CLAIMS_INVALID");
     if (claimById.size > 0) {
@@ -11768,6 +12221,7 @@ var init_semantic_gaps_v4 = __esm({
   "src/semantic-gaps-v4.mjs"() {
     "use strict";
     init_canonical();
+    init_v4_contract();
     RISK = /* @__PURE__ */ new Set(["critical", "high", "medium", "low"]);
     PHASE = /* @__PURE__ */ new Set(["pre_case", "post_case"]);
   }
@@ -11799,41 +12253,137 @@ var init_non_blocking_diagnostics_v4 = __esm({
   }
 });
 
-// src/v4-contract.mjs
-function v4ContractForSchema(schemaVersion) {
-  return CONTRACTS.find((item) => item.schema_version === schemaVersion) ?? null;
+// src/semantic-delivery-gate-v4.mjs
+function record3(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-function v4ContractForIdentity(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const identity2 = (
-    /** @type {Record<string, unknown>} */
-    value
-  );
-  return CONTRACTS.find((item) => item.schema_version === identity2.schema_version && item.compiler_version === identity2.compiler_version) ?? null;
+function validateAcceptanceImpactV4(root) {
+  const impact = record3(root?.acceptance_impact) ? root.acceptance_impact : null;
+  if (!impact || !["critical", "noncritical"].includes(impact.classification) || !Array.isArray(impact.criteria) || impact.criteria.length === 0 || new Set(impact.criteria).size !== impact.criteria.length || typeof impact.rationale !== "string" || !impact.rationale.normalize("NFC").trim()) {
+    throw new TypeError("SEMANTIC_IMPACT_REQUIRED");
+  }
+  const allowed = impact.classification === "critical" ? CRITICAL_CRITERIA : NONCRITICAL_CRITERIA;
+  if (impact.criteria.some((criterion) => typeof criterion !== "string" || !allowed.has(criterion))) {
+    throw new TypeError("SEMANTIC_IMPACT_INVALID");
+  }
+  return {
+    classification: impact.classification,
+    criteria: [...impact.criteria].sort(compareUnicodeScalar),
+    rationale: impact.rationale.normalize("NFC").trim()
+  };
 }
-function isV4SchemaVersion(schemaVersion) {
-  return v4ContractForSchema(schemaVersion) !== null;
+function finalBasis(root, decisions2) {
+  for (const decision of decisions2) {
+    if (!record3(decision)) continue;
+    const target = record3(decision.target) ? decision.target : decision;
+    if (target.root_issue_id !== root.root_issue_id || target.root_version_digest !== root.root_version_digest) continue;
+    if (decision.resolution === "final" && decision.evidence_level === "E3" && decision.authority === "product_final") return "final_e3_decision";
+    if (decision.resolution_kind === "derived_e2" && decision.evidence_level === "E2" && decision.replayable === true && Array.isArray(decision.source_claim_ids) && decision.source_claim_ids.length > 0) return "replayable_e2_derivation";
+    if (["evidence_not_applicable", "evidence_obsolete"].includes(decision.resolution_kind) && ["E2", "E3"].includes(decision.evidence_level) && decision.replayable === true && Array.isArray(decision.source_claim_ids) && decision.source_claim_ids.length > 0) {
+      return decision.resolution_kind;
+    }
+  }
+  return null;
 }
-function requireV4Contract(value) {
-  const contract2 = v4ContractForIdentity(value);
-  if (!contract2) throw new TypeError("V4_CONTRACT_UNSUPPORTED");
-  return contract2;
+function deriveSemanticDeliveryGateV4(input) {
+  if (!record3(input) || !Array.isArray(input.roots) || !Array.isArray(input.rootStates) || input.decisions !== void 0 && !Array.isArray(input.decisions)) {
+    throw new TypeError("SEMANTIC_DELIVERY_GATE_INPUT_INVALID");
+  }
+  if (!isGeneralQualityV4Contract(input.contract)) {
+    return {
+      can_materialize_formal_case_document: true,
+      unresolved_critical_root_ids: [],
+      resolved_critical_roots: [],
+      stale_root_state_ids: []
+    };
+  }
+  const states = /* @__PURE__ */ new Map();
+  for (const state of input.rootStates) {
+    if (!record3(state) || typeof state.root_issue_id !== "string" || states.has(state.root_issue_id)) {
+      throw new TypeError("SEMANTIC_ROOT_STATE_INVALID");
+    }
+    states.set(state.root_issue_id, state);
+  }
+  const unresolved = [];
+  const resolved = [];
+  const stale = [];
+  for (const root of input.roots) {
+    if (!record3(root) || typeof root.root_issue_id !== "string" || typeof root.root_version_digest !== "string") throw new TypeError("SEMANTIC_ROOT_INVALID");
+    const impact = validateAcceptanceImpactV4(root);
+    if (impact.classification !== "critical") continue;
+    const state = states.get(root.root_issue_id);
+    if (!state || state.root_version_digest !== root.root_version_digest) {
+      stale.push(root.root_issue_id);
+      unresolved.push(root.root_issue_id);
+      continue;
+    }
+    const basisKind = finalBasis(
+      root,
+      /** @type {any[]} */
+      input.decisions ?? []
+    );
+    const statusAllowsFinal = state.status === "resolved_final" || state.status === "obsolete" && ["evidence_not_applicable", "evidence_obsolete"].includes(basisKind);
+    if (!statusAllowsFinal || basisKind === null) {
+      unresolved.push(root.root_issue_id);
+      continue;
+    }
+    resolved.push({
+      root_issue_id: root.root_issue_id,
+      root_version_digest: root.root_version_digest,
+      basis_kind: basisKind
+    });
+  }
+  unresolved.sort(compareUnicodeScalar);
+  resolved.sort((left, right) => compareUnicodeScalar(left.root_issue_id, right.root_issue_id));
+  stale.sort(compareUnicodeScalar);
+  return {
+    can_materialize_formal_case_document: unresolved.length === 0,
+    unresolved_critical_root_ids: unresolved,
+    resolved_critical_roots: resolved,
+    stale_root_state_ids: stale
+  };
 }
-var LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, CONTRACTS;
-var init_v4_contract = __esm({
-  "src/v4-contract.mjs"() {
+function availableSemanticActionsV4(root, state) {
+  const impact = validateAcceptanceImpactV4(root);
+  if (impact.classification !== "critical") {
+    return state?.status === "presented" ? ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] : ["answer_question_part"];
+  }
+  if (state?.status === "resolved_final" || state?.status === "obsolete") return [];
+  return state?.status === "presented" ? ["answer_question_part", "defer_question_part", "mark_question_unknown"] : ["answer_question_part"];
+}
+function requiresRecoverableCriticalQuestionV4(root, state) {
+  try {
+    return validateAcceptanceImpactV4(root).classification === "critical" && !["resolved_final", "obsolete"].includes(state?.status);
+  } catch {
+    return false;
+  }
+}
+function assertSemanticBundleDeliveryGateV4(submittedBundle) {
+  if (!record3(submittedBundle) || !isGeneralQualityV4Contract(submittedBundle)) return;
+  if (!Array.isArray(submittedBundle.semantic_root_groups)) {
+    throw new TypeError("SEMANTIC_DELIVERY_GATE_INPUT_INVALID");
+  }
+  for (const root of submittedBundle.semantic_root_groups) {
+    const impact = validateAcceptanceImpactV4(root);
+    if (impact.classification !== "critical") continue;
+    const basis = record3(root.critical_resolution_basis) ? root.critical_resolution_basis : null;
+    const basisMatches = basis && basis.root_issue_id === root.root_issue_id && basis.root_version_digest === root.root_version_digest && ["final_e3_decision", "replayable_e2_derivation", "evidence_not_applicable", "evidence_obsolete"].includes(basis.basis_kind);
+    const statusMatches = root.status === "resolved_final" || root.status === "obsolete" && ["evidence_not_applicable", "evidence_obsolete"].includes(basis?.basis_kind);
+    if (!basisMatches || !statusMatches) throw new TypeError("CRITICAL_SEMANTIC_GAPS_REMAIN");
+  }
+}
+var CRITICAL_CRITERIA, NONCRITICAL_CRITERIA;
+var init_semantic_delivery_gate_v4 = __esm({
+  "src/semantic-delivery-gate-v4.mjs"() {
     "use strict";
-    LEGACY_V4_CONTRACT = Object.freeze({
-      schema_version: "4.0.0",
-      compiler_version: "0.5.0",
-      candidate: false
-    });
-    CANDIDATE_V4_CONTRACT = Object.freeze({
-      schema_version: "4.2.0",
-      compiler_version: "0.7.0",
-      candidate: true
-    });
-    CONTRACTS = Object.freeze([LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT]);
+    init_semantic_gaps_v4();
+    init_v4_contract();
+    CRITICAL_CRITERIA = /* @__PURE__ */ new Set([
+      "changes_core_acceptance",
+      "changes_required_branch",
+      "makes_required_result_undecidable"
+    ]);
+    NONCRITICAL_CRITERIA = /* @__PURE__ */ new Set(["does_not_change_required_acceptance"]);
   }
 });
 
@@ -11875,10 +12425,13 @@ function publicRoot(root) {
     source_claim_ids: [...root.source_claim_ids],
     affected_test_point_ids: [...root.affected_test_point_ids],
     affected_facts: [...root.affected_facts],
-    discovery_phase: root.discovery_phase
+    discovery_phase: root.discovery_phase,
+    ...root.acceptance_impact ? { acceptance_impact: structuredClone(root.acceptance_impact) } : {}
   };
 }
 function questionPart(root, presentationId) {
+  const contract2 = v4ContractForSchema(root.schema_version);
+  const actions = isGeneralQualityV4Contract(contract2) ? availableSemanticActionsV4(root, { status: root.clarification_status ?? "presented" }) : [...ACTIONS];
   return {
     question_part_id: root.question_part_id,
     root_issue_id: root.root_issue_id,
@@ -11890,7 +12443,7 @@ function questionPart(root, presentationId) {
     affected_facts: [...root.affected_facts],
     answer_options: [...root.answer_options],
     risk_level: root.risk_level,
-    available_actions: [...ACTIONS],
+    available_actions: actions,
     action_context: {
       presentation_id: presentationId,
       question_part_id: root.question_part_id,
@@ -11931,8 +12484,16 @@ function buildPresentation(input) {
       committed_checkpoint_digest: input.committed_checkpoint_digest,
       after_partial_answer: "issue_successor_for_remaining_parts"
     },
-    question_parts: input.roots.map((root) => questionPart(root, presentationId))
+    question_parts: input.roots.map((root) => questionPart({ ...root, schema_version: input.schema_version }, presentationId))
   };
+}
+function requiresPresentation(schemaVersion, root, state) {
+  const contract2 = v4ContractForSchema(schemaVersion);
+  return state.status === "presented" || isGeneralQualityV4Contract(contract2) && requiresRecoverableCriticalQuestionV4(root, state);
+}
+function countsAsAnswered(schemaVersion, root, state) {
+  const contract2 = v4ContractForSchema(schemaVersion);
+  return state.status === "resolved_final" || state.status === "resolved_temporary" && !(isGeneralQualityV4Contract(contract2) && requiresRecoverableCriticalQuestionV4(root, state));
 }
 function identifiedEvent(event) {
   return {
@@ -11948,9 +12509,20 @@ function hasCanonicalEventIdentity(event) {
 }
 function refreshCheckpointPresentation(checkpoint2, supersedesPresentationId) {
   const ledger = new Map(checkpoint2.semantic_gap_ledger.map((root) => [root.root_issue_id, root]));
-  const remainingRoots = checkpoint2.clarification_state.root_states.filter((state) => state.status === "presented").map((state) => ledger.get(state.root_issue_id)).filter(Boolean).sort(compareSemanticRoots);
-  const answered = checkpoint2.clarification_state.root_states.filter((state) => RESOLVED_ROOT_STATES.has(state.status)).map((state) => state.question_part_id).sort(compareUnicodeScalar);
-  const closed12 = checkpoint2.clarification_state.root_states.filter((state) => state.status === "closed_for_delivery").map((state) => state.question_part_id).sort(compareUnicodeScalar);
+  const remainingRoots = checkpoint2.clarification_state.root_states.filter((state) => requiresPresentation(
+    checkpoint2.schema_version,
+    ledger.get(state.root_issue_id),
+    state
+  )).map((state) => ({
+    ...ledger.get(state.root_issue_id),
+    clarification_status: state.status
+  })).filter(Boolean).sort(compareSemanticRoots);
+  const answered = checkpoint2.clarification_state.root_states.filter((state) => countsAsAnswered(
+    checkpoint2.schema_version,
+    ledger.get(state.root_issue_id),
+    state
+  )).map((state) => state.question_part_id).sort(compareUnicodeScalar);
+  const closed13 = checkpoint2.clarification_state.root_states.filter((state) => state.status === "closed_for_delivery").map((state) => state.question_part_id).sort(compareUnicodeScalar);
   const presentation = remainingRoots.length > 0 ? buildPresentation({
     schema_version: checkpoint2.schema_version,
     run_id: checkpoint2.run_id,
@@ -11963,7 +12535,7 @@ function refreshCheckpointPresentation(checkpoint2, supersedesPresentationId) {
   }) : null;
   checkpoint2.clarification_state.answered_part_ids = answered;
   checkpoint2.clarification_state.remaining_part_ids = presentation?.remaining_part_ids ?? [];
-  checkpoint2.clarification_state.closed_for_delivery_part_ids = closed12;
+  checkpoint2.clarification_state.closed_for_delivery_part_ids = closed13;
   checkpoint2.clarification_state.presentation = presentation;
   checkpoint2.clarification_state.presentation_digest = presentation ? sha256CanonicalV4(presentation) : null;
   checkpoint2.clarification_state.latest_presentation_id = presentation?.presentation_id ?? supersedesPresentationId;
@@ -12006,6 +12578,7 @@ function compileSemanticClarificationCheckpointV4(submitted) {
   }
   const committedCheckpointDigest = exactByteDigest(submitted.committed_checkpoint_bytes);
   const currentRoots = compileSemanticGapRootsV4({
+    contract: contract2,
     facts: submitted.facts,
     claims: submitted.claims,
     diagnostic_candidates: submitted.diagnostic_candidates,
@@ -12039,7 +12612,7 @@ function compileSemanticClarificationCheckpointV4(submitted) {
   for (const state of prior?.clarification_state.root_states ?? []) stateByRoot.set(state.root_issue_id, structuredClone(state));
   for (const root of currentRoots) {
     const state = stateByRoot.get(root.root_issue_id);
-    if (state && TERMINAL_ROOT_STATES.has(state.status)) continue;
+    if (state && TERMINAL_ROOT_STATES.has(state.status) && (!isGeneralQualityV4Contract(contract2) || state.root_version_digest === root.root_version_digest)) continue;
     const nextRoot = publicRoot(root);
     ledger.set(root.root_issue_id, nextRoot);
     stateByRoot.set(root.root_issue_id, {
@@ -12049,8 +12622,8 @@ function compileSemanticClarificationCheckpointV4(submitted) {
       status: initialRootDispositions.get(root.root_issue_id) ?? "presented"
     });
   }
-  const pendingRoots = [...stateByRoot.values()].filter((state) => state.status === "presented").map((state) => ledger.get(state.root_issue_id)).filter(Boolean).sort(compareSemanticRoots);
-  const answered = [...stateByRoot.values()].filter((state) => RESOLVED_ROOT_STATES.has(state.status)).map((state) => state.question_part_id).sort(compareUnicodeScalar);
+  const pendingRoots = [...stateByRoot.values()].filter((state) => requiresPresentation(contract2.schema_version, ledger.get(state.root_issue_id), state)).map((state) => ({ ...ledger.get(state.root_issue_id), clarification_status: state.status })).filter(Boolean).sort(compareSemanticRoots);
+  const answered = [...stateByRoot.values()].filter((state) => countsAsAnswered(contract2.schema_version, ledger.get(state.root_issue_id), state)).map((state) => state.question_part_id).sort(compareUnicodeScalar);
   const previousPresentationId = prior?.clarification_state.latest_presentation_id ?? null;
   const phase = discoveryPhase === "pre_case" ? "requirements_analysis" : "case_design";
   const candidatePresentation = pendingRoots.length > 0 ? buildPresentation({
@@ -12066,7 +12639,7 @@ function compileSemanticClarificationCheckpointV4(submitted) {
   const presentation = prior?.clarification_state.presentation && prior.clarification_state.presentation.phase === phase && prior.clarification_state.presentation.cycle_digest === candidatePresentation?.cycle_digest && sameStringSet(prior.clarification_state.presentation.answered_part_ids, answered) && prior.clarification_state.presentation.recovery.committed_checkpoint_digest === committedCheckpointDigest && prior.clarification_state.presentation.recovery.committed_revision === revision ? structuredClone(prior.clarification_state.presentation) : candidatePresentation;
   const remaining = presentation?.remaining_part_ids ?? [];
   const rootStates = [...stateByRoot.values()].sort((left, right) => compareUnicodeScalar(left.root_issue_id, right.root_issue_id));
-  const closed12 = [...stateByRoot.values()].filter((state) => state.status === "closed_for_delivery").map((state) => state.question_part_id).sort(compareUnicodeScalar);
+  const closed13 = [...stateByRoot.values()].filter((state) => state.status === "closed_for_delivery").map((state) => state.question_part_id).sort(compareUnicodeScalar);
   const reopenOverlay = prior && Object.hasOwn(prior, "reopened_targets") ? {
     reopened_targets: structuredClone(prior.reopened_targets),
     decision_suspension_ledger: structuredClone(prior.decision_suspension_ledger),
@@ -12090,7 +12663,7 @@ function compileSemanticClarificationCheckpointV4(submitted) {
       root_states: rootStates,
       answered_part_ids: answered,
       remaining_part_ids: [...remaining],
-      closed_for_delivery_part_ids: closed12,
+      closed_for_delivery_part_ids: closed13,
       cycle_digest: presentation?.cycle_digest ?? sha256CanonicalV4([]),
       latest_presentation_id: presentation?.presentation_id ?? previousPresentationId,
       presentation,
@@ -12250,7 +12823,7 @@ function validateSemanticClarificationCheckpointV4(submitted) {
   const stateIds = /* @__PURE__ */ new Set();
   const remaining = [];
   const answered = [];
-  const closed12 = [];
+  const closed13 = [];
   for (const state of stateEntries) {
     if (stateIds.has(state.root_issue_id)) diagnostics2.push({
       code: "CHECKPOINT_ROOT_STATE_DUPLICATE",
@@ -12269,9 +12842,13 @@ function validateSemanticClarificationCheckpointV4(submitted) {
       path: "/clarification_state/root_states",
       message: "root state version and part must equal the ledger root"
     });
-    if (state.status === "presented") remaining.push(state.question_part_id);
-    if (RESOLVED_ROOT_STATES.has(state.status)) answered.push(state.question_part_id);
-    if (state.status === "closed_for_delivery") closed12.push(state.question_part_id);
+    if (root && requiresPresentation(checkpoint2.schema_version, root, state)) {
+      remaining.push(state.question_part_id);
+    }
+    if (root && countsAsAnswered(checkpoint2.schema_version, root, state)) {
+      answered.push(state.question_part_id);
+    }
+    if (state.status === "closed_for_delivery") closed13.push(state.question_part_id);
   }
   if (stateIds.size !== ledger.size) diagnostics2.push({
     code: "CHECKPOINT_LEDGER_STATE_MISMATCH",
@@ -12288,14 +12865,21 @@ function validateSemanticClarificationCheckpointV4(submitted) {
     path: "/clarification_state/answered_part_ids",
     message: "answered set must equal resolved roots"
   });
-  if (!sameStringSet(checkpoint2.clarification_state?.closed_for_delivery_part_ids ?? [], closed12)) diagnostics2.push({
+  if (!sameStringSet(checkpoint2.clarification_state?.closed_for_delivery_part_ids ?? [], closed13)) diagnostics2.push({
     code: "CHECKPOINT_CLOSED_MISMATCH",
     path: "/clarification_state/closed_for_delivery_part_ids",
     message: "delivery-closed set must equal closed roots"
   });
   const presentation = checkpoint2.clarification_state?.presentation;
   const expectedPhase = checkpoint2.commit_profile === "pre_case_pending" ? "requirements_analysis" : "case_design";
-  const remainingRoots = stateEntries.filter((state) => state.status === "presented").map((state) => ledger.get(state.root_issue_id)).filter(Boolean).sort(compareSemanticRoots);
+  const remainingRoots = stateEntries.filter((state) => requiresPresentation(
+    checkpoint2.schema_version,
+    ledger.get(state.root_issue_id),
+    state
+  )).map((state) => ({
+    ...ledger.get(state.root_issue_id),
+    clarification_status: state.status
+  })).filter(Boolean).sort(compareSemanticRoots);
   if (remainingRoots.length > 0 !== Boolean(presentation)) diagnostics2.push({
     code: "CHECKPOINT_PRESENTATION_STATE_MISMATCH",
     path: "/clarification_state/presentation",
@@ -12364,6 +12948,7 @@ function applyRequestDeliverySelectionV4(checkpoint2, submittedEvent, presentati
   const selectedPresentation = targetsCurrentPresentation ? currentPresentation : historicalMatches[0];
   const presentationParts = new Map(selectedPresentation.question_parts.map((part) => [part.question_part_id, part]));
   const selected = /* @__PURE__ */ new Set();
+  const selectedRoots = [];
   for (const raw of submittedEvent.question_part_refs) {
     if (!isRecord(raw)) throw new TypeError("REQUEST_DELIVERY_INVALID");
     const part = presentationParts.get(raw.question_part_id);
@@ -12375,6 +12960,13 @@ function applyRequestDeliverySelectionV4(checkpoint2, submittedEvent, presentati
       throw new TypeError("REQUEST_DELIVERY_STALE_OR_DUPLICATE");
     }
     selected.add(String(raw.question_part_id));
+    selectedRoots.push(checkpoint2.semantic_gap_ledger.find(
+      (root) => root.root_issue_id === part.root_issue_id
+    ));
+  }
+  const contract2 = v4ContractForSchema(checkpoint2.schema_version);
+  if (isGeneralQualityV4Contract(contract2) && selectedRoots.some((root) => root?.acceptance_impact?.classification === "critical")) {
+    throw new TypeError("CRITICAL_SEMANTIC_DELIVERY_FORBIDDEN");
   }
   for (const state of checkpoint2.clarification_state.root_states) {
     if (selected.has(state.question_part_id)) state.status = "closed_for_delivery";
@@ -12609,7 +13201,8 @@ function applySemanticClarificationEventsV4(submitted) {
     } catch {
       return noInformationGain();
     }
-    if (state.status !== "presented" || state.root_version_digest !== event.root_version_digest || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer();
+    const answerable = state.status === "presented" || isGeneralQualityV4Contract(v4ContractForSchema(checkpoint2.schema_version)) && requiresRecoverableCriticalQuestionV4(root, state);
+    if (!answerable || state.root_version_digest !== event.root_version_digest || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer();
     decisions2.push(compiled.decision);
     decisionClaimSummaries.push({
       claim_id: `CLM-${sha256CanonicalV4({ decision_id: compiled.decision.decision_id }).slice("sha256:".length)}`,
@@ -12653,6 +13246,7 @@ var init_clarification_v4 = __esm({
     init_non_blocking_diagnostics_v4();
     init_semantic_gaps_v4();
     init_schema_validator();
+    init_semantic_delivery_gate_v4();
     init_v4_contract();
     ACTIONS = Object.freeze([
       "answer_question_part",
@@ -12734,9 +13328,9 @@ function finalizeDiagnostics(diagnostics2) {
     else unique2.set(diagnosticKey(item), item);
   }
   if (unique2.size > DIAGNOSTIC_LIMIT) overflow = true;
-  const sorted2 = arraySort([...unique2.values()], compareDiagnostics);
-  if (!overflow) return sorted2;
-  const retained = arraySlice(sorted2, 0, DIAGNOSTIC_LIMIT - 1);
+  const sorted3 = arraySort([...unique2.values()], compareDiagnostics);
+  if (!overflow) return sorted3;
+  const retained = arraySlice(sorted3, 0, DIAGNOSTIC_LIMIT - 1);
   arrayPush(retained, diagnostic3(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
@@ -12923,7 +13517,7 @@ function checkKeys(value, allowed, path14, diagnostics2) {
     "unknown controlled clarification field is not allowed"
   ));
 }
-function record3(value, path14, diagnostics2) {
+function record4(value, path14, diagnostics2) {
   if (isRecord2(value)) return value;
   arrayPush(diagnostics2, diagnostic3("schema", "RECORD_REQUIRED", path14, "controlled clarification value must be a record"));
   return {};
@@ -12971,12 +13565,12 @@ function enumeration(value, allowed, path14, diagnostics2) {
   return value;
 }
 function normalizeSemanticSnapshot(value, path14, diagnostics2) {
-  const snapshot2 = record3(value, path14, diagnostics2);
+  const snapshot2 = record4(value, path14, diagnostics2);
   checkKeys(snapshot2, ["formal_test_points", "coverage_denominator", "delivery_sections"], path14, diagnostics2);
   const points = [];
   const pointIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(snapshot2.formal_test_points, `${path14}/formal_test_points`, diagnostics2))) {
-    const point = record3(raw, `${path14}/formal_test_points/${index}`, diagnostics2);
+    const point = record4(raw, `${path14}/formal_test_points/${index}`, diagnostics2);
     checkKeys(point, ["obligation_id", "evidence_level", "classification", "blocked_reason", "root_issue_ids"], `${path14}/formal_test_points/${index}`, diagnostics2);
     const obligationId = canonicalString(point.obligation_id, `${path14}/formal_test_points/${index}/obligation_id`, diagnostics2);
     const evidenceLevel2 = enumeration(point.evidence_level, EVIDENCE_LEVELS, `${path14}/formal_test_points/${index}/evidence_level`, diagnostics2);
@@ -13024,13 +13618,13 @@ function normalizeSemanticSnapshot(value, path14, diagnostics2) {
     `${path14}/coverage_denominator`,
     "formal coverage denominator must equal the formal Test Point count"
   ));
-  const delivery = record3(snapshot2.delivery_sections, `${path14}/delivery_sections`, diagnostics2);
+  const delivery = record4(snapshot2.delivery_sections, `${path14}/delivery_sections`, diagnostics2);
   checkKeys(delivery, ["grounded", "conditional", "blocked", "exploratory", "coverage", "quality"], `${path14}/delivery_sections`, diagnostics2);
   const grounded = stringSet(delivery.grounded, `${path14}/delivery_sections/grounded`, diagnostics2);
   const conditional = stringSet(delivery.conditional, `${path14}/delivery_sections/conditional`, diagnostics2);
   const blocked = stringSet(delivery.blocked, `${path14}/delivery_sections/blocked`, diagnostics2);
   const exploratory = stringSet(delivery.exploratory, `${path14}/delivery_sections/exploratory`, diagnostics2);
-  const coverage = record3(delivery.coverage, `${path14}/delivery_sections/coverage`, diagnostics2);
+  const coverage = record4(delivery.coverage, `${path14}/delivery_sections/coverage`, diagnostics2);
   checkKeys(coverage, ["formal_denominator"], `${path14}/delivery_sections/coverage`, diagnostics2);
   const deliveryDenominator = integer(coverage.formal_denominator, `${path14}/delivery_sections/coverage/formal_denominator`, diagnostics2, 0);
   if (deliveryDenominator !== denominator) arrayPush(diagnostics2, diagnostic3(
@@ -13039,7 +13633,7 @@ function normalizeSemanticSnapshot(value, path14, diagnostics2) {
     `${path14}/delivery_sections/coverage/formal_denominator`,
     "delivery coverage denominator must match the semantic snapshot"
   ));
-  const quality = record3(delivery.quality, `${path14}/delivery_sections/quality`, diagnostics2);
+  const quality = record4(delivery.quality, `${path14}/delivery_sections/quality`, diagnostics2);
   checkKeys(quality, ["delivery_status"], `${path14}/delivery_sections/quality`, diagnostics2);
   const deliveryStatus = enumeration(quality.delivery_status, DELIVERY_STATUSES, `${path14}/delivery_sections/quality/delivery_status`, diagnostics2);
   for (const [lane, submitted] of [["grounded", grounded], ["conditional", conditional], ["blocked", blocked]]) {
@@ -13069,7 +13663,7 @@ function normalizeBlocked(value, path14, diagnostics2) {
   const obligationIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(value, path14, diagnostics2))) {
     const currentPath = `${path14}/${index}`;
-    const item = record3(raw, currentPath, diagnostics2);
+    const item = record4(raw, currentPath, diagnostics2);
     checkKeys(item, [
       "obligation_id",
       "missing_type",
@@ -13136,7 +13730,7 @@ function normalizeRootLedger(value, path14, diagnostics2) {
   const ids3 = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(value, path14, diagnostics2))) {
     const itemPath = `${path14}/${index}`;
-    const item = record3(raw, itemPath, diagnostics2);
+    const item = record4(raw, itemPath, diagnostics2);
     checkKeys(item, [
       "root_issue_id",
       "root_issue_key",
@@ -13170,7 +13764,7 @@ function normalizeRootLedger(value, path14, diagnostics2) {
       `${itemPath}/root_issue_id`,
       "root snapshot identity must derive from its canonical semantic key"
     ));
-    const riskRecord = record3(item.risk_counts, `${itemPath}/risk_counts`, diagnostics2);
+    const riskRecord = record4(item.risk_counts, `${itemPath}/risk_counts`, diagnostics2);
     checkKeys(riskRecord, ["critical", "high", "medium", "low"], `${itemPath}/risk_counts`, diagnostics2);
     const riskCounts = {
       critical: integer(riskRecord.critical, `${itemPath}/risk_counts/critical`, diagnostics2, 0),
@@ -13215,7 +13809,7 @@ function normalizeRootLedger(value, path14, diagnostics2) {
   return arraySort(output, (left, right) => compareCodePoints2(left.root_issue_id, right.root_issue_id));
 }
 function normalizePriorState(value, path14, diagnostics2) {
-  const prior = record3(value, path14, diagnostics2);
+  const prior = record4(value, path14, diagnostics2);
   checkKeys(prior, [
     "source_revision",
     "clarification_event_seq",
@@ -13235,7 +13829,7 @@ function normalizePriorState(value, path14, diagnostics2) {
   const dispositionIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(prior.root_issue_dispositions, `${path14}/root_issue_dispositions`, diagnostics2))) {
     const itemPath = `${path14}/root_issue_dispositions/${index}`;
-    const item = record3(raw, itemPath, diagnostics2);
+    const item = record4(raw, itemPath, diagnostics2);
     checkKeys(item, ["root_issue_id", "status"], itemPath, diagnostics2);
     const rootIssueId = canonicalString(item.root_issue_id, `${itemPath}/root_issue_id`, diagnostics2);
     const status = enumeration(item.status, ROOT_STATUSES, `${itemPath}/status`, diagnostics2);
@@ -13252,7 +13846,7 @@ function normalizePriorState(value, path14, diagnostics2) {
   const lastDigest = canonicalString(prior.last_question_set_digest, `${path14}/last_question_set_digest`, diagnostics2, true);
   let stop = null;
   if (prior.clarification_stop !== null) {
-    const rawStop = record3(prior.clarification_stop, `${path14}/clarification_stop`, diagnostics2);
+    const rawStop = record4(prior.clarification_stop, `${path14}/clarification_stop`, diagnostics2);
     checkKeys(rawStop, ["reason", "source_revision"], `${path14}/clarification_stop`, diagnostics2);
     stop = {
       reason: enumeration(rawStop.reason, STOP_REASONS, `${path14}/clarification_stop/reason`, diagnostics2),
@@ -13446,13 +14040,13 @@ function projectRootDependencies(semantics, ledger, dispositions) {
   return semantics;
 }
 function normalizeAppendBatch(value, path14, diagnostics2) {
-  const batch = record3(value, path14, diagnostics2);
+  const batch = record4(value, path14, diagnostics2);
   checkKeys(batch, ["decision_records", "clarification_events", "execution_events"], path14, diagnostics2);
   const decisions2 = [];
   const decisionIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(batch.decision_records, `${path14}/decision_records`, diagnostics2))) {
     const itemPath = `${path14}/decision_records/${index}`;
-    const item = record3(raw, itemPath, diagnostics2);
+    const item = record4(raw, itemPath, diagnostics2);
     if (item.decision_type === "exploratory_adoption") {
       checkKeys(item, [
         "decision_id",
@@ -13550,7 +14144,7 @@ function normalizeAppendBatch(value, path14, diagnostics2) {
   const eventIds = /* @__PURE__ */ new Set();
   for (const [index, raw] of arrayEntries(array(batch.clarification_events, `${path14}/clarification_events`, diagnostics2))) {
     const itemPath = `${path14}/clarification_events/${index}`;
-    const item = record3(raw, itemPath, diagnostics2);
+    const item = record4(raw, itemPath, diagnostics2);
     const eventType = enumeration(item.type, CONTROL_TYPES, `${itemPath}/type`, diagnostics2);
     checkKeys(item, eventType === "request_reanalysis" ? ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "source_locator_ids", "affected_items", "reason"] : ["event_id", "clarification_event_seq", "type", "actor", "event_at", "presentation_id", "decision_group_ids", "root_issue_ids"], itemPath, diagnostics2);
     const eventId = canonicalString(item.event_id, `${itemPath}/event_id`, diagnostics2);
@@ -13893,7 +14487,7 @@ function evaluateClarification(submittedContext, interactionPolicy, repairRecord
   arrayPush(diagnostics2, ...captured.diagnostics);
   if (diagnostics2.length > 0) return invalidDecision(interactionPolicy, diagnostics2);
   try {
-    const context = record3(captured.snapshot, "/", diagnostics2);
+    const context = record4(captured.snapshot, "/", diagnostics2);
     checkKeys(context, ["source_revision", "blocked_obligations", "prior_state", "append_batch", "semantic_snapshot"], "", diagnostics2);
     const sourceRevision = integer(context.source_revision, "/source_revision", diagnostics2, 0);
     const blocked = normalizeBlocked(context.blocked_obligations, "/blocked_obligations", diagnostics2);
@@ -17085,17 +17679,17 @@ function comparableCase(draft) {
   return canonicalStringify(strip(copy));
 }
 function mergeExactCases(drafts) {
-  const sorted2 = [...drafts].sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
-  const merged = structuredClone(sorted2[0]);
+  const sorted3 = [...drafts].sort((left, right) => compareCodePoints3(String(left.case_id), String(right.case_id)));
+  const merged = structuredClone(sorted3[0]);
   for (const field of ["fact_ids", "obligation_ids", "source_claim_ids", "evidence_refs"]) {
-    const values = new Set(sorted2.flatMap((draft) => stringArray3(draft[field]) ?? []));
+    const values = new Set(sorted3.flatMap((draft) => stringArray3(draft[field]) ?? []));
     merged[field] = [...values].sort(compareCodePoints3);
   }
   const mergedPreconditions = new Map((objectArray4(merged.preconditions) ?? []).map((precondition) => [
     canonicalStringify({ condition: precondition.condition, reachable_from: precondition.reachable_from }),
     precondition
   ]));
-  for (const draft of sorted2) {
+  for (const draft of sorted3) {
     for (const precondition of objectArray4(draft.preconditions) ?? []) {
       const target = mergedPreconditions.get(canonicalStringify({
         condition: precondition.condition,
@@ -17111,7 +17705,7 @@ function mergeExactCases(drafts) {
   const mergedSteps = objectArray4(merged.steps) ?? [];
   for (const [stepIndex, step] of mergedSteps.entries()) {
     const expectationsByClosure = /* @__PURE__ */ new Map();
-    for (const draft of sorted2) {
+    for (const draft of sorted3) {
       const sourceStep = (objectArray4(draft.steps) ?? [])[stepIndex];
       if (!sourceStep) continue;
       for (const expectation of objectArray4(sourceStep.expectations) ?? []) {
@@ -23863,16 +24457,57 @@ var init_test_bundle_schema = __esm({
           required: ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"],
           properties: {
             root_issue_id: { $ref: "#/$defs/v4Text" },
-            status: { enum: ["presented", "resolved", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"] },
+            status: { enum: ["presented", "resolved", "resolved_final", "resolved_temporary", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"] },
             title: { $ref: "#/$defs/v4Text" },
             business_object: { $ref: "#/$defs/v4Text" },
             question: { $ref: "#/$defs/v4Text" },
             why_needed: { $ref: "#/$defs/v4Text" },
             decision_impact: { $ref: "#/$defs/v4Text" },
             unresolved_outcome: { $ref: "#/$defs/v4Text" },
-            affected_business_items: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4AffectedBusinessItem" } }
+            affected_business_items: { type: "array", minItems: 1, items: { $ref: "#/$defs/v4AffectedBusinessItem" } },
+            root_version_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+            acceptance_impact: { $ref: "#/$defs/v4AcceptanceImpact" },
+            critical_resolution_basis: {
+              oneOf: [
+                { type: "null" },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["root_issue_id", "root_version_digest", "basis_kind"],
+                  properties: {
+                    root_issue_id: { $ref: "#/$defs/v4Text" },
+                    root_version_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+                    basis_kind: { enum: ["final_e3_decision", "replayable_e2_derivation", "evidence_not_applicable", "evidence_obsolete"] }
+                  }
+                }
+              ]
+            }
           },
           additionalProperties: false
+        },
+        v4AcceptanceImpact: {
+          oneOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["classification", "criteria", "rationale"],
+              properties: {
+                classification: { const: "critical" },
+                criteria: { type: "array", minItems: 1, uniqueItems: true, items: { enum: ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"] } },
+                rationale: { $ref: "#/$defs/v4Text" }
+              }
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["classification", "criteria", "rationale"],
+              properties: {
+                classification: { const: "noncritical" },
+                criteria: { type: "array", minItems: 1, maxItems: 1, prefixItems: [{ const: "does_not_change_required_acceptance" }], items: false },
+                rationale: { $ref: "#/$defs/v4Text" }
+              }
+            }
+          ]
         },
         v4ExploratoryPresentation: {
           type: "object",
@@ -23980,6 +24615,64 @@ var init_test_bundle_schema = __esm({
             }
           ]
         },
+        v4DispositionCounts: {
+          type: "object",
+          required: ["retained", "representative_value", "equivalent_merge", "evidence_exclusion", "semantic_gap", "exploratory"],
+          properties: {
+            retained: { type: "integer", minimum: 0 },
+            representative_value: { type: "integer", minimum: 0 },
+            equivalent_merge: { type: "integer", minimum: 0 },
+            evidence_exclusion: { type: "integer", minimum: 0 },
+            semantic_gap: { type: "integer", minimum: 0 },
+            exploratory: { type: "integer", minimum: 0 }
+          },
+          additionalProperties: false
+        },
+        v4DesignAssuranceSummary: {
+          type: "object",
+          required: ["status", "plan_revision", "batch_count", "rule_group_count", "candidate_responsibility_count", "candidate_disposition_counts"],
+          properties: {
+            status: { const: "complete" },
+            plan_revision: { type: "integer", minimum: 1 },
+            batch_count: { type: "integer", minimum: 1 },
+            rule_group_count: { type: "integer", minimum: 1 },
+            candidate_responsibility_count: { type: "integer", minimum: 1 },
+            candidate_disposition_counts: { $ref: "#/$defs/v4DispositionCounts" }
+          },
+          additionalProperties: false
+        },
+        v4IndependentReviewSummary: {
+          type: "object",
+          required: ["status", "protocol_version", "review_mode", "reviewer_identity_class", "source_first_target_count", "target_assessment_counts", "finding_counts", "review_target_digest"],
+          properties: {
+            status: { const: "completed" },
+            protocol_version: { const: "1.0.0" },
+            review_mode: { const: "independent_source_first" },
+            reviewer_identity_class: { enum: ["independent_context", "independent_agent", "qualified_external_reviewer"] },
+            source_first_target_count: { type: "integer", minimum: 1 },
+            target_assessment_counts: {
+              type: "object",
+              required: ["verified", "semantic_gap", "evidence_excluded"],
+              properties: {
+                verified: { type: "integer", minimum: 0 },
+                semantic_gap: { type: "integer", minimum: 0 },
+                evidence_excluded: { type: "integer", minimum: 0 }
+              },
+              additionalProperties: false
+            },
+            finding_counts: {
+              type: "object",
+              required: ["confirmed", "rejected"],
+              properties: {
+                confirmed: { type: "integer", minimum: 0 },
+                rejected: { type: "integer", minimum: 0 }
+              },
+              additionalProperties: false
+            },
+            review_target_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }
+          },
+          additionalProperties: false
+        },
         caseDocumentBundle: {
           type: "object",
           required: [
@@ -23999,10 +24692,10 @@ var init_test_bundle_schema = __esm({
           ],
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             compiler_version: {
-              enum: ["0.5.0", "0.7.0"]
+              enum: ["0.5.0", "0.7.0", "0.8.0"]
             },
             delivery_intent: {
               const: "case_document"
@@ -24026,22 +24719,53 @@ var init_test_bundle_schema = __esm({
             semantic_root_groups: { type: "array", items: { $ref: "#/$defs/v4SemanticRootGroup" } },
             exploratory: { type: "array", items: { $ref: "#/$defs/v4ExploratoryPresentation" } },
             not_applicable: { type: "array", items: { $ref: "#/$defs/v4NotApplicablePresentation" } },
-            risk_review_ledger: { type: "array", items: { $ref: "#/$defs/v4RiskReviewItem" } }
+            risk_review_ledger: { type: "array", items: { $ref: "#/$defs/v4RiskReviewItem" } },
+            design_assurance_summary: { $ref: "#/$defs/v4DesignAssuranceSummary" },
+            independent_review_summary: { $ref: "#/$defs/v4IndependentReviewSummary" }
           },
           additionalProperties: false,
           allOf: [
             {
               oneOf: [
                 {
+                  allOf: [
+                    { not: { required: ["design_assurance_summary"] } },
+                    { not: { required: ["independent_review_summary"] } }
+                  ],
                   properties: {
                     schema_version: { const: "4.0.0" },
-                    compiler_version: { const: "0.5.0" }
+                    compiler_version: { const: "0.5.0" },
+                    semantic_root_groups: { items: { allOf: [
+                      { not: { required: ["root_version_digest"] } },
+                      { not: { required: ["acceptance_impact"] } },
+                      { not: { required: ["critical_resolution_basis"] } }
+                    ] } }
                   }
                 },
                 {
+                  allOf: [
+                    { not: { required: ["design_assurance_summary"] } },
+                    { not: { required: ["independent_review_summary"] } }
+                  ],
                   properties: {
                     schema_version: { const: "4.2.0" },
-                    compiler_version: { const: "0.7.0" }
+                    compiler_version: { const: "0.7.0" },
+                    semantic_root_groups: { items: { allOf: [
+                      { not: { required: ["root_version_digest"] } },
+                      { not: { required: ["acceptance_impact"] } },
+                      { not: { required: ["critical_resolution_basis"] } }
+                    ] } }
+                  }
+                },
+                {
+                  required: ["design_assurance_summary", "independent_review_summary"],
+                  properties: {
+                    schema_version: { const: "4.3.0" },
+                    compiler_version: { const: "0.8.0" },
+                    semantic_root_groups: { items: {
+                      required: ["root_version_digest", "acceptance_impact", "critical_resolution_basis"],
+                      properties: { status: { not: { const: "resolved" } } }
+                    } }
                   }
                 }
               ]
@@ -24712,7 +25436,7 @@ var init_test_obligations_schema = __esm({
           ],
           properties: {
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             source_revision: {
               type: "integer",
@@ -24866,9 +25590,9 @@ function finalizeDiagnostics3(diagnostics2) {
     else unique2.set(canonicalStringify(item), item);
   }
   if (unique2.size > DIAGNOSTIC_LIMIT3) overflow = true;
-  const sorted2 = sortArray2([...unique2.values()], (left, right) => compareCodePoints4(left.category, right.category) || compareCodePoints4(left.code, right.code) || compareCodePoints4(left.path, right.path) || compareCodePoints4(left.message, right.message));
-  if (!overflow) return sorted2;
-  const retained = sliceArray2(sorted2, 0, DIAGNOSTIC_LIMIT3 - 1);
+  const sorted3 = sortArray2([...unique2.values()], (left, right) => compareCodePoints4(left.category, right.category) || compareCodePoints4(left.code, right.code) || compareCodePoints4(left.path, right.path) || compareCodePoints4(left.message, right.message));
+  if (!overflow) return sorted3;
+  const retained = sliceArray2(sorted3, 0, DIAGNOSTIC_LIMIT3 - 1);
   pushArray2(retained, diagnostic8(
     "classification",
     "DIAGNOSTICS_TRUNCATED",
@@ -27292,6 +28016,9 @@ var init_current_pointer_schema = __esm({
         },
         {
           $ref: "#/$defs/executionManifest"
+        },
+        {
+          $ref: "#/$defs/v4NonReady"
         }
       ],
       $defs: {
@@ -27321,6 +28048,12 @@ var init_current_pointer_schema = __esm({
                 schema_version: { const: "4.2.0" },
                 compiler_version: { const: "0.7.0" }
               }
+            },
+            {
+              properties: {
+                schema_version: { const: "4.3.0" },
+                compiler_version: { const: "0.8.0" }
+              }
             }
           ]
         },
@@ -27337,6 +28070,21 @@ var init_current_pointer_schema = __esm({
             digest: {
               $ref: "#/$defs/sha256"
             }
+          },
+          additionalProperties: false
+        },
+        v4NonReady: {
+          type: "object",
+          required: ["status", "schema_version", "compiler_version", "run_id", "active_revision", "reason", "previous_ready_revision", "previous_ready_manifest_digest"],
+          properties: {
+            status: { const: "stale" },
+            schema_version: { const: "4.3.0" },
+            compiler_version: { const: "0.8.0" },
+            run_id: { $ref: "#/$defs/text" },
+            active_revision: { $ref: "#/$defs/count" },
+            reason: { const: "higher_revision_not_ready" },
+            previous_ready_revision: { $ref: "#/$defs/count" },
+            previous_ready_manifest_digest: { $ref: "#/$defs/sha256" }
           },
           additionalProperties: false
         },
@@ -27481,10 +28229,10 @@ var init_current_pointer_schema = __esm({
               $ref: "#/$defs/count"
             },
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             compiler_version: {
-              enum: ["0.5.0", "0.7.0"]
+              enum: ["0.5.0", "0.7.0", "0.8.0"]
             },
             delivery_intent: {
               const: "case_document"
@@ -27560,6 +28308,7 @@ var init_current_pointer_schema = __esm({
               additionalProperties: false
             },
             primary_readable: { const: "html" },
+            review_target_digest: { $ref: "#/$defs/sha256" },
             render_options: {
               type: "object",
               required: [
@@ -27593,16 +28342,25 @@ var init_current_pointer_schema = __esm({
             {
               oneOf: [
                 {
+                  not: { required: ["review_target_digest"] },
                   properties: {
                     schema_version: { const: "4.0.0" },
                     compiler_version: { const: "0.5.0" }
                   }
                 },
                 {
+                  not: { required: ["review_target_digest"] },
                   required: ["html", "chat_table", "source_reading", "primary_readable"],
                   properties: {
                     schema_version: { const: "4.2.0" },
                     compiler_version: { const: "0.7.0" }
+                  }
+                },
+                {
+                  required: ["html", "chat_table", "source_reading", "primary_readable", "review_target_digest"],
+                  properties: {
+                    schema_version: { const: "4.3.0" },
+                    compiler_version: { const: "0.8.0" }
                   }
                 }
               ]
@@ -27703,10 +28461,10 @@ var init_current_pointer_schema = __esm({
               $ref: "#/$defs/count"
             },
             schema_version: {
-              enum: ["4.0.0", "4.2.0"]
+              enum: ["4.0.0", "4.2.0", "4.3.0"]
             },
             compiler_version: {
-              enum: ["0.5.0", "0.7.0"]
+              enum: ["0.5.0", "0.7.0", "0.8.0"]
             },
             delivery_intent: {
               const: "execution_plan"
@@ -27884,15 +28642,17 @@ var init_reply_schema = __esm({
             risk_level: { enum: ["critical", "high", "medium", "low"] },
             available_actions: {
               type: "array",
-              minItems: 4,
+              minItems: 1,
               maxItems: 4,
-              prefixItems: [
-                { const: "answer_question_part" },
-                { const: "defer_question_part" },
-                { const: "mark_question_unknown" },
-                { const: "request_delivery" }
-              ],
-              items: false
+              uniqueItems: true,
+              items: {
+                enum: [
+                  "answer_question_part",
+                  "defer_question_part",
+                  "mark_question_unknown",
+                  "request_delivery"
+                ]
+              }
             },
             action_context: { $ref: "#/$defs/v4SemanticActionContext" }
           }
@@ -27931,7 +28691,7 @@ var init_reply_schema = __esm({
             "question_parts"
           ],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
             presentation_id: { type: "string", pattern: "^PRES-[0-9a-f]{64}$" },
             phase: { enum: ["requirements_analysis", "case_design"] },
             supersedes_presentation_id: {
@@ -27963,7 +28723,31 @@ var init_reply_schema = __esm({
               minItems: 1,
               items: { $ref: "#/$defs/v4SemanticQuestionPart" }
             }
-          }
+          },
+          allOf: [{
+            oneOf: [
+              {
+                properties: {
+                  schema_version: { enum: ["4.0.0", "4.2.0"] },
+                  question_parts: { items: { properties: {
+                    available_actions: {
+                      type: "array",
+                      minItems: 4,
+                      maxItems: 4,
+                      prefixItems: [
+                        { const: "answer_question_part" },
+                        { const: "defer_question_part" },
+                        { const: "mark_question_unknown" },
+                        { const: "request_delivery" }
+                      ],
+                      items: false
+                    }
+                  } } }
+                }
+              },
+              { properties: { schema_version: { const: "4.3.0" } } }
+            ]
+          }]
         },
         v4ExecutionClosurePresentation: {
           type: "object",
@@ -28817,6 +29601,54 @@ var init_reply_schema = __esm({
             }
           }
         },
+        v4IndependentReviewSourceTarget: {
+          type: "object",
+          additionalProperties: false,
+          required: ["target_id", "target_kind", "acceptance_role", "objective", "source_claim_ids", "decision_ids"],
+          properties: {
+            target_id: { type: "string", pattern: "^IRT-[0-9a-f]{64}$" },
+            target_kind: { enum: ["business_result", "condition_distinction", "required_relation"] },
+            acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
+            objective: { type: "string", minLength: 1, pattern: "\\S" },
+            source_claim_ids: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } },
+            decision_ids: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } }
+          }
+        },
+        v4IndependentReviewRequest: {
+          type: "object",
+          additionalProperties: false,
+          required: ["protocol_version", "review_mode", "reviewer_identity", "source_first_targets", "review_target_digest", "review_target_projection"],
+          properties: {
+            protocol_version: { const: "1.0.0" },
+            review_mode: { const: "independent_source_first" },
+            reviewer_identity: {
+              type: "object",
+              additionalProperties: false,
+              required: ["identity_class", "separation_basis"],
+              properties: {
+                identity_class: { enum: ["independent_context", "independent_agent", "qualified_external_reviewer"] },
+                separation_basis: { type: "string", minLength: 1, pattern: "\\S" }
+              }
+            },
+            source_first_targets: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/v4IndependentReviewSourceTarget" } },
+            review_target_digest: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+            review_target_projection: {
+              type: "object",
+              additionalProperties: false,
+              required: ["projection_version", "source_revision", "source_first_targets", "facts", "views", "formal_test_points", "candidate_responsibilities", "cases"],
+              properties: {
+                projection_version: { const: "1.0.0" },
+                source_revision: { type: "integer", minimum: 0 },
+                source_first_targets: { type: "array", minItems: 1, uniqueItems: true, items: { $ref: "#/$defs/v4IndependentReviewSourceTarget" } },
+                facts: { type: "array", items: { type: "object" } },
+                views: { type: "array", items: { type: "object" } },
+                formal_test_points: { type: "array", items: { type: "object" } },
+                candidate_responsibilities: { type: "array", items: { type: "object" } },
+                cases: { type: "array", items: { type: "object" } }
+              }
+            }
+          }
+        },
         v4StageArtifactReply: {
           type: "object",
           additionalProperties: false,
@@ -28982,6 +29814,7 @@ var init_reply_schema = __esm({
             artifact_path: { type: "string", minLength: 1 },
             artifact_digest: { $ref: "#/$defs/legacySha256" },
             diagnostics: { $ref: "#/$defs/diagnostics" },
+            review_request: { $ref: "#/$defs/v4IndependentReviewRequest" },
             incomplete_reason: {
               $ref: "#/$defs/incompleteReason"
             },
@@ -30873,11 +31706,11 @@ var init_reply_schema = __esm({
 });
 
 // src/execution-events.mjs
-function record4(value) {
+function record5(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function deriveV4ExecutionReadinessTarget(caseDocumentRef, caseId) {
-  if (!record4(caseDocumentRef) || typeof caseId !== "string" || !caseId) {
+  if (!record5(caseDocumentRef) || typeof caseId !== "string" || !caseId) {
     throw new TypeError("EXECUTION_READINESS_TARGET_INVALID");
   }
   const rootIssueId = `EXECROOT-${digest({
@@ -30907,7 +31740,7 @@ function deriveV4ExecutionReadinessTarget(caseDocumentRef, caseId) {
   };
 }
 function capabilityReadiness(proof) {
-  if (!record4(proof) || Object.keys(proof).length !== 2 || typeof proof.type !== "string" || !proof.type || typeof proof.value !== "string" || !proof.value) {
+  if (!record5(proof) || Object.keys(proof).length !== 2 || typeof proof.type !== "string" || !proof.type || typeof proof.value !== "string" || !proof.value) {
     throw new TypeError("EXECUTION_PROOF_INVALID");
   }
   if (proof.type !== CAPABILITY_PROOF_POLICY.type) {
@@ -30929,7 +31762,7 @@ function validateV4CapabilityReceipt(receipt, expected = {}) {
     "ready",
     "receipt_digest"
   ];
-  if (!record4(receipt) || Object.keys(receipt).length !== keys.length || keys.some((key) => !Object.hasOwn(receipt, key)) || receipt.domain !== "testability" || !record4(receipt.verification_policy) || canonicalStringify(receipt.verification_policy) !== canonicalStringify({
+  if (!record5(receipt) || Object.keys(receipt).length !== keys.length || keys.some((key) => !Object.hasOwn(receipt, key)) || receipt.domain !== "testability" || !record5(receipt.verification_policy) || canonicalStringify(receipt.verification_policy) !== canonicalStringify({
     policy_id: CAPABILITY_PROOF_POLICY.policy_id,
     policy_version: CAPABILITY_PROOF_POLICY.policy_version
   }) || !Array.isArray(receipt.case_ids) || receipt.case_ids.length !== 1 || typeof receipt.case_ids[0] !== "string" || !receipt.case_ids[0] || !Array.isArray(receipt.root_refs) || receipt.root_refs.length !== 1 || typeof receipt.ready !== "boolean" || !/^sha256:[0-9a-f]{64}$/.test(receipt.receipt_digest)) {
@@ -31194,7 +32027,7 @@ function sortedItemRefs(items) {
 function createPresentationSnapshot(input) {
   const postReadyControl = input.entryContext === "post_ready_change" ? input.postReadyControl : null;
   const groups = records2(input.groups).map((group) => {
-    const itemRefs = sortedItemRefs(group.items);
+    const itemRefs2 = sortedItemRefs(group.items);
     const options = records2(group.allowedOptions).map((option) => ({
       option_code: String(option.option_code ?? ""),
       label: String(option.label ?? ""),
@@ -31209,7 +32042,7 @@ function createPresentationSnapshot(input) {
       plan_digest: input.planDigest,
       plan_change_head_seq: input.planChangeHeadSeq,
       question: group.question,
-      item_refs: itemRefs,
+      item_refs: itemRefs2,
       allowed_options: options,
       answer_example: group.answerExample,
       proposed_change: group.proposedChange ?? null
@@ -31218,7 +32051,7 @@ function createPresentationSnapshot(input) {
       group_id: `GROUP-${digest(signature).slice(0, 24)}`,
       question_id: `QUESTION-${digest({ ...signature, kind: "question" }).slice(0, 24)}`,
       question: String(group.question ?? ""),
-      item_refs: itemRefs,
+      item_refs: itemRefs2,
       allowed_options: options,
       answer_example: String(group.answerExample ?? ""),
       proposed_change: group.proposedChange ?? null
@@ -31265,16 +32098,16 @@ function allPresentedItems(presentation) {
   }
   return byKey;
 }
-function validPresentedRecord(record20, input, diagnostics2, path14, optionCode, itemRefs = []) {
+function validPresentedRecord(record23, input, diagnostics2, path14, optionCode, itemRefs2 = []) {
   const shown = input.currentPresentation;
   const groups = records2(shown?.groups);
   const groupIds = new Set(groups.map((group) => group.group_id));
-  const selectedIds = Array.isArray(record20.decision_group_ids) ? record20.decision_group_ids : [];
-  let valid = Boolean(shown) && record20.presentation_id === shown.presentation_id && selectedIds.length > 0 && selectedIds.every((id2) => groupIds.has(id2));
+  const selectedIds = Array.isArray(record23.decision_group_ids) ? record23.decision_group_ids : [];
+  let valid = Boolean(shown) && record23.presentation_id === shown.presentation_id && selectedIds.length > 0 && selectedIds.every((id2) => groupIds.has(id2));
   const selectedGroups = groups.filter((group) => selectedIds.includes(group.group_id));
   if (optionCode && !selectedGroups.every((group) => records2(group.allowed_options).some((option) => option.option_code === optionCode))) valid = false;
   const presented = new Set(selectedGroups.flatMap((group) => records2(group.item_refs).map(itemKey)));
-  if (itemRefs.some((ref2) => !presented.has(itemKey(ref2)))) valid = false;
+  if (itemRefs2.some((ref2) => !presented.has(itemKey(ref2)))) valid = false;
   if (!valid) diagnostics2.push(diagnostic9(
     "PRESENTATION_BINDING_INVALID",
     path14,
@@ -31282,9 +32115,9 @@ function validPresentedRecord(record20, input, diagnostics2, path14, optionCode,
   ));
   return valid;
 }
-function selectedProposedChange(record20, input) {
+function selectedProposedChange(record23, input) {
   if (input.currentPresentation?.entry_context !== "post_ready_change") return null;
-  const selectedIds = Array.isArray(record20.decision_group_ids) ? record20.decision_group_ids.filter((id2) => typeof id2 === "string") : [];
+  const selectedIds = Array.isArray(record23.decision_group_ids) ? record23.decision_group_ids.filter((id2) => typeof id2 === "string") : [];
   const selected = records2(input.currentPresentation?.groups).filter(
     (group) => selectedIds.includes(group.group_id)
   );
@@ -33062,16 +33895,16 @@ function auditInteractionMatrix(artifact) {
     "an empty interaction matrix cannot represent a completed audit"
   ));
   const moduleIds = /* @__PURE__ */ new Set();
-  for (const record20 of [...matrix, ...submittedCandidates]) {
-    for (const moduleId of normalizedStrings(record20.module_ids)) moduleIds.add(moduleId);
+  for (const record23 of [...matrix, ...submittedCandidates]) {
+    for (const moduleId of normalizedStrings(record23.module_ids)) moduleIds.add(moduleId);
   }
   const modules = [...moduleIds].sort(compareCodePoints5);
   const cells = [];
-  for (const record20 of matrix) {
-    const modulesForCell = normalizedStrings(record20.module_ids);
-    const rawModuleCount = Array.isArray(record20.module_ids) ? record20.module_ids.length : 0;
-    const dimension = typeof record20.dimension === "string" ? record20.dimension : "";
-    const status = typeof record20.status === "string" ? record20.status : "";
+  for (const record23 of matrix) {
+    const modulesForCell = normalizedStrings(record23.module_ids);
+    const rawModuleCount = Array.isArray(record23.module_ids) ? record23.module_ids.length : 0;
+    const dimension = typeof record23.dimension === "string" ? record23.dimension : "";
+    const status = typeof record23.status === "string" ? record23.status : "";
     const path14 = cellPath(modulesForCell, dimension);
     let valid = true;
     if (modulesForCell.length !== rawModuleCount || modulesForCell.length === 0) {
@@ -33086,7 +33919,7 @@ function auditInteractionMatrix(artifact) {
       diagnostics2.push(diagnostic11("schema", "INTERACTION_STATUS_INVALID", `${path14}/status`, "status must be checked-no-signal or candidate"));
       valid = false;
     }
-    if (valid) cells.push({ record: record20, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
+    if (valid) cells.push({ record: record23, modules: modulesForCell, dimension, status, key: cellKey(modulesForCell, dimension) });
   }
   const expectedCells = /* @__PURE__ */ new Map();
   if (modules.length === 1) {
@@ -33210,10 +34043,10 @@ function isFormalInteractionEvidence(claim) {
 function reconcileInteractionMatrix(artifact, candidates2, viewsById, viewModeledClaims, claimsById) {
   const input = isObject4(artifact) ? artifact : {};
   const submittedViews = objectArray5(input.views);
-  const cells = objectArray5(input.interaction_matrix).map((record20) => ({
-    modules: normalizedStrings(record20.module_ids),
-    dimension: typeof record20.dimension === "string" ? record20.dimension : "",
-    status: typeof record20.status === "string" ? record20.status : ""
+  const cells = objectArray5(input.interaction_matrix).map((record23) => ({
+    modules: normalizedStrings(record23.module_ids),
+    dimension: typeof record23.dimension === "string" ? record23.dimension : "",
+    status: typeof record23.status === "string" ? record23.status : ""
   }));
   const cellsByKey = /* @__PURE__ */ new Map();
   for (const cell of cells) {
@@ -37966,12 +38799,12 @@ function canonicalRenderDiagnostics(diagnostics2) {
     else unique2.set(canonicalStringify(diagnostics2[index]), diagnostics2[index]);
   }
   if (unique2.size > RENDER_DIAGNOSTIC_LIMIT) overflow = true;
-  const sorted2 = [...unique2.values()];
-  Reflect.apply(NATIVE_ARRAY_SORT4, sorted2, [(left, right) => compareCodePoints8(left.category, right.category) || compareCodePoints8(left.code, right.code) || compareCodePoints8(left.path, right.path) || compareCodePoints8(left.message, right.message)]);
-  if (!overflow) return sorted2;
+  const sorted3 = [...unique2.values()];
+  Reflect.apply(NATIVE_ARRAY_SORT4, sorted3, [(left, right) => compareCodePoints8(left.category, right.category) || compareCodePoints8(left.code, right.code) || compareCodePoints8(left.path, right.path) || compareCodePoints8(left.message, right.message)]);
+  if (!overflow) return sorted3;
   const retained = [];
-  for (let index = 0; index < Math.min(sorted2.length, RENDER_DIAGNOSTIC_LIMIT - 1); index += 1) {
-    append(retained, sorted2[index]);
+  for (let index = 0; index < Math.min(sorted3.length, RENDER_DIAGNOSTIC_LIMIT - 1); index += 1) {
+    append(retained, sorted3[index]);
   }
   append(retained, {
     category: "classification",
@@ -41717,8 +42550,8 @@ var init_run_instance_schema = __esm({
             "lineage"
           ],
           properties: {
-            schema_version: { enum: ["4.0.0", "4.2.0"] },
-            compiler_version: { enum: ["0.5.0", "0.7.0"] },
+            schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+            compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
             run_id: { $ref: "#/$defs/runId" },
             delivery_intent: { enum: ["case_document", "execution_plan"] },
             created_at: { type: "string", minLength: 1 },
@@ -41728,7 +42561,8 @@ var init_run_instance_schema = __esm({
           allOf: [{
             oneOf: [
               { properties: { schema_version: { const: "4.0.0" }, compiler_version: { const: "0.5.0" } } },
-              { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } }
+              { properties: { schema_version: { const: "4.2.0" }, compiler_version: { const: "0.7.0" } } },
+              { properties: { schema_version: { const: "4.3.0" }, compiler_version: { const: "0.8.0" } } }
             ]
           }]
         }
@@ -41995,12 +42829,12 @@ function detectLegacyHazards(artifacts) {
   artifacts.forEach((value) => visit(value));
   return [...diagnostics2].sort();
 }
-async function analysis(complete, record20, entries2) {
+async function analysis(complete, record23, entries2) {
   const diagnostics2 = [];
   if (!complete) diagnostics2.push("LAST_COMPLETE_REVISION_MISSING");
-  if (record20.legacy_status === "cancelled") diagnostics2.push("LEGACY_RUN_CANCELLED");
-  if (record20.legacy_status === "finished") diagnostics2.push("LEGACY_FINISHED_NONCANONICAL");
-  const accepted = await Promise.all(entries2.filter((row) => /^accepted\/r[0-9]+\/.*\.json$/u.test(row.path)).map((row) => legacyJson(record20.legacy_run_directory, row.path)));
+  if (record23.legacy_status === "cancelled") diagnostics2.push("LEGACY_RUN_CANCELLED");
+  if (record23.legacy_status === "finished") diagnostics2.push("LEGACY_FINISHED_NONCANONICAL");
+  const accepted = await Promise.all(entries2.filter((row) => /^accepted\/r[0-9]+\/.*\.json$/u.test(row.path)).map((row) => legacyJson(record23.legacy_run_directory, row.path)));
   diagnostics2.push(...detectLegacyHazards(accepted));
   const source = complete?.artifacts.source_pack ?? accepted.find((value) => Array.isArray(value?.sources));
   if (source && (source.sources.length === 0 || validateSourceIntegrity(source).length)) diagnostics2.push("SOURCE_UNAVAILABLE");
@@ -42008,7 +42842,7 @@ async function analysis(complete, record20, entries2) {
     diagnostics2.push("REQUIRES_V4_SEMANTIC_REANALYSIS");
   }
   if (source?.source_assets?.some((asset) => ["unread", "unavailable"].includes(asset.status))) diagnostics2.push("SOURCE_UNAVAILABLE");
-  const states = (await Promise.all(entries2.filter((row) => /^derived\/r[0-9]+\/clarification-state\.json$/u.test(row.path)).map((row) => legacyJson(record20.legacy_run_directory, row.path)))).filter(Boolean);
+  const states = (await Promise.all(entries2.filter((row) => /^derived\/r[0-9]+\/clarification-state\.json$/u.test(row.path)).map((row) => legacyJson(record23.legacy_run_directory, row.path)))).filter(Boolean);
   states.sort((a, b) => a.source_revision - b.source_revision);
   const current = states.filter((state) => state.source_revision <= (complete?.revision ?? Infinity)).at(-1);
   const mapping = mapLegacyClarification(current, states.filter((state) => state.source_revision < (current?.source_revision ?? 0)), source, complete?.artifacts.evidence_claims);
@@ -43573,18 +44407,18 @@ async function acquireRunLock(runDirectory, coordinationHooks = {}) {
       throw error;
     }
     const status = observed.status;
-    const record20 = observed.record;
-    const ownerPid = record20?.pid;
-    const ownerToken = record20?.token;
-    const ownerLease = record20?.lease_expires_at_ms;
-    const ownerProcessStart = record20?.process_start_identity;
+    const record23 = observed.record;
+    const ownerPid = record23?.pid;
+    const ownerToken = record23?.token;
+    const ownerLease = record23?.lease_expires_at_ms;
+    const ownerProcessStart = record23?.process_start_identity;
     const ownerShapeValid = typeof ownerToken === "string" && ownerToken.length > 0 && typeof ownerPid === "number" && typeof ownerLease === "number" && NATIVE_REFLECT_APPLY3(NATIVE_NUMBER_IS_SAFE_INTEGER2, NATIVE_NUMBER2, [ownerPid]) && NATIVE_REFLECT_APPLY3(NATIVE_NUMBER_IS_SAFE_INTEGER2, NATIVE_NUMBER2, [ownerLease]);
     const now = currentTimeMilliseconds();
     const currentPidIdentityMatches = ownerPid !== NATIVE_PROCESS_PID || ownerProcessStart === void 0 || ownerProcessStart === NATIVE_PROCESS_START_IDENTITY;
-    const hasCompilerHeartbeat = typeof record20?.heartbeat_seq === "number" && NATIVE_REFLECT_APPLY3(
+    const hasCompilerHeartbeat = typeof record23?.heartbeat_seq === "number" && NATIVE_REFLECT_APPLY3(
       NATIVE_NUMBER_IS_SAFE_INTEGER2,
       NATIVE_NUMBER2,
-      [record20.heartbeat_seq]
+      [record23.heartbeat_seq]
     );
     const compilerIdentityValid = hasCompilerHeartbeat && compilerProcessIdentityHasCanonicalShape(ownerPid, ownerProcessStart);
     const heartbeatLease = compilerIdentityValid ? status.mtimeMs + RUN_LOCK_LEASE_MS : ownerLease;
@@ -44641,17 +45475,17 @@ function diagnosticOwner(pointer) {
 }
 function mapInternalRevision(result) {
   if (!result || typeof result !== "object") return PROTOCOL_VIOLATION;
-  const record20 = (
+  const record23 = (
     /** @type {Record<string, unknown>} */
     result
   );
-  if (record20.status !== "need_revision" || typeof record20.stage !== "string" || !Array.isArray(record20.diagnostics) || record20.diagnostics.length === 0) {
+  if (record23.status !== "need_revision" || typeof record23.stage !== "string" || !Array.isArray(record23.diagnostics) || record23.diagnostics.length === 0) {
     return PROTOCOL_VIOLATION;
   }
   let stage;
-  if (record20.stage === "schema") {
+  if (record23.stage === "schema") {
     let owner = null;
-    for (const item of record20.diagnostics) {
+    for (const item of record23.diagnostics) {
       if (!item || typeof item !== "object") return PROTOCOL_VIOLATION;
       const path14 = (
         /** @type {Record<string, unknown>} */
@@ -44663,7 +45497,7 @@ function mapInternalRevision(result) {
       owner = candidate;
     }
     stage = owner;
-  } else stage = INTERNAL_STAGE_OWNER[record20.stage];
+  } else stage = INTERNAL_STAGE_OWNER[record23.stage];
   if (!stage) return PROTOCOL_VIOLATION;
   return {
     kind: "need_revision",
@@ -44793,6 +45627,12 @@ var execution_plan_schema_default = {
           properties: {
             schema_version: { const: "4.2.0" },
             compiler_version: { const: "0.7.0" }
+          }
+        },
+        {
+          properties: {
+            schema_version: { const: "4.3.0" },
+            compiler_version: { const: "0.8.0" }
           }
         }
       ]
@@ -45052,8 +45892,8 @@ var execution_plan_schema_default = {
         "runner_projection"
       ],
       properties: {
-        schema_version: { enum: ["4.0.0", "4.2.0"] },
-        compiler_version: { enum: ["0.5.0", "0.7.0"] },
+        schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+        compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
         delivery_intent: { const: "execution_plan" },
         status: { const: "need_user_answers" },
         result_kind: { type: "null" },
@@ -45079,8 +45919,8 @@ var execution_plan_schema_default = {
         "runner_projection"
       ],
       properties: {
-        schema_version: { enum: ["4.0.0", "4.2.0"] },
-        compiler_version: { enum: ["0.5.0", "0.7.0"] },
+        schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+        compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
         delivery_intent: { const: "execution_plan" },
         status: { const: "finished" },
         result_kind: { const: "execution_ready" },
@@ -45106,8 +45946,8 @@ var execution_plan_schema_default = {
         "runner_projection"
       ],
       properties: {
-        schema_version: { enum: ["4.0.0", "4.2.0"] },
-        compiler_version: { enum: ["0.5.0", "0.7.0"] },
+        schema_version: { enum: ["4.0.0", "4.2.0", "4.3.0"] },
+        compiler_version: { enum: ["0.5.0", "0.7.0", "0.8.0"] },
         delivery_intent: { const: "execution_plan" },
         status: { const: "finished" },
         result_kind: { const: "no_execution_selected" },
@@ -45230,7 +46070,16 @@ init_test_bundle_schema();
 // src/business-markdown-v4.mjs
 init_case_semantics_v4();
 var RESULT_KINDS = /* @__PURE__ */ new Set(["delivered_cases", "delivered_with_gaps", "blocked_only", "no_applicable_cases"]);
-var ROOT_STATUSES2 = /* @__PURE__ */ new Set(["presented", "resolved", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]);
+var ROOT_STATUSES2 = /* @__PURE__ */ new Set([
+  "presented",
+  "resolved",
+  "resolved_final",
+  "resolved_temporary",
+  "deferred_by_user",
+  "unknown_by_user",
+  "closed_for_delivery",
+  "obsolete"
+]);
 var ACTIVE_ROOT_STATUSES = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
 var SURFACE_RANK = Object.freeze([
   "ui",
@@ -45256,6 +46105,20 @@ var SURFACE_LABEL = Object.freeze({
 });
 var INTERNAL_ID = /(?:ROOT|FACT|CLM|CLAIM|OBL|OBLIGATION|TP|CASE|EXP|NA)-[A-Za-z0-9_.:/#-]+/u;
 var ROOT_KEYS = ["result_kind", "ordered_case_ids", "scope_manifest", "cases", "coverage", "semantic_root_groups", "exploratory", "not_applicable", "render_options"];
+var GENERAL_QUALITY_ROOT_KEYS = [
+  ...ROOT_KEYS,
+  "schema_version",
+  "compiler_version",
+  "design_assurance_summary",
+  "independent_review_summary"
+];
+var SEMANTIC_ROOT_KEYS = ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"];
+var GENERAL_QUALITY_SEMANTIC_ROOT_KEYS = [
+  ...SEMANTIC_ROOT_KEYS,
+  "root_version_digest",
+  "acceptance_impact",
+  "critical_resolution_basis"
+];
 var CASE_KEYS = [
   "case_id",
   "title",
@@ -45275,7 +46138,7 @@ var CASE_KEYS = [
   "baseline_spec",
   "test_values"
 ];
-function record5(value) {
+function record6(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function closed6(value, keys, code2 = "MARKDOWN_PROJECTION_INVALID") {
@@ -45315,10 +46178,10 @@ function uniqueIds(values, code2 = "MARKDOWN_PROJECTION_INVALID") {
   return normalized;
 }
 function validateCanonicalCase(candidate) {
-  if (!record5(candidate)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+  if (!record6(candidate)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
   const allowed = new Set(CASE_KEYS);
   if (Object.keys(candidate).some((key) => !allowed.has(key)) || CASE_KEYS.slice(0, 14).some((key) => !Object.hasOwn(candidate, key))) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
-  if (!["Grounded", "Conditional"].includes(candidate.semantic_status) || !record5(candidate.ordering) || !Array.isArray(candidate.ordering.depends_on_case_ids)) {
+  if (!["Grounded", "Conditional"].includes(candidate.semantic_status) || !record6(candidate.ordering) || !Array.isArray(candidate.ordering.depends_on_case_ids)) {
     throw new TypeError("MARKDOWN_PROJECTION_INVALID");
   }
   const dependencies = uniqueIds(candidate.ordering.depends_on_case_ids);
@@ -45337,20 +46200,70 @@ function validateCanonicalCase(candidate) {
   return dependencies;
 }
 function validateProjection(raw) {
-  if (!record5(raw)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
-  closed6(raw, ROOT_KEYS);
-  if (!RESULT_KINDS.has(raw.result_kind) || !Array.isArray(raw.cases) || !record5(raw.scope_manifest) || !Array.isArray(raw.semantic_root_groups) || !Array.isArray(raw.exploratory) || !Array.isArray(raw.not_applicable) || !record5(raw.coverage) || !record5(raw.render_options)) {
+  if (!record6(raw)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+  const generalQuality = raw.schema_version === "4.3.0";
+  closed6(raw, generalQuality ? GENERAL_QUALITY_ROOT_KEYS : ROOT_KEYS);
+  if (generalQuality && (raw.compiler_version !== "0.8.0" || !record6(raw.design_assurance_summary) || !record6(raw.independent_review_summary))) {
+    throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+  }
+  if (!RESULT_KINDS.has(raw.result_kind) || !Array.isArray(raw.cases) || !record6(raw.scope_manifest) || !Array.isArray(raw.semantic_root_groups) || !Array.isArray(raw.exploratory) || !Array.isArray(raw.not_applicable) || !record6(raw.coverage) || !record6(raw.render_options)) {
     throw new TypeError("MARKDOWN_PROJECTION_INVALID");
   }
   closed6(raw.render_options, ["include_audit_appendix"]);
   if (typeof raw.render_options.include_audit_appendix !== "boolean") throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+  if (generalQuality) {
+    const assurance = raw.design_assurance_summary;
+    closed6(assurance, [
+      "status",
+      "plan_revision",
+      "batch_count",
+      "rule_group_count",
+      "candidate_responsibility_count",
+      "candidate_disposition_counts"
+    ]);
+    closed6(assurance.candidate_disposition_counts, [
+      "retained",
+      "representative_value",
+      "equivalent_merge",
+      "evidence_exclusion",
+      "semantic_gap",
+      "exploratory"
+    ]);
+    const dispositionTotal = Object.values(assurance.candidate_disposition_counts).reduce((sum, value) => sum + nonNegativeInteger(value), 0);
+    const planRevision = nonNegativeInteger(assurance.plan_revision);
+    const batchCount = nonNegativeInteger(assurance.batch_count);
+    const ruleGroupCount = nonNegativeInteger(assurance.rule_group_count);
+    const responsibilityCount = nonNegativeInteger(assurance.candidate_responsibility_count);
+    if (assurance.status !== "complete" || planRevision < 1 || batchCount < 1 || ruleGroupCount < 1 || dispositionTotal !== responsibilityCount) {
+      throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    }
+    const review = raw.independent_review_summary;
+    closed6(review, [
+      "status",
+      "protocol_version",
+      "review_mode",
+      "reviewer_identity_class",
+      "source_first_target_count",
+      "target_assessment_counts",
+      "finding_counts",
+      "review_target_digest"
+    ]);
+    closed6(review.target_assessment_counts, ["verified", "semantic_gap", "evidence_excluded"]);
+    closed6(review.finding_counts, ["confirmed", "rejected"]);
+    const assessmentTotal = Object.values(review.target_assessment_counts).reduce((sum, value) => sum + nonNegativeInteger(value), 0);
+    for (const value of Object.values(review.finding_counts)) nonNegativeInteger(value);
+    const sourceFirstTargetCount = nonNegativeInteger(review.source_first_target_count);
+    if (review.status !== "completed" || review.protocol_version !== "1.0.0" || review.review_mode !== "independent_source_first" || !["independent_context", "independent_agent", "qualified_external_reviewer"].includes(review.reviewer_identity_class) || sourceFirstTargetCount < 1 || assessmentTotal !== sourceFirstTargetCount || !/^sha256:[0-9a-f]{64}$/u.test(review.review_target_digest)) {
+      throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    }
+  }
   closed6(raw.scope_manifest, ["primary_surface", "modules", "boundaries"]);
   if (!Array.isArray(raw.scope_manifest.modules) || !Array.isArray(raw.scope_manifest.boundaries)) {
     throw new TypeError("MARKDOWN_PROJECTION_INVALID");
   }
   const modules = /* @__PURE__ */ new Map();
   for (const item of raw.scope_manifest.modules) {
-    if (!record5(item)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    if (!record6(item)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
     closed6(item, ["module_id", "name", "role", "claim_ids"]);
     const moduleId = traceId(item.module_id);
     if (modules.has(moduleId) || !["primary", "upstream", "downstream", "external"].includes(item.role)) {
@@ -45363,7 +46276,7 @@ function validateProjection(raw) {
   const primaryModule = raw.scope_manifest.modules.find((item) => item.module_id === primarySurface);
   if (!primaryModule || primaryModule.role !== "primary") throw new TypeError("MARKDOWN_PROJECTION_INVALID");
   for (const boundary2 of raw.scope_manifest.boundaries) {
-    if (!record5(boundary2)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    if (!record6(boundary2)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
     closed6(boundary2, ["from", "to", "channel", "acceptance_scope", "claim_ids"]);
     if (!modules.has(boundary2.from) || !modules.has(boundary2.to) || boundary2.from === boundary2.to || typeof boundary2.channel !== "string" || !boundary2.channel.trim() || boundary2.acceptance_scope !== "contract_only") throw new TypeError("MARKDOWN_PROJECTION_INVALID");
     uniqueIds(boundary2.claim_ids);
@@ -45384,7 +46297,7 @@ function validateProjection(raw) {
   if (order.length !== cases.size || order.some((id2) => !cases.has(id2))) throw new TypeError("CASE_ORDER_INVALID");
   closed6(raw.coverage, ["primary", "boundary", "semantic_gap_count", "exploratory_count", "not_applicable_count"]);
   const countPair = (pair) => {
-    if (!record5(pair)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    if (!record6(pair)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
     closed6(pair, ["reviewed_formal_test_point_count", "covered_formal_test_point_count", "not_applicable_formal_test_point_count"]);
     const reviewed = nonNegativeInteger(pair.reviewed_formal_test_point_count);
     const covered = nonNegativeInteger(pair.covered_formal_test_point_count);
@@ -45399,8 +46312,8 @@ function validateProjection(raw) {
   const notApplicableCount = nonNegativeInteger(raw.coverage.not_applicable_count);
   const rootIds = /* @__PURE__ */ new Set();
   for (const root of raw.semantic_root_groups) {
-    if (!record5(root)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
-    closed6(root, ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"]);
+    if (!record6(root)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    closed6(root, generalQuality ? GENERAL_QUALITY_SEMANTIC_ROOT_KEYS : SEMANTIC_ROOT_KEYS);
     const rootId = traceId(root.root_issue_id);
     if (rootIds.has(rootId) || !ROOT_STATUSES2.has(root.status) || !Array.isArray(root.affected_business_items) || root.affected_business_items.length === 0) {
       throw new TypeError("MARKDOWN_PROJECTION_INVALID");
@@ -45409,7 +46322,7 @@ function validateProjection(raw) {
     for (const field of ["title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome"]) businessText(root[field]);
     const members = /* @__PURE__ */ new Set();
     for (const member of root.affected_business_items) {
-      if (!record5(member)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+      if (!record6(member)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
       closed6(member, ["item_kind", "item_id", "display_name"]);
       if (!["formal_test_point", "case", "business_outcome", "risk"].includes(member.item_kind)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
       const memberId = `${member.item_kind}\0${traceId(member.item_id)}`;
@@ -45420,7 +46333,7 @@ function validateProjection(raw) {
   }
   const exploratoryIds = /* @__PURE__ */ new Set();
   for (const item of raw.exploratory) {
-    if (!record5(item)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    if (!record6(item)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
     closed6(item, ["exploratory_id", "module_id", "title", "reason"]);
     const id2 = traceId(item.exploratory_id);
     if (exploratoryIds.has(id2) || !modules.has(item.module_id)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
@@ -45430,7 +46343,7 @@ function validateProjection(raw) {
   }
   const notApplicableIds = /* @__PURE__ */ new Set();
   for (const item of raw.not_applicable) {
-    if (!record5(item)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
+    if (!record6(item)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
     closed6(item, ["not_applicable_record_id", "module_id", "subject", "reason"]);
     const id2 = traceId(item.not_applicable_record_id);
     if (notApplicableIds.has(id2) || !modules.has(item.module_id)) throw new TypeError("MARKDOWN_PROJECTION_INVALID");
@@ -45497,6 +46410,15 @@ function renderCaseSection(lines, title, cases, modules) {
   }
   for (const candidate of cases) renderCase(lines, candidate, modules);
 }
+function renderQualityAssurance(lines, view) {
+  if (view.raw.schema_version !== "4.3.0") return;
+  const design = view.raw.design_assurance_summary;
+  const review = view.raw.independent_review_summary;
+  lines.push("## \u8BBE\u8BA1\u4FDD\u969C\u4E0E\u72EC\u7ACB\u5BA1\u67E5", "");
+  lines.push(`- \u8BBE\u8BA1\u4FDD\u969C\uFF1A\u8BA1\u5212\u4FEE\u8BA2 ${design.plan_revision}\uFF1B${design.batch_count} \u4E2A\u6279\u6B21\u3001${design.rule_group_count} \u4E2A\u89C4\u5219\u7EC4\u3001${design.candidate_responsibility_count} \u9879\u5019\u9009\u9A8C\u8BC1\u8D23\u4EFB\u5747\u5DF2\u5904\u7F6E\u3002`);
+  lines.push(`- \u72EC\u7ACB\u5BA1\u67E5\uFF1A${review.source_first_target_count} \u4E2A\u6765\u6E90\u4F18\u5148\u76EE\u6807\u5747\u5DF2\u8BC4\u4F30\uFF1B\u786E\u8BA4\u53D1\u73B0 ${review.finding_counts.confirmed} \u9879\uFF0C\u9A73\u56DE\u53D1\u73B0 ${review.finding_counts.rejected} \u9879\u3002`);
+  lines.push("_\u4E0A\u8FF0\u8BB0\u5F55\u7528\u4E8E\u8FC7\u7A0B\u5BA1\u8BA1\uFF0C\u4E0D\u63D0\u5347\u4E1A\u52A1\u8BC1\u636E\u7B49\u7EA7\u3002_", "");
+}
 function renderAudit(lines, view) {
   lines.push("## \u5BA1\u8BA1\u9644\u5F55");
   lines.push("");
@@ -45518,6 +46440,9 @@ function renderAudit(lines, view) {
   lines.push("### \u6392\u9664\u4E0E\u63A2\u7D22\u8FFD\u8E2A");
   for (const item of view.raw.not_applicable) lines.push(`- NotApplicable\uFF1A\`${item.not_applicable_record_id}\``);
   for (const item of view.raw.exploratory) lines.push(`- Exploratory\uFF1A\`${item.exploratory_id}\``);
+  if (view.raw.schema_version === "4.3.0") {
+    lines.push(`- \u5F53\u524D\u72EC\u7ACB\u5BA1\u67E5\u76EE\u6807\uFF1A\`${view.raw.independent_review_summary.review_target_digest}\``);
+  }
   lines.push("");
 }
 function renderBusinessMarkdownV4(input) {
@@ -45532,6 +46457,7 @@ function renderBusinessMarkdownV4(input) {
     for (const candidate of orderedCases) lines.push(`| ${tableCell(view.modules.get(candidate.module_id))} | ${candidate.priority} | ${tableCell(candidate.title)} | ${candidate.semantic_status === "Grounded" ? "\u5DF2\u786E\u8BA4" : "\u5F85\u786E\u8BA4"} |`);
   }
   lines.push("");
+  renderQualityAssurance(lines, view);
   renderCaseSection(lines, "\u4E3B\u9A8C\u6536", orderedCases.filter((item) => item.acceptance_role === "primary_acceptance" && item.semantic_status === "Grounded"), view.modules);
   renderCaseSection(lines, "\u8FB9\u754C\u5951\u7EA6", orderedCases.filter((item) => item.acceptance_role === "dependency_contract" && item.semantic_status === "Grounded"), view.modules);
   const contextCases = orderedCases.filter((item) => item.acceptance_role === "context_only" && item.semantic_status === "Grounded");
@@ -45635,7 +46561,7 @@ var RESULT_COPY = Object.freeze({
     empty: "\u7ECF\u6709\u4F9D\u636E\u7684\u9002\u7528\u6027\u5BA1\u9605\uFF0C\u5F53\u524D\u8303\u56F4\u6CA1\u6709\u9002\u7528\u7684\u6B63\u5F0F Case\u3002"
   }
 });
-function record6(value) {
+function record7(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function compareText2(left, right) {
@@ -45662,13 +46588,15 @@ function orderedOracles(candidate) {
   });
 }
 function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit_appendix: false }) {
-  if (!record6(bundle) || !Array.isArray(bundle.cases) || !Array.isArray(bundle.ordered_case_ids) || !record6(bundle.scope_manifest) || !Array.isArray(bundle.scope_manifest.modules)) {
+  if (!record7(bundle) || !Array.isArray(bundle.cases) || !Array.isArray(bundle.ordered_case_ids) || !record7(bundle.scope_manifest) || !Array.isArray(bundle.scope_manifest.modules)) {
     throw new TypeError("CASE_DOCUMENT_INVALID");
   }
   const resultCopy = RESULT_COPY[bundle.result_kind];
-  if (!resultCopy || !record6(renderOptions) || typeof renderOptions.include_audit_appendix !== "boolean") {
+  if (!resultCopy || !record7(renderOptions) || typeof renderOptions.include_audit_appendix !== "boolean") {
     throw new TypeError("CASE_DOCUMENT_INVALID");
   }
+  const generalQuality = bundle.schema_version === "4.3.0";
+  if (generalQuality && (!record7(bundle.design_assurance_summary) || !record7(bundle.independent_review_summary))) throw new TypeError("CASE_DOCUMENT_INVALID");
   const modules = new Map(bundle.scope_manifest.modules.map((item) => [item.module_id, item.name]));
   const cases = new Map(bundle.cases.map((item) => [item.case_id, item]));
   if (cases.size !== bundle.cases.length || bundle.ordered_case_ids.length !== cases.size || new Set(bundle.ordered_case_ids).size !== bundle.ordered_case_ids.length || bundle.ordered_case_ids.some((id2) => typeof id2 !== "string" || !cases.has(id2))) {
@@ -45719,6 +46647,7 @@ function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit
     };
   });
   return {
+    schema_version: bundle.schema_version,
     result_kind: bundle.result_kind,
     title: resultCopy.title,
     empty_message: resultCopy.empty,
@@ -45733,6 +46662,8 @@ function buildCaseDocumentPresentationV4(bundle, renderOptions = { include_audit
       ...structuredClone(item),
       module: modules.get(item.module_id)
     })),
+    design_assurance_summary: generalQuality ? structuredClone(bundle.design_assurance_summary) : null,
+    independent_review_summary: generalQuality ? structuredClone(bundle.independent_review_summary) : null,
     render_options: structuredClone(renderOptions),
     rows
   };
@@ -45800,6 +46731,17 @@ function tableExpectations(row) {
 }
 function tableContext(presentation) {
   const lines = ["", `\u7ED3\u679C\u72B6\u6001\uFF1A${tableUserText(presentation.title)}`];
+  if (presentation.schema_version === "4.3.0") {
+    const design = presentation.design_assurance_summary;
+    const review = presentation.independent_review_summary;
+    lines.push(
+      "",
+      "\u8BBE\u8BA1\u4FDD\u969C\u4E0E\u72EC\u7ACB\u5BA1\u67E5\uFF1A",
+      `- \u8BBE\u8BA1\u4FDD\u969C\uFF1A\u8BA1\u5212\u4FEE\u8BA2 ${design.plan_revision}\uFF1B${design.batch_count} \u4E2A\u6279\u6B21\u3001${design.rule_group_count} \u4E2A\u89C4\u5219\u7EC4\u3001${design.candidate_responsibility_count} \u9879\u5019\u9009\u9A8C\u8BC1\u8D23\u4EFB\u5747\u5DF2\u5904\u7F6E\u3002`,
+      `- \u72EC\u7ACB\u5BA1\u67E5\uFF1A${review.source_first_target_count} \u4E2A\u6765\u6E90\u4F18\u5148\u76EE\u6807\u5747\u5DF2\u8BC4\u4F30\uFF1B\u786E\u8BA4\u53D1\u73B0 ${review.finding_counts.confirmed} \u9879\uFF0C\u9A73\u56DE\u53D1\u73B0 ${review.finding_counts.rejected} \u9879\u3002`,
+      "- \u4E0A\u8FF0\u8BB0\u5F55\u7528\u4E8E\u8FC7\u7A0B\u5BA1\u8BA1\uFF0C\u4E0D\u63D0\u5347\u4E1A\u52A1\u8BC1\u636E\u7B49\u7EA7\u3002"
+    );
+  }
   if (presentation.semantic_roots.length) {
     lines.push("", "\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236\uFF1A");
     for (const root of presentation.semantic_roots) {
@@ -45866,11 +46808,18 @@ function htmlCoverage(presentation) {
   const coverage = presentation.coverage;
   return `<section class="panel"><h2>\u8986\u76D6\u60C5\u51B5</h2><h3>\u5DF2\u5BA1\u9605 formal test-point \u8986\u76D6</h3><ul><li>\u4E3B\u9A8C\u6536\uFF1A\u5DF2\u8986\u76D6 ${coverage.primary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.primary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.primary.not_applicable_formal_test_point_count} \u9879</li><li>\u8FB9\u754C\u5951\u7EA6\uFF1A\u5DF2\u8986\u76D6 ${coverage.boundary.covered_formal_test_point_count} \u9879\uFF0C\u5DF2\u5BA1\u9605 ${coverage.boundary.reviewed_formal_test_point_count} \u9879\uFF0C\u5176\u4E2D NotApplicable ${coverage.boundary.not_applicable_formal_test_point_count} \u9879</li><li>semantic gap\uFF1A${coverage.semantic_gap_count} \u9879</li><li>Exploratory\uFF1A${coverage.exploratory_count} \u9879</li><li>NotApplicable\uFF1A${coverage.not_applicable_count} \u9879</li></ul></section>`;
 }
+function htmlQualityAssurance(presentation) {
+  if (presentation.schema_version !== "4.3.0") return "";
+  const design = presentation.design_assurance_summary;
+  const review = presentation.independent_review_summary;
+  return `<section class="panel"><h2>\u8BBE\u8BA1\u4FDD\u969C\u4E0E\u72EC\u7ACB\u5BA1\u67E5</h2><ul><li>\u8BBE\u8BA1\u4FDD\u969C\uFF1A\u8BA1\u5212\u4FEE\u8BA2 ${design.plan_revision}\uFF1B${design.batch_count} \u4E2A\u6279\u6B21\u3001${design.rule_group_count} \u4E2A\u89C4\u5219\u7EC4\u3001${design.candidate_responsibility_count} \u9879\u5019\u9009\u9A8C\u8BC1\u8D23\u4EFB\u5747\u5DF2\u5904\u7F6E\u3002</li><li>\u72EC\u7ACB\u5BA1\u67E5\uFF1A${review.source_first_target_count} \u4E2A\u6765\u6E90\u4F18\u5148\u76EE\u6807\u5747\u5DF2\u8BC4\u4F30\uFF1B\u786E\u8BA4\u53D1\u73B0 ${review.finding_counts.confirmed} \u9879\uFF0C\u9A73\u56DE\u53D1\u73B0 ${review.finding_counts.rejected} \u9879\u3002</li></ul><p class="meta">\u4E0A\u8FF0\u8BB0\u5F55\u7528\u4E8E\u8FC7\u7A0B\u5BA1\u8BA1\uFF0C\u4E0D\u63D0\u5347\u4E1A\u52A1\u8BC1\u636E\u7B49\u7EA7\u3002</p></section>`;
+}
 function htmlAudit(presentation) {
   if (!presentation.render_options.include_audit_appendix) return "";
   const cases = presentation.rows.map((row) => `<li><code>${html(row.case_id)}</code> \xB7 Test Point <code>${html(row.primary_test_point_id)}</code>${row.business_flow_ref ? ` \xB7 Flow <code>${html(row.business_flow_ref)}</code>` : ""}</li>`).join("");
   const roots = presentation.semantic_roots.map((root) => `<li><code>${html(root.root_issue_id)}</code></li>`).join("");
-  return `<details class="panel audit"><summary>\u5BA1\u8BA1\u6807\u8BC6</summary><p class="meta">\u4EE5\u4E0B\u6807\u8BC6\u4EC5\u7528\u4E8E\u673A\u5668\u8FFD\u8E2A\uFF0C\u4E0D\u5C5E\u4E8E\u4E1A\u52A1\u6267\u884C\u6B63\u6587\u3002</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul></details>`;
+  const review = presentation.schema_version === "4.3.0" ? `<h3>\u72EC\u7ACB\u5BA1\u67E5\u76EE\u6807</h3><p><code>${html(presentation.independent_review_summary.review_target_digest)}</code></p>` : "";
+  return `<details class="panel audit"><summary>\u5BA1\u8BA1\u6807\u8BC6</summary><p class="meta">\u4EE5\u4E0B\u6807\u8BC6\u4EC5\u7528\u4E8E\u673A\u5668\u8FFD\u8E2A\uFF0C\u4E0D\u5C5E\u4E8E\u4E1A\u52A1\u6267\u884C\u6B63\u6587\u3002</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul>${review}</details>`;
 }
 function renderBusinessHtmlV4(presentation, sourceReading) {
   const sourceRows = sourceReading.items.map((item, index) => `<tr><td>${index + 1}</td><td>${html(item.channel)}</td><td>${html(item.acquisition_status)}</td><td>${html(item.review_status)}</td></tr>`).join("");
@@ -45882,14 +46831,17 @@ function renderBusinessHtmlV4(presentation, sourceReading) {
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${html(presentation.title)}</title><style>
 :root{color-scheme:light;--ink:#1d2433;--muted:#657086;--line:#d9dfeb;--paper:#fff;--soft:#f5f7fb;--accent:#174ea6;--warn:#8a4b00}*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1180px;margin:auto;padding:32px 20px 64px}h1,h2,h3,h4{line-height:1.25}h1{font-size:2rem}h2{margin-top:2.2rem}h3{font-size:1.2rem}.lede,.meta{color:var(--muted)}.panel,article{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0;box-shadow:0 4px 18px #23324d0d}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;background:var(--paper)}th,td{padding:10px 12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3fb;white-space:nowrap}a{color:var(--accent)}.eyebrow,.surface{color:var(--muted);font-size:.88rem}.steps>li{margin-bottom:1rem}.compact{margin:.5rem 0 0;padding-left:1.25rem}.complete{color:#236b3b}.empty{color:var(--muted)}.warning{border-left:4px solid var(--warn)}code{overflow-wrap:anywhere}@media print{body{background:#fff}.panel,article{box-shadow:none;break-inside:avoid}main{max-width:none;padding:0}}
-</style></head><body><main><header><p class="eyebrow">V4 \xB7 HTML \u4E3B\u9605\u8BFB\u6587\u4EF6</p><h1>${html(presentation.title)}</h1><p class="lede">\u5171 ${presentation.case_count} \u6761\u3002\u6BCF\u6761 Case \u53EA\u6709\u4E00\u4E2A\u72EC\u7ACB\u4E3B\u8981\u7ED3\u679C\uFF1B\u5FC5\u8981\u7684\u540C\u5BF9\u8C61\u591A\u6B65\u52A8\u4F5C\u4E0E\u8FC7\u7A0B\u89C2\u5BDF\u4FDD\u6301\u8FDE\u7EED\u3002</p></header><section class="panel"><h2>\u8D44\u6599\u8BFB\u53D6\u6458\u8981</h2><p class="meta">\u8FD9\u662F\u91C7\u96C6\u6280\u672F\u8BB0\u5F55\uFF0C\u4E0D\u662F\u4E1A\u52A1\u4E8B\u5B9E\u6216\u4E1A\u52A1\u8BC1\u636E\u3002</p><p>\u8303\u56F4\uFF1A${html(sourceReading.scope.root_ref)} \xB7 \u6A21\u5F0F\uFF1A${html(sourceReading.scope.mode)} \xB7 \u72B6\u6001\uFF1A${html(sourceReading.status)} \xB7 \u7248\u672C\uFF1A${html(sourceReading.scope.source_version ?? "\u672A\u63D0\u4F9B")}</p><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u901A\u9053</th><th>\u91C7\u96C6</th><th>\u5BA1\u9605</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>\u91C7\u96C6\u9650\u5236</h3>${limitations}</section><section><h2>\u7528\u4F8B\u603B\u89C8</h2><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u6A21\u5757</th><th>\u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0</th><th>\u9884\u671F\u7ED3\u679C</th><th>\u4F18\u5148\u7EA7</th><th>\u4F9D\u636E\u72B6\u6001</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? "" : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>\u7528\u4F8B\u8BE6\u60C5</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? " warning" : ""}"><h2>\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>\u6392\u9664\u4E0E\u63A2\u7D22</h2><h3>\u5DF2\u786E\u8BA4\u4E0D\u9002\u7528</h3>${notApplicable}<h3>\u63A2\u7D22\u5EFA\u8BAE</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>
+</style></head><body><main><header><p class="eyebrow">V4 \xB7 HTML \u4E3B\u9605\u8BFB\u6587\u4EF6</p><h1>${html(presentation.title)}</h1><p class="lede">\u5171 ${presentation.case_count} \u6761\u3002\u6BCF\u6761 Case \u53EA\u6709\u4E00\u4E2A\u72EC\u7ACB\u4E3B\u8981\u7ED3\u679C\uFF1B\u5FC5\u8981\u7684\u540C\u5BF9\u8C61\u591A\u6B65\u52A8\u4F5C\u4E0E\u8FC7\u7A0B\u89C2\u5BDF\u4FDD\u6301\u8FDE\u7EED\u3002</p></header><section class="panel"><h2>\u8D44\u6599\u8BFB\u53D6\u6458\u8981</h2><p class="meta">\u8FD9\u662F\u91C7\u96C6\u6280\u672F\u8BB0\u5F55\uFF0C\u4E0D\u662F\u4E1A\u52A1\u4E8B\u5B9E\u6216\u4E1A\u52A1\u8BC1\u636E\u3002</p><p>\u8303\u56F4\uFF1A${html(sourceReading.scope.root_ref)} \xB7 \u6A21\u5F0F\uFF1A${html(sourceReading.scope.mode)} \xB7 \u72B6\u6001\uFF1A${html(sourceReading.status)} \xB7 \u7248\u672C\uFF1A${html(sourceReading.scope.source_version ?? "\u672A\u63D0\u4F9B")}</p><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u901A\u9053</th><th>\u91C7\u96C6</th><th>\u5BA1\u9605</th></tr></thead><tbody>${sourceRows}</tbody></table></div><h3>\u91C7\u96C6\u9650\u5236</h3>${limitations}</section>${htmlQualityAssurance(presentation)}<section><h2>\u7528\u4F8B\u603B\u89C8</h2><div class="table-wrap"><table><thead><tr><th>\u5E8F\u53F7</th><th>\u6A21\u5757</th><th>\u7528\u4F8B/\u6D41\u7A0B\u540D\u79F0</th><th>\u9884\u671F\u7ED3\u679C</th><th>\u4F18\u5148\u7EA7</th><th>\u4F9D\u636E\u72B6\u6001</th></tr></thead><tbody>${overviewRows}</tbody></table></div>${presentation.rows.length ? "" : `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section><h2>\u7528\u4F8B\u8BE6\u60C5</h2>${cases || `<div class="panel"><p>${html(presentation.empty_message)}</p></div>`}</section><section class="panel${presentation.semantic_roots.length ? " warning" : ""}"><h2>\u5F85\u786E\u8BA4\u4E8B\u9879\u4E0E\u4EA4\u4ED8\u9650\u5236</h2>${htmlSemanticRoots(presentation)}</section><section class="panel"><h2>\u6392\u9664\u4E0E\u63A2\u7D22</h2><h3>\u5DF2\u786E\u8BA4\u4E0D\u9002\u7528</h3>${notApplicable}<h3>\u63A2\u7D22\u5EFA\u8BAE</h3>${exploratory}</section>${htmlCoverage(presentation)}${htmlAudit(presentation)}</main></body></html>
 `;
 }
 function matchCasePresentationFamilyV42(presentation, sourceReading, artifacts) {
-  if (!record6(artifacts) || typeof artifacts.html !== "string" || typeof artifacts.table !== "string") {
+  if (!record7(artifacts) || typeof artifacts.html !== "string" || typeof artifacts.table !== "string") {
     throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
   }
-  if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html && renderCaseTableV4(presentation) === artifacts.table) return "current-4.2";
+  if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html && renderCaseTableV4(presentation) === artifacts.table) {
+    return presentation.schema_version === "4.3.0" ? "current-4.3" : "current-4.2";
+  }
+  if (presentation.schema_version === "4.3.0") throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
   if (renderLegacyBusinessHtmlV42(presentation, sourceReading) === artifacts.html && renderLegacyCaseTableV42(presentation) === artifacts.table) return "legacy-4.2";
   throw new TypeError("CASE_PRESENTATION_FAMILY_INVALID");
 }
@@ -45900,6 +46852,7 @@ init_canonical();
 // src/canonical-output-v4.mjs
 init_canonical();
 init_case_semantics_v4();
+init_v4_contract();
 var EXECUTION_WORKSHEET_COLUMNS = Object.freeze([
   "case_id",
   "acceptance_role",
@@ -45927,7 +46880,7 @@ var SURFACE_RANK3 = Object.freeze([
   "side_effect",
   "external_observation"
 ]);
-function record7(value) {
+function record8(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function compareText3(left, right) {
@@ -45940,7 +46893,7 @@ function csvField(value) {
   return /[",\n]/u.test(text11) ? `"${text11.replace(/"/gu, '""')}"` : text11;
 }
 function validateCanonicalCase2(candidate) {
-  if (!record7(candidate) || !["Grounded", "Conditional"].includes(candidate.semantic_status) || !record7(candidate.ordering) || !Array.isArray(candidate.ordering.depends_on_case_ids)) {
+  if (!record8(candidate) || !["Grounded", "Conditional"].includes(candidate.semantic_status) || !record8(candidate.ordering) || !Array.isArray(candidate.ordering.depends_on_case_ids)) {
     throw new TypeError("CANONICAL_CASE_INVALID");
   }
   const draft = structuredClone(candidate);
@@ -45954,7 +46907,7 @@ function validateCanonicalCase2(candidate) {
   if (diagnostics2.length || dependencies.some((id2) => typeof id2 !== "string" || !id2) || new Set(dependencies).size !== dependencies.length) throw new TypeError("CANONICAL_CASE_INVALID");
 }
 function renderExecutionWorksheetCsvV4(input, orderedCaseIds) {
-  if (!record7(input) || !["4.0.0", "4.2.0"].includes(input.schema_version) || input.delivery_intent !== "case_document" || !Array.isArray(input.cases) || !record7(input.scope_manifest) || !Array.isArray(input.scope_manifest.modules) || !Array.isArray(orderedCaseIds)) {
+  if (!record8(input) || !isV4SchemaVersion(input.schema_version) || input.delivery_intent !== "case_document" || !Array.isArray(input.cases) || !record8(input.scope_manifest) || !Array.isArray(input.scope_manifest.modules) || !Array.isArray(orderedCaseIds)) {
     throw new TypeError("CASE_DOCUMENT_INVALID");
   }
   const cases = structuredClone(input.cases);
@@ -45966,7 +46919,7 @@ function renderExecutionWorksheetCsvV4(input, orderedCaseIds) {
   }
   const moduleById = /* @__PURE__ */ new Map();
   for (const module of input.scope_manifest.modules) {
-    if (!record7(module) || typeof module.module_id !== "string" || typeof module.name !== "string" || !module.name.trim() || moduleById.has(module.module_id)) throw new TypeError("MODULE_MANIFEST_INVALID");
+    if (!record8(module) || typeof module.module_id !== "string" || typeof module.name !== "string" || !module.name.trim() || moduleById.has(module.module_id)) throw new TypeError("MODULE_MANIFEST_INVALID");
     moduleById.set(module.module_id, module.name.normalize("NFC"));
   }
   const rows = [EXECUTION_WORKSHEET_COLUMNS.join(",")];
@@ -46015,7 +46968,9 @@ init_contracts();
 init_non_blocking_diagnostics_v4();
 await init_run_store();
 init_schema_validator();
-var BUNDLE_KEYS = Object.freeze([
+init_v4_contract();
+init_semantic_delivery_gate_v4();
+var BASE_BUNDLE_KEYS = Object.freeze([
   "schema_version",
   "compiler_version",
   "delivery_intent",
@@ -46030,6 +46985,11 @@ var BUNDLE_KEYS = Object.freeze([
   "not_applicable",
   "risk_review_ledger"
 ]);
+var GENERAL_QUALITY_BUNDLE_KEYS = Object.freeze([
+  ...BASE_BUNDLE_KEYS,
+  "design_assurance_summary",
+  "independent_review_summary"
+]);
 var ACTIVE_ROOT_STATUSES3 = /* @__PURE__ */ new Set(["presented", "deferred_by_user", "unknown_by_user", "closed_for_delivery"]);
 var RISK_KINDS = Object.freeze([
   "null_or_missing",
@@ -46042,8 +47002,11 @@ var RISK_KINDS = Object.freeze([
   "refresh",
   "business_permission_boundary"
 ]);
-function record8(value) {
+function record9(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function sameContractIdentity(left, right) {
+  return left?.schema_version === right?.schema_version && left?.compiler_version === right?.compiler_version;
 }
 function byteDigest2(value) {
   return `sha256:${createHash8("sha256").update(value, "utf8").digest("hex")}`;
@@ -46073,19 +47036,19 @@ function validateSourceReadingRelations(summary) {
   }
 }
 function normalizeInput2(input) {
-  if (!record8(input) || Object.keys(input).some((key) => !["run_id", "completed_at", "bundle", "source_reading", "render_options", "non_blocking_diagnostics"].includes(key)) || typeof input.run_id !== "string" || !input.run_id.trim() || typeof input.completed_at !== "string" || !input.completed_at.trim() || !record8(input.bundle) || !record8(input.render_options) || !Array.isArray(input.non_blocking_diagnostics)) throw new TypeError("CANONICAL_DELIVERY_INPUT_INVALID");
+  if (!record9(input) || Object.keys(input).some((key) => !["run_id", "completed_at", "bundle", "source_reading", "render_options", "non_blocking_diagnostics"].includes(key)) || typeof input.run_id !== "string" || !input.run_id.trim() || typeof input.completed_at !== "string" || !input.completed_at.trim() || !record9(input.bundle) || !record9(input.render_options) || !Array.isArray(input.non_blocking_diagnostics)) throw new TypeError("CANONICAL_DELIVERY_INPUT_INVALID");
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
-  const expectedKeys = [...BUNDLE_KEYS].sort();
-  const legacy = bundle.schema_version === "4.0.0" && bundle.compiler_version === "0.5.0";
-  const candidate = bundle.schema_version === "4.2.0" && bundle.compiler_version === "0.7.0";
-  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index]) || !legacy && !candidate || bundle.delivery_intent !== "case_document" || !Number.isSafeInteger(bundle.source_revision) || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
+  const contract2 = v4ContractForIdentity(bundle);
+  const expectedKeys = [...contract2?.schema_version === "4.3.0" ? GENERAL_QUALITY_BUNDLE_KEYS : BASE_BUNDLE_KEYS].sort();
+  const candidate = contract2?.candidate === true;
+  if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index]) || !contract2 || bundle.delivery_intent !== "case_document" || !Number.isSafeInteger(bundle.source_revision) || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
     throw new TypeError("CANONICAL_BUNDLE_INVALID");
   }
   if (validateAgainstSchema(bundle, test_bundle_schema_default).length) throw new TypeError("CANONICAL_BUNDLE_INVALID");
   let sourceReading = null;
   if (candidate) {
-    if (!record8(input.source_reading) || validateAgainstSchema(input.source_reading, source_reading_schema_default).length) {
+    if (!record9(input.source_reading) || validateAgainstSchema(input.source_reading, source_reading_schema_default).length) {
       throw new TypeError("SOURCE_READING_INVALID");
     }
     sourceReading = structuredClone(input.source_reading);
@@ -46103,6 +47066,12 @@ function normalizeInput2(input) {
     "exploratory",
     "not_applicable"
   ].map((key) => [key, structuredClone(bundle[key])]));
+  if (contract2.schema_version === "4.3.0") Object.assign(projection, {
+    schema_version: bundle.schema_version,
+    compiler_version: bundle.compiler_version,
+    design_assurance_summary: structuredClone(bundle.design_assurance_summary),
+    independent_review_summary: structuredClone(bundle.independent_review_summary)
+  });
   projection.render_options = structuredClone(input.render_options);
   return { value: structuredClone(input), bundle, projection, sourceReading, candidate };
 }
@@ -46151,7 +47120,7 @@ function validateManifest(manifest) {
 }
 function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
   const blockedOnly = manifest.result_kind === "blocked_only";
-  const candidate = manifest.schema_version === "4.2.0";
+  const candidate = isCandidateV4Contract(manifest);
   const reply = {
     status: "finished",
     phase: "delivery",
@@ -46188,10 +47157,10 @@ function same(left, right) {
   return canonicalStringify(left) === canonicalStringify(right);
 }
 function validateCaseDocumentRef(ref2) {
-  return record8(ref2) && Object.keys(ref2).length === 4 && ["run_id", "revision", "manifest_digest", "bundle_digest"].every((key) => Object.hasOwn(ref2, key)) && typeof ref2.run_id === "string" && Boolean(ref2.run_id.trim()) && Number.isSafeInteger(ref2.revision) && ref2.revision >= 0 && /^sha256:[0-9a-f]{64}$/u.test(ref2.manifest_digest) && /^sha256:[0-9a-f]{64}$/u.test(ref2.bundle_digest);
+  return record9(ref2) && Object.keys(ref2).length === 4 && ["run_id", "revision", "manifest_digest", "bundle_digest"].every((key) => Object.hasOwn(ref2, key)) && typeof ref2.run_id === "string" && Boolean(ref2.run_id.trim()) && Number.isSafeInteger(ref2.revision) && ref2.revision >= 0 && /^sha256:[0-9a-f]{64}$/u.test(ref2.manifest_digest) && /^sha256:[0-9a-f]{64}$/u.test(ref2.bundle_digest);
 }
 async function resolveCaseDocument(ref2, services) {
-  if (!validateCaseDocumentRef(ref2) || !record8(services) || typeof services.resolve_case_document !== "function") {
+  if (!validateCaseDocumentRef(ref2) || !record9(services) || typeof services.resolve_case_document !== "function") {
     throw new TypeError("CASE_DOCUMENT_REFERENCE_INVALID");
   }
   const snapshot2 = await services.resolve_case_document(structuredClone(ref2));
@@ -46210,20 +47179,24 @@ async function resolveCaseDocument(ref2, services) {
   }
   if (`${canonicalStringify(manifest)}
 ` !== manifestBytes || `${canonicalStringify(bundle)}
-` !== bundleBytes || validateAgainstSchema(manifest, current_pointer_schema_default).length || validateCanonicalManifestRelations(manifest).length || validateAgainstSchema(bundle, test_bundle_schema_default).length || manifest.delivery_intent !== "case_document" || manifest.authority !== "canonical" || !["delivered_cases", "delivered_with_gaps"].includes(manifest.result_kind) || manifest.run_id !== ref2.run_id || manifest.revision !== ref2.revision || manifest.bundle.digest !== ref2.bundle_digest || bundle.delivery_intent !== "case_document" || bundle.source_revision !== ref2.revision || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count) {
+` !== bundleBytes || validateAgainstSchema(manifest, current_pointer_schema_default).length || validateCanonicalManifestRelations(manifest).length || validateAgainstSchema(bundle, test_bundle_schema_default).length || manifest.delivery_intent !== "case_document" || manifest.authority !== "canonical" || !["delivered_cases", "delivered_with_gaps"].includes(manifest.result_kind) || manifest.run_id !== ref2.run_id || manifest.revision !== ref2.revision || manifest.bundle.digest !== ref2.bundle_digest || bundle.delivery_intent !== "case_document" || bundle.source_revision !== ref2.revision || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count || bundle.schema_version === "4.3.0" && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest) {
     throw new TypeError("CASE_DOCUMENT_MANIFEST_INVALID");
   }
+  if (!sameContractIdentity(manifest, bundle)) {
+    throw new TypeError("CASE_DOCUMENT_CONTRACT_MISMATCH");
+  }
+  assertSemanticBundleDeliveryGateV4(bundle);
   return { manifest, bundle, manifest_bytes: manifestBytes, bundle_bytes: bundleBytes };
 }
 async function normalizeExecutionInput(input, services) {
-  if (!record8(input) || Object.keys(input).some((key) => ![
+  if (!record9(input) || Object.keys(input).some((key) => ![
     "run_id",
     "revision",
     "completed_at",
     "case_document_ref",
     "execution_plan",
     "non_blocking_diagnostics"
-  ].includes(key)) || typeof input.run_id !== "string" || !input.run_id.trim() || !Number.isSafeInteger(input.revision) || input.revision < 0 || typeof input.completed_at !== "string" || !input.completed_at.trim() || !Array.isArray(input.non_blocking_diagnostics) || !record8(input.execution_plan)) {
+  ].includes(key)) || typeof input.run_id !== "string" || !input.run_id.trim() || !Number.isSafeInteger(input.revision) || input.revision < 0 || typeof input.completed_at !== "string" || !input.completed_at.trim() || !Array.isArray(input.non_blocking_diagnostics) || !record9(input.execution_plan)) {
     throw new TypeError("EXECUTION_DELIVERY_INPUT_INVALID");
   }
   const plan = structuredClone(input.execution_plan);
@@ -46232,10 +47205,13 @@ async function normalizeExecutionInput(input, services) {
     $defs: execution_plan_schema_default.$defs,
     $ref: "#/$defs/v4ExecutionPlan"
   }).length) throw new TypeError("EXECUTION_PLAN_SCHEMA_INVALID");
-  if (!same(plan.case_document_ref, input.case_document_ref) || plan.status !== "finished" || !["execution_ready", "no_execution_selected"].includes(plan.result_kind) || typeof plan.runner_ready !== "boolean" || !Array.isArray(plan.items) || !record8(plan.runner_projection) || Object.keys(plan.runner_projection).some((key) => !["case_ids", "case_ids_digest"].includes(key)) || !Array.isArray(plan.runner_projection.case_ids) || plan.runner_projection.case_ids_digest !== `sha256:${digest(plan.runner_projection.case_ids)}`) {
+  if (!same(plan.case_document_ref, input.case_document_ref) || plan.status !== "finished" || !["execution_ready", "no_execution_selected"].includes(plan.result_kind) || typeof plan.runner_ready !== "boolean" || !Array.isArray(plan.items) || !record9(plan.runner_projection) || Object.keys(plan.runner_projection).some((key) => !["case_ids", "case_ids_digest"].includes(key)) || !Array.isArray(plan.runner_projection.case_ids) || plan.runner_projection.case_ids_digest !== `sha256:${digest(plan.runner_projection.case_ids)}`) {
     throw new TypeError("EXECUTION_PLAN_INVALID");
   }
   const referenced = await resolveCaseDocument(input.case_document_ref, services);
+  if (!sameContractIdentity(plan, referenced.manifest) || !sameContractIdentity(plan, referenced.bundle)) {
+    throw new TypeError("EXECUTION_CONTRACT_MISMATCH");
+  }
   const cases = new Map(referenced.bundle.cases.map((item) => [item.case_id, item]));
   const orderedCaseIds = referenced.bundle.ordered_case_ids;
   if (plan.items.length !== orderedCaseIds.length || new Set(plan.items.map((item) => item?.case_id)).size !== plan.items.length) {
@@ -46244,7 +47220,7 @@ async function normalizeExecutionInput(input, services) {
   for (let index = 0; index < plan.items.length; index += 1) {
     const item = plan.items[index];
     const candidate = cases.get(item?.case_id);
-    if (!record8(item) || Object.keys(item).some((key) => !["case_id", "semantic_status", "disposition", "ready"].includes(key)) || item.case_id !== orderedCaseIds[index] || !candidate || item.semantic_status !== candidate.semantic_status || !["execute", "do_not_execute"].includes(item.disposition) || typeof item.ready !== "boolean" || item.disposition === "execute" && (item.semantic_status !== "Grounded" || item.ready !== true)) {
+    if (!record9(item) || Object.keys(item).some((key) => !["case_id", "semantic_status", "disposition", "ready"].includes(key)) || item.case_id !== orderedCaseIds[index] || !candidate || item.semantic_status !== candidate.semantic_status || !["execute", "do_not_execute"].includes(item.disposition) || typeof item.ready !== "boolean" || item.disposition === "execute" && (item.semantic_status !== "Grounded" || item.ready !== true)) {
       throw new TypeError("EXECUTION_PLAN_INVALID");
     }
   }
@@ -46281,6 +47257,7 @@ function executionFinishedReply(manifest, planBytes, diagnostics2) {
 }
 function materializeCaseDocumentDeliveryV4(input) {
   const { value, bundle, sourceReading, candidate } = normalizeInput2(input);
+  assertSemanticBundleDeliveryGateV4(bundle);
   validateFinalRiskReview(bundle);
   const bundleBytes = `${canonicalStringify(bundle)}
 `;
@@ -46319,7 +47296,10 @@ function materializeCaseDocumentDeliveryV4(input) {
         digest: byteDigest2(sourceReadingBytes ?? ""),
         format: "json"
       },
-      primary_readable: "html"
+      primary_readable: "html",
+      ...canonicalBundle.schema_version === "4.3.0" ? {
+        review_target_digest: canonicalBundle.independent_review_summary.review_target_digest
+      } : {}
     } : {},
     render_options: structuredClone(value.render_options),
     ...derivedCounts(canonicalBundle),
@@ -46339,12 +47319,12 @@ function materializeCaseDocumentDeliveryV4(input) {
   };
 }
 function validateCaseDocumentArtifactSetV4(input, texts) {
-  if (!record8(texts)) throw new TypeError("CANONICAL_ARTIFACT_INVALID");
+  if (!record9(texts)) throw new TypeError("CANONICAL_ARTIFACT_INVALID");
   const materialized = (
     /** @type {any} */
     materializeCaseDocumentDeliveryV4(input)
   );
-  const candidate = materialized.manifest.schema_version === "4.2.0";
+  const candidate = isCandidateV4Contract(materialized.manifest);
   if (materialized.bundle_bytes !== texts.bundle || materialized.markdown_bytes !== texts.markdown || materialized.worksheet_bytes !== texts.worksheet || typeof texts.manifest !== "string") {
     throw new TypeError("CANONICAL_ARTIFACT_INVALID");
   }
@@ -46382,7 +47362,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateManifest(manifest);
   if (manifest.delivery_intent !== "case_document") throw new TypeError("CANONICAL_MANIFEST_INVALID");
   const prefix = `output/${revisionName(manifest.revision)}`;
-  const candidate = manifest.schema_version === "4.2.0";
+  const candidate = isCandidateV4Contract(manifest);
   if (manifest.bundle.path !== `${prefix}/test-bundle.json` || manifest.markdown.path !== `${prefix}/test-cases.md` || manifest.execution_worksheet.path !== `${prefix}/execution-worksheet.csv` || candidate && (manifest.html.path !== `${prefix}/test-cases.html` || manifest.chat_table.path !== `${prefix}/case-table.txt` || manifest.source_reading.path !== `${prefix}/source-reading.json` || manifest.primary_readable !== "html")) {
     throw new TypeError("CANONICAL_MANIFEST_INVALID");
   }
@@ -46418,6 +47398,10 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   }
   if (`${canonicalStringify(bundle)}
 ` !== artifacts.bundle) throw new TypeError("CANONICAL_ARTIFACT_INVALID");
+  if (!sameContractIdentity(manifest, bundle)) {
+    throw new TypeError("CASE_DOCUMENT_CONTRACT_MISMATCH");
+  }
+  assertSemanticBundleDeliveryGateV4(bundle);
   let sourceReading;
   if (candidate) {
     try {
@@ -46440,7 +47424,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
     })
   );
   validateFinalRiskReview(normalized.bundle);
-  if (normalized.bundle.source_revision !== manifest.revision || normalized.bundle.result_kind !== manifest.result_kind || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
+  if (normalized.bundle.source_revision !== manifest.revision || normalized.bundle.result_kind !== manifest.result_kind || normalized.bundle.schema_version === "4.3.0" && manifest.review_target_digest !== normalized.bundle.independent_review_summary.review_target_digest || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
     case_count: manifest.case_count,
     blocked_root_count: manifest.blocked_root_count,
     closed_for_delivery_root_count: manifest.closed_for_delivery_root_count,
@@ -46555,7 +47539,7 @@ async function verifyExecutionPlanDeliveryV4(runDirectory, services) {
     execution_plan: plan,
     non_blocking_diagnostics: []
   }, services);
-  if (manifest.result_kind !== normalized.plan.result_kind || manifest.runner_ready !== normalized.plan.runner_ready || !same(manifest.runner_projection, normalized.plan.runner_projection)) {
+  if (manifest.result_kind !== normalized.plan.result_kind || !sameContractIdentity(manifest, normalized.plan) || !sameContractIdentity(manifest, normalized.referenced.manifest) || !sameContractIdentity(manifest, normalized.referenced.bundle) || manifest.runner_ready !== normalized.plan.runner_ready || !same(manifest.runner_projection, normalized.plan.runner_projection)) {
     throw new TypeError("EXECUTION_MANIFEST_INVALID");
   }
   return {
@@ -46612,6 +47596,11 @@ var DOCUMENT_KEYS = /* @__PURE__ */ new Set([
   "all_reviewed_formal_points_not_applicable",
   "delivery_requested"
 ]);
+var STRICT_DOCUMENT_KEYS = /* @__PURE__ */ new Set([
+  ...DOCUMENT_KEYS,
+  "strict_semantic_delivery",
+  "unresolved_critical_semantic_gap_count"
+]);
 var EXECUTION_KEYS = /* @__PURE__ */ new Set([
   "delivery_intent",
   "cancelled",
@@ -46638,7 +47627,8 @@ function classifyFinalOutcomeV4(input) {
   );
   if (!["case_document", "execution_plan"].includes(state.delivery_intent) || typeof state.cancelled !== "boolean") throw new TypeError("FINAL_OUTCOME_INPUT_INVALID");
   if (state.delivery_intent === "case_document") {
-    requireClosed3(state, DOCUMENT_KEYS);
+    const strict = state.strict_semantic_delivery === true;
+    requireClosed3(state, strict ? STRICT_DOCUMENT_KEYS : DOCUMENT_KEYS);
     const counts = [
       state.case_count,
       state.applicable_formal_test_point_count,
@@ -46646,12 +47636,16 @@ function classifyFinalOutcomeV4(input) {
       state.blocked_root_count,
       state.closed_for_delivery_root_count,
       state.open_semantic_gap_count,
-      state.not_applicable_count
+      state.not_applicable_count,
+      ...strict ? [state.unresolved_critical_semantic_gap_count] : []
     ];
     if (!countsValid(counts) || typeof state.all_reviewed_formal_points_not_applicable !== "boolean" || typeof state.delivery_requested !== "boolean" || state.closed_for_delivery_root_count > state.blocked_root_count || state.open_semantic_gap_count + state.closed_for_delivery_root_count !== state.blocked_root_count || state.decidable_primary_acceptance_count > state.applicable_formal_test_point_count || state.all_reviewed_formal_points_not_applicable && (state.applicable_formal_test_point_count !== 0 || state.not_applicable_count === 0)) {
       throw new TypeError("FINAL_OUTCOME_INPUT_INVALID");
     }
     if (state.cancelled) return { status: "cancelled", result_kind: "cancelled", reason_code: "USER_CANCELLED" };
+    if (strict && state.unresolved_critical_semantic_gap_count > 0) {
+      return { status: "need_user_answers", result_kind: null, reason_code: "CRITICAL_SEMANTIC_GAPS_REMAIN" };
+    }
     if (state.blocked_root_count > 0) {
       if (state.open_semantic_gap_count > 0 || !state.delivery_requested) {
         return { status: "need_user_answers", result_kind: null, reason_code: "SEMANTIC_GAPS_REMAIN" };
@@ -46783,7 +47777,7 @@ var PHASES2 = /* @__PURE__ */ new Set([
   "execution_closure",
   "final_confirmation"
 ]);
-function record9(value) {
+function record10(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function requireHeldLock(ownership) {
@@ -46807,7 +47801,7 @@ function lifecyclePath(runDirectory) {
   return path5.join(runDirectory, "state", "lifecycle.json");
 }
 function validateCancelEvent(submitted) {
-  if (!record9(submitted)) throw new TypeError("CANCEL_EVENT_INVALID");
+  if (!record10(submitted)) throw new TypeError("CANCEL_EVENT_INVALID");
   const event = structuredClone(submitted);
   const keys = ["event_id", "event_type", "run_id", "phase", "phase_version"];
   if (Object.keys(event).length !== keys.length || keys.some((key) => !Object.hasOwn(event, key)) || !EVENT_ID.test(event.event_id) || event.event_type !== "cancel_run" || typeof event.run_id !== "string" || !RUN_ID.test(event.run_id) || !PHASES2.has(event.phase) || !Number.isSafeInteger(event.phase_version) || event.phase_version < 0) {
@@ -46819,7 +47813,7 @@ function validateCancelEvent(submitted) {
   return event;
 }
 function constructCancelRunEventV4(context) {
-  if (!record9(context)) throw new TypeError("CANCEL_CONTEXT_INVALID");
+  if (!record10(context)) throw new TypeError("CANCEL_CONTEXT_INVALID");
   const body = {
     event_type: "cancel_run",
     run_id: context.run_id,
@@ -46855,7 +47849,7 @@ async function syncCancelledLifecycle(runDirectory, runInstance, recordValue) {
   });
 }
 async function validateCancellationRecord(runDirectory, value) {
-  if (!record9(value)) throw new RunStoreIntegrityError("CANCEL_STATE_INVALID");
+  if (!record10(value)) throw new RunStoreIntegrityError("CANCEL_STATE_INVALID");
   const keys = [
     "schema_version",
     "compiler_version",
@@ -46870,13 +47864,13 @@ async function validateCancellationRecord(runDirectory, value) {
   ];
   const event = validateCancelEvent(value.event);
   const contract2 = v4ContractForIdentity(value);
-  if (Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key)) || !contract2 || value.run_id !== event.run_id || !["case_document", "execution_plan"].includes(value.delivery_intent) || value.status !== "cancelled" || value.version !== 1 || value.event_digest !== `sha256:${digest(event)}` || !record9(value.reply) || value.reply.status !== "cancelled" || value.reply.run_id !== value.run_id || value.reply.phase !== event.phase || value.reply.result_kind !== "cancelled") {
+  if (Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key)) || !contract2 || value.run_id !== event.run_id || !["case_document", "execution_plan"].includes(value.delivery_intent) || value.status !== "cancelled" || value.version !== 1 || value.event_digest !== `sha256:${digest(event)}` || !record10(value.reply) || value.reply.status !== "cancelled" || value.reply.run_id !== value.run_id || value.reply.phase !== event.phase || value.reply.result_kind !== "cancelled") {
     throw new RunStoreIntegrityError("CANCEL_STATE_INVALID");
   }
   const current = await readTextIfPresent(runDirectory, path5.join(runDirectory, "output", "current.json"));
   if (value.prior_manifest === null) {
     if (current !== null) throw new RunStoreIntegrityError("CANCEL_MANIFEST_CHANGED");
-  } else if (!record9(value.prior_manifest) || value.prior_manifest.path !== "output/current.json" || typeof value.prior_manifest.digest !== "string" || current === null || byteDigest3(current) !== value.prior_manifest.digest) {
+  } else if (!record10(value.prior_manifest) || value.prior_manifest.path !== "output/current.json" || typeof value.prior_manifest.digest !== "string" || current === null || byteDigest3(current) !== value.prior_manifest.digest) {
     throw new RunStoreIntegrityError("CANCEL_MANIFEST_CHANGED");
   }
   return value;
@@ -46973,7 +47967,7 @@ function catalogRunDirectory(catalogRoot2, runId) {
   return path5.join(path5.resolve(catalogRoot2), "runs", runId);
 }
 async function createResumeCancelledSiblingV4(catalogRoot2, input) {
-  if (!record9(input) || Object.keys(input).length !== 2 || typeof input.parent_run_id !== "string" || typeof input.run_id !== "string") {
+  if (!record10(input) || Object.keys(input).length !== 2 || typeof input.parent_run_id !== "string" || typeof input.run_id !== "string") {
     throw new TypeError("RESUME_CANCELLED_INPUT_INVALID");
   }
   const release = await acquireRunLock(catalogRoot2);
@@ -47015,7 +48009,7 @@ async function createResumeCancelledSiblingV4(catalogRoot2, input) {
   }
 }
 async function verifyResumeCancelledSiblingV4(runDirectory, submittedInstance) {
-  if (!record9(submittedInstance) || submittedInstance.lineage?.creation_reason !== "resume_cancelled" || typeof submittedInstance.lineage.parent_run_id !== "string") {
+  if (!record10(submittedInstance) || submittedInstance.lineage?.creation_reason !== "resume_cancelled" || typeof submittedInstance.lineage.parent_run_id !== "string") {
     throw new RunStoreIntegrityError("RESUME_CANCELLED_SIBLING_INVALID");
   }
   const resolved = path5.resolve(runDirectory);
@@ -47070,12 +48064,1427 @@ import { createHash as createHash10 } from "node:crypto";
 init_canonical();
 init_clarification_v4();
 init_contracts();
+
+// src/design-assurance-v4.mjs
+init_behavior_views_schema();
+init_canonical();
+init_schema_validator();
+function problem(code2, path14, message) {
+  return { category: "traceability", code: code2, path: path14, message };
+}
+function record11(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function uniqueIndex(values, key, code2, diagnostics2) {
+  const result = /* @__PURE__ */ new Map();
+  values.forEach((value, index) => {
+    const id2 = record11(value) ? value[key] : void 0;
+    if (typeof id2 !== "string") return;
+    if (result.has(id2)) diagnostics2.push(problem(code2, `/${key}/${index}`, `${key} must be unique.`));
+    else result.set(id2, value);
+  });
+  return result;
+}
+function canonicalClone(value) {
+  return JSON.parse(canonicalStringify(value));
+}
+function validateDesignAssuranceV4(submitted, submittedContext) {
+  const diagnostics2 = validateAgainstSchema(submitted, {
+    $defs: behavior_views_schema_default.$defs,
+    $ref: "#/$defs/v4DesignAssurance"
+  });
+  if (!record11(submittedContext) || !Array.isArray(submittedContext.source_claim_ids) || !Array.isArray(submittedContext.semantic_gap_ids) || !Array.isArray(submittedContext.view_element_ids)) {
+    diagnostics2.push(problem("DESIGN_ASSURANCE_CONTEXT_INVALID", "/", "Compiler reference inventories are required."));
+  }
+  if (diagnostics2.length || !record11(submitted) || !record11(submittedContext)) {
+    return { diagnostics: diagnostics2, normalized: null };
+  }
+  const assurance = (
+    /** @type {Record<string,any>} */
+    canonicalClone(submitted)
+  );
+  const knownClaims = new Set(submittedContext.source_claim_ids);
+  const knownGaps = new Set(submittedContext.semantic_gap_ids);
+  const knownElements = new Set(submittedContext.view_element_ids);
+  const batches = uniqueIndex(assurance.batches, "batch_id", "DESIGN_ASSURANCE_BATCH_DUPLICATE", diagnostics2);
+  const groups = uniqueIndex(assurance.rule_groups, "rule_group_id", "DESIGN_ASSURANCE_RULE_GROUP_DUPLICATE", diagnostics2);
+  const responsibilities = uniqueIndex(
+    assurance.candidate_responsibilities,
+    "candidate_id",
+    "DESIGN_ASSURANCE_RESPONSIBILITY_DUPLICATE",
+    diagnostics2
+  );
+  const dispositions = uniqueIndex(
+    assurance.candidate_dispositions,
+    "candidate_id",
+    "DESIGN_ASSURANCE_DISPOSITION_DUPLICATE",
+    diagnostics2
+  );
+  const sequences = /* @__PURE__ */ new Set();
+  const candidateOwners = /* @__PURE__ */ new Map();
+  const checkClaims = (claimIds, path14) => {
+    for (const claimId of claimIds) if (!knownClaims.has(claimId)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_SOURCE_CLAIM_UNKNOWN",
+      path14,
+      "Design rationale must reference a current verified source Claim."
+    ));
+  };
+  for (const [index, batch] of assurance.batches.entries()) {
+    if (sequences.has(batch.sequence)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_BATCH_SEQUENCE_DUPLICATE",
+      `/batches/${index}/sequence`,
+      "Batch sequence must be unique."
+    ));
+    sequences.add(batch.sequence);
+    if (batch.status !== "complete") diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_BATCH_INCOMPLETE",
+      `/batches/${index}/status`,
+      "Every submitted design batch must be complete."
+    ));
+    if (batch.sequence > assurance.plan_revision) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_PLAN_REVISION_STALE",
+      "/plan_revision",
+      "Plan revision must cover every submitted batch sequence."
+    ));
+    checkClaims(batch.source_claim_ids, `/batches/${index}/source_claim_ids`);
+  }
+  for (const [index, group] of assurance.rule_groups.entries()) {
+    const batch = batches.get(group.batch_id);
+    if (!batch || !batch.rule_group_ids.includes(group.rule_group_id)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_BATCH_RULE_GROUP_MISMATCH",
+      `/rule_groups/${index}/batch_id`,
+      "Every rule group must be owned by exactly one declared batch."
+    ));
+    checkClaims(group.source_claim_ids, `/rule_groups/${index}/source_claim_ids`);
+    for (const candidateId of group.candidate_ids) {
+      if (candidateOwners.has(candidateId)) diagnostics2.push(problem(
+        "DESIGN_ASSURANCE_CANDIDATE_DUPLICATE",
+        `/rule_groups/${index}/candidate_ids`,
+        "A design candidate may belong to only one rule group."
+      ));
+      else candidateOwners.set(candidateId, group.rule_group_id);
+    }
+  }
+  for (const [batchId, batch] of batches) {
+    const actual = assurance.rule_groups.filter((group) => group.batch_id === batchId).map((group) => group.rule_group_id).sort();
+    const declared = [...batch.rule_group_ids].sort();
+    if (canonicalStringify(actual) !== canonicalStringify(declared)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_BATCH_RULE_GROUP_MISMATCH",
+      `/batches/${batchId}/rule_group_ids`,
+      "Batch rule-group inventory must be total and exact."
+    ));
+  }
+  for (const [candidateId, ownerGroupId] of candidateOwners) {
+    const responsibility = responsibilities.get(candidateId);
+    if (!responsibility || responsibility.rule_group_id !== ownerGroupId) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_RESPONSIBILITY_MISSING",
+      `/candidate_responsibilities/${candidateId}`,
+      "Every candidate needs one responsibility owned by its rule group."
+    ));
+    if (!dispositions.has(candidateId)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_DISPOSITION_MISSING",
+      `/candidate_dispositions/${candidateId}`,
+      "Every candidate needs one auditable disposition."
+    ));
+  }
+  for (const [candidateId, responsibility] of responsibilities) {
+    if (!candidateOwners.has(candidateId) || responsibility.rule_group_id !== candidateOwners.get(candidateId)) {
+      diagnostics2.push(problem(
+        "DESIGN_ASSURANCE_RESPONSIBILITY_UNKNOWN",
+        `/candidate_responsibilities/${candidateId}`,
+        "Responsibility must reference one declared candidate and its owning rule group."
+      ));
+    }
+    checkClaims(responsibility.source_claim_ids, `/candidate_responsibilities/${candidateId}/source_claim_ids`);
+  }
+  for (const [candidateId, disposition] of dispositions) {
+    if (!candidateOwners.has(candidateId)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_DISPOSITION_UNKNOWN",
+      `/candidate_dispositions/${candidateId}`,
+      "Disposition must reference one declared candidate."
+    ));
+    if (disposition.disposition === "retained" && disposition.retained_element_ids.some((id2) => !knownElements.has(id2))) {
+      diagnostics2.push(problem(
+        "DESIGN_ASSURANCE_RETAINED_TARGET_UNKNOWN",
+        `/candidate_dispositions/${candidateId}/retained_element_ids`,
+        "Retained candidates must bind current behavior-view elements."
+      ));
+    }
+    if (["representative_value", "equivalent_merge"].includes(disposition.disposition) && (!candidateOwners.has(disposition.retained_candidate_id) || disposition.retained_candidate_id === candidateId)) {
+      diagnostics2.push(problem(
+        "DESIGN_ASSURANCE_RETAINED_CANDIDATE_UNKNOWN",
+        `/candidate_dispositions/${candidateId}/retained_candidate_id`,
+        "Representative or merged candidates must target another declared candidate."
+      ));
+    }
+    if (disposition.disposition === "evidence_exclusion") {
+      checkClaims(disposition.source_claim_ids, `/candidate_dispositions/${candidateId}/source_claim_ids`);
+    }
+    if (disposition.disposition === "semantic_gap" && !knownGaps.has(disposition.semantic_gap_id)) {
+      diagnostics2.push(problem(
+        "DESIGN_ASSURANCE_SEMANTIC_GAP_UNKNOWN",
+        `/candidate_dispositions/${candidateId}/semantic_gap_id`,
+        "Semantic-gap disposition must reference a current semantic gap."
+      ));
+    }
+  }
+  for (const candidateId of candidateOwners.keys()) {
+    const initialDisposition = dispositions.get(candidateId);
+    if (!initialDisposition || !["representative_value", "equivalent_merge"].includes(initialDisposition.disposition)) continue;
+    const visited = /* @__PURE__ */ new Set();
+    let cursor = candidateId;
+    while (true) {
+      if (visited.has(cursor)) {
+        diagnostics2.push(problem(
+          "DESIGN_ASSURANCE_MERGE_CYCLE",
+          `/candidate_dispositions/${candidateId}`,
+          "Representative and merge targets cannot form a cycle."
+        ));
+        break;
+      }
+      visited.add(cursor);
+      const disposition = dispositions.get(cursor);
+      if (!disposition || !["representative_value", "equivalent_merge"].includes(disposition.disposition)) {
+        if (!disposition || disposition.disposition !== "retained" || disposition.retained_element_ids.some(
+          (id2) => !knownElements.has(id2)
+        )) {
+          diagnostics2.push(problem(
+            "DESIGN_ASSURANCE_RETAINED_CHAIN_INVALID",
+            `/candidate_dispositions/${candidateId}/retained_candidate_id`,
+            "Representative and merge chains must terminate at a retained candidate with current elements."
+          ));
+        }
+        break;
+      }
+      cursor = disposition.retained_candidate_id;
+    }
+  }
+  const impactedIds = /* @__PURE__ */ new Set();
+  for (const [index, impact] of assurance.impacted_prior_batches.entries()) {
+    if (impactedIds.has(impact.batch_id)) diagnostics2.push(problem(
+      "DESIGN_ASSURANCE_IMPACT_DUPLICATE",
+      `/impacted_prior_batches/${index}/batch_id`,
+      "A prior batch may appear only once in an impact record."
+    ));
+    impactedIds.add(impact.batch_id);
+    const prior = batches.get(impact.batch_id);
+    const triggers = impact.trigger_rule_group_ids.map((id2) => groups.get(id2));
+    const triggerBatches = triggers.map((group) => group ? batches.get(group.batch_id) : null);
+    if (!prior || triggers.some((value) => !value) || triggerBatches.some((value) => !value) || triggerBatches.some((batch) => batch.sequence <= prior.sequence)) {
+      diagnostics2.push(problem(
+        "DESIGN_ASSURANCE_PRIOR_BATCH_INVALID",
+        `/impacted_prior_batches/${index}`,
+        "An impacted prior batch must precede every triggering rule group batch."
+      ));
+    }
+    checkClaims(impact.source_claim_ids, `/impacted_prior_batches/${index}/source_claim_ids`);
+  }
+  return { diagnostics: diagnostics2, normalized: assurance };
+}
+
+// src/independent-review-v4.mjs
+init_canonical();
+init_semantic_gaps_v4();
+var TARGET_KINDS = /* @__PURE__ */ new Set(["business_result", "condition_distinction", "required_relation"]);
+var ACCEPTANCE_ROLES = /* @__PURE__ */ new Set(["primary_acceptance", "dependency_contract", "context_only"]);
+var REVIEWER_CLASSES = /* @__PURE__ */ new Set([
+  "independent_context",
+  "independent_agent",
+  "qualified_external_reviewer"
+]);
+var ITEM_KEYS = Object.freeze({
+  fact: "fact_id",
+  view: "view_id",
+  formal_test_point: "formal_test_point_id",
+  candidate_responsibility: "candidate_id",
+  case: "case_id",
+  precondition: "precondition_id",
+  data_condition: "condition_id",
+  step: "step_id",
+  oracle: "oracle_id"
+});
+function record12(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function closed7(value, keys, code2) {
+  if (Object.keys(value).some((key) => !keys.includes(key))) throw new TypeError(code2);
+}
+function sorted(values, key) {
+  return values.map((value) => structuredClone(value)).sort((left, right) => compareUnicodeScalar(String(left[key] ?? ""), String(right[key] ?? "")));
+}
+function sourceFirstTarget(raw, allowIssuedId) {
+  if (!record12(raw)) throw new TypeError("INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID");
+  closed7(raw, [
+    ...allowIssuedId ? ["target_id"] : [],
+    "target_kind",
+    "acceptance_role",
+    "objective",
+    "source_claim_ids",
+    "decision_ids"
+  ], "INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID");
+  const target = {
+    target_kind: canonicalTextV4(raw.target_kind, "INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID"),
+    acceptance_role: canonicalTextV4(raw.acceptance_role, "INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID"),
+    objective: canonicalTextV4(raw.objective, "INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID"),
+    source_claim_ids: canonicalStringSetV4(raw.source_claim_ids, "INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID", false),
+    decision_ids: canonicalStringSetV4(raw.decision_ids, "INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID", false)
+  };
+  if (!TARGET_KINDS.has(target.target_kind) || !ACCEPTANCE_ROLES.has(target.acceptance_role) || target.source_claim_ids.length + target.decision_ids.length === 0) {
+    throw new TypeError("INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_INVALID");
+  }
+  const targetId = `IRT-${sha256CanonicalV4(target).slice("sha256:".length)}`;
+  if (allowIssuedId && raw.target_id !== targetId) {
+    throw new TypeError("INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_ID_INVALID");
+  }
+  return { target_id: targetId, ...target };
+}
+function projectedCase(rawCase) {
+  if (!record12(rawCase)) throw new TypeError("INDEPENDENT_REVIEW_TARGET_INPUT_INVALID");
+  const content = {};
+  for (const key of [
+    "title",
+    "primary_test_point_id",
+    "business_preconditions",
+    "data_conditions",
+    "steps",
+    "oracles"
+  ]) {
+    if (!Object.hasOwn(rawCase, key)) throw new TypeError("INDEPENDENT_REVIEW_TARGET_INPUT_INVALID");
+    content[key] = structuredClone(rawCase[key]);
+  }
+  return {
+    case_id: `RCASE-${sha256CanonicalV4(content).slice("sha256:".length)}`,
+    ...content
+  };
+}
+function compileIndependentReviewTargetV4(submitted) {
+  if (!record12(submitted) || !Number.isSafeInteger(submitted.source_revision) || submitted.source_revision < 0 || !Array.isArray(submitted.source_first_targets) || submitted.source_first_targets.length === 0) {
+    throw new TypeError("INDEPENDENT_REVIEW_SOURCE_FIRST_TARGETS_REQUIRED");
+  }
+  for (const key of ["facts", "views", "formal_test_points", "candidate_responsibilities", "cases"]) {
+    if (!Array.isArray(submitted[key])) throw new TypeError("INDEPENDENT_REVIEW_TARGET_INPUT_INVALID");
+  }
+  const issuedTargets = submitted.source_first_targets.map((target) => sourceFirstTarget(target, Object.hasOwn(target, "target_id")));
+  if (new Set(issuedTargets.map((target) => target.target_id)).size !== issuedTargets.length) {
+    throw new TypeError("INDEPENDENT_REVIEW_SOURCE_FIRST_TARGET_DUPLICATE");
+  }
+  const projectedCases = (
+    /** @type {any[]} */
+    submitted.cases.map(projectedCase)
+  );
+  const projection = {
+    projection_version: "1.0.0",
+    source_revision: submitted.source_revision,
+    source_first_targets: issuedTargets.sort((left, right) => compareUnicodeScalar(left.target_id, right.target_id)),
+    facts: sorted(submitted.facts, "fact_id"),
+    views: sorted(submitted.views, "view_id"),
+    formal_test_points: sorted(submitted.formal_test_points, "formal_test_point_id"),
+    candidate_responsibilities: sorted(submitted.candidate_responsibilities, "candidate_id"),
+    cases: projectedCases.sort((left, right) => compareUnicodeScalar(String(left.case_id), String(right.case_id)))
+  };
+  return { projection, digest: sha256CanonicalV4(projection) };
+}
+function itemRefs(target) {
+  const refs3 = /* @__PURE__ */ new Set();
+  const add = (kind, value) => {
+    const key = ITEM_KEYS[kind];
+    if (record12(value) && typeof value[key] === "string") refs3.add(`${kind}\0${value[key]}`);
+  };
+  for (const fact of target.projection.facts) add("fact", fact);
+  for (const view of target.projection.views) add("view", view);
+  for (const point of target.projection.formal_test_points) add("formal_test_point", point);
+  for (const responsibility of target.projection.candidate_responsibilities) add("candidate_responsibility", responsibility);
+  for (const candidate of target.projection.cases) {
+    add("case", candidate);
+    for (const item of candidate.business_preconditions) add("precondition", item);
+    for (const item of candidate.data_conditions) add("data_condition", item);
+    for (const item of candidate.steps) add("step", item);
+    for (const item of candidate.oracles) add("oracle", item);
+  }
+  return refs3;
+}
+function diagnostic17(diagnostics2, code2, path14, message) {
+  diagnostics2.push({ category: "quality", code: code2, path: path14, message });
+}
+function validateItems(refs3, knownItems, diagnostics2, path14) {
+  if (!Array.isArray(refs3) || refs3.length === 0) {
+    diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_ITEM_REQUIRED", path14, "At least one reviewed item is required.");
+    return;
+  }
+  for (let index = 0; index < refs3.length; index += 1) {
+    const ref2 = refs3[index];
+    if (!record12(ref2) || !Object.hasOwn(ITEM_KEYS, ref2.item_kind) || typeof ref2.item_id !== "string" || !knownItems.has(`${ref2.item_kind}\0${ref2.item_id}`)) {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_ITEM_UNKNOWN", `${path14}/${index}`, "Review item must bind the issued target projection.");
+    }
+  }
+}
+function validateEvidenceRefs(value, claims, decisions2, diagnostics2, path14) {
+  const claimIds = Array.isArray(value?.source_claim_ids) ? value.source_claim_ids : [];
+  const decisionIds = Array.isArray(value?.decision_ids) ? value.decision_ids : [];
+  if (claimIds.some((id2) => !claims.has(id2)) || decisionIds.some((id2) => !decisions2.has(id2))) {
+    diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_SOURCE_REF_UNKNOWN", path14, "Review evidence must reference current Claims or Decisions.");
+  }
+}
+function sameReferenceSet(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.some((value) => typeof value !== "string") || right.some((value) => typeof value !== "string")) return false;
+  const order = (first, second) => compareUnicodeScalar(first, second);
+  return canonicalStringify([...left].sort(order)) === canonicalStringify([...right].sort(order));
+}
+function validateIndependentReviewV4(submittedReview, submittedTarget, submittedContext) {
+  const diagnostics2 = [];
+  if (!record12(submittedTarget) || !record12(submittedTarget.projection) || typeof submittedTarget.digest !== "string" || !record12(submittedContext)) {
+    return { normalized: null, diagnostics: [{
+      category: "quality",
+      code: "INDEPENDENT_REVIEW_CONTEXT_INVALID",
+      path: "/",
+      message: "Independent review validation requires a compiler-issued target and current references."
+    }] };
+  }
+  const review = record12(submittedReview) ? submittedReview : {};
+  if (review.status !== "completed") {
+    diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_INCOMPLETE", "/status", "Only a completed independent review can release formal delivery.");
+    return { normalized: null, diagnostics: diagnostics2 };
+  }
+  if (review.protocol_version !== "1.0.0" || review.review_mode !== "independent_source_first" || !record12(review.reviewer_identity) || !REVIEWER_CLASSES.has(review.reviewer_identity.identity_class) || typeof review.reviewer_identity.separation_basis !== "string" || !review.reviewer_identity.separation_basis.trim()) {
+    diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_NOT_INDEPENDENT", "/reviewer_identity", "Generator self-check cannot stand in for source-first independent review.");
+  }
+  if (review.review_target_digest !== submittedTarget.digest || canonicalStringify(review.source_first_targets) !== canonicalStringify(
+    submittedTarget.projection.source_first_targets
+  )) {
+    diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_TARGET_MISMATCH", "/review_target_digest", "Review must bind the current compiler-issued target and source-first inventory.");
+  }
+  const claims = new Set(Array.isArray(submittedContext.source_claim_ids) ? submittedContext.source_claim_ids : []);
+  const decisions2 = new Set(Array.isArray(submittedContext.decision_ids) ? submittedContext.decision_ids : []);
+  const gaps = new Set(Array.isArray(submittedContext.semantic_gap_ids) ? submittedContext.semantic_gap_ids : []);
+  const knownTargets = new Set(submittedTarget.projection.source_first_targets.map(
+    (target) => target.target_id
+  ));
+  const targetsById = new Map(submittedTarget.projection.source_first_targets.map(
+    (target) => [target.target_id, target]
+  ));
+  const knownItems = itemRefs(submittedTarget);
+  for (const target of submittedTarget.projection.source_first_targets) {
+    validateEvidenceRefs(target, claims, decisions2, diagnostics2, `/source_first_targets/${target.target_id}`);
+  }
+  const assessments = Array.isArray(review.target_assessments) ? review.target_assessments : [];
+  const assessmentTargets = /* @__PURE__ */ new Set();
+  for (let index = 0; index < assessments.length; index += 1) {
+    const assessment = assessments[index];
+    const path14 = `/target_assessments/${index}`;
+    if (!record12(assessment) || !knownTargets.has(assessment.target_id) || assessmentTargets.has(assessment.target_id)) {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_TARGET_ASSESSMENT_INVALID", path14, "Each issued source-first target requires exactly one assessment.");
+      continue;
+    }
+    assessmentTargets.add(assessment.target_id);
+    validateEvidenceRefs(assessment, claims, decisions2, diagnostics2, path14);
+    const issuedTarget = targetsById.get(assessment.target_id);
+    if (!sameReferenceSet(assessment.source_claim_ids, issuedTarget.source_claim_ids) || !sameReferenceSet(assessment.decision_ids, issuedTarget.decision_ids)) {
+      diagnostic17(
+        diagnostics2,
+        "INDEPENDENT_REVIEW_TARGET_EVIDENCE_MISMATCH",
+        path14,
+        "Target assessment evidence must exactly match its issued source-first target."
+      );
+    }
+    validateItems(assessment.affected_items, knownItems, diagnostics2, `${path14}/affected_items`);
+    if (assessment.disposition === "semantic_gap") {
+      if (!Array.isArray(assessment.semantic_gap_ids) || assessment.semantic_gap_ids.length === 0 || assessment.semantic_gap_ids.some((id2) => !gaps.has(id2))) {
+        diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_GAP_REF_INVALID", `${path14}/semantic_gap_ids`, "Gap disposition must bind a current semantic gap.");
+      }
+    } else if (!["verified", "evidence_excluded"].includes(assessment.disposition)) {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_DISPOSITION_INVALID", `${path14}/disposition`, "Target disposition is invalid.");
+    }
+    if (!record12(assessment.required_recheck) || assessment.required_recheck.status !== "passed") {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_RECHECK_REQUIRED", `${path14}/required_recheck`, "Every final target assessment requires a passed recheck.");
+    } else validateItems(assessment.required_recheck.affected_items, knownItems, diagnostics2, `${path14}/required_recheck/affected_items`);
+  }
+  if (assessmentTargets.size !== knownTargets.size || [...knownTargets].some((id2) => !assessmentTargets.has(id2))) {
+    diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_TARGET_ASSESSMENT_INCOMPLETE", "/target_assessments", "Every source-first target must be assessed exactly once.");
+  }
+  const findings = Array.isArray(review.findings) ? review.findings : [];
+  for (let index = 0; index < findings.length; index += 1) {
+    const finding = findings[index];
+    const path14 = `/findings/${index}`;
+    if (!record12(finding)) {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_FINDING_INVALID", path14, "Finding must be a closed object.");
+      continue;
+    }
+    validateEvidenceRefs(finding, claims, decisions2, diagnostics2, path14);
+    validateItems(finding.affected_items, knownItems, diagnostics2, `${path14}/affected_items`);
+    if (!Array.isArray(finding.source_first_target_ids) || finding.source_first_target_ids.some((id2) => !knownTargets.has(id2))) {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_TARGET_REF_UNKNOWN", `${path14}/source_first_target_ids`, "Finding target references must be compiler-issued.");
+    }
+    const confirmedClosed = finding.adjudication === "confirmed" && finding.disposition === "fixed_and_rechecked" && finding.required_recheck?.status === "passed";
+    const rejectedClosed = finding.adjudication === "rejected" && finding.disposition === "rejected_with_evidence" && finding.required_recheck?.status === "not_required" && (finding.source_claim_ids?.length ?? 0) + (finding.decision_ids?.length ?? 0) > 0;
+    if (!confirmedClosed && !rejectedClosed) {
+      diagnostic17(diagnostics2, "INDEPENDENT_REVIEW_FINDING_NOT_CLOSED", path14, "A finding must be fixed and rechecked or rejected with current evidence.");
+    }
+    if (confirmedClosed) validateItems(
+      finding.required_recheck.affected_items,
+      knownItems,
+      diagnostics2,
+      `${path14}/required_recheck/affected_items`
+    );
+  }
+  return {
+    normalized: diagnostics2.length === 0 ? structuredClone(review) : null,
+    diagnostics: diagnostics2.sort((left, right) => compareUnicodeScalar(
+      `${left.code}\0${left.path}`,
+      `${right.code}\0${right.path}`
+    ))
+  };
+}
+
+// src/relative-baseline-materialization-v4.mjs
+init_case_semantics_v4();
+function materializeRelativeBaselinesV4(candidates2, semanticEvidence, claimAssessments) {
+  const assessmentById = new Map((Array.isArray(claimAssessments) ? claimAssessments : []).map((item) => [item.claim_id, item]));
+  const diagnostics2 = [];
+  const cases = candidates2.map((candidate) => {
+    if (!candidate.baseline_spec) return candidate;
+    const assertion = semanticEvidence.baseline_assertions.find((item) => candidate.baseline_spec.claim_ids.includes(item.claim_id));
+    if (!assertion) return candidate;
+    const support = candidate.baseline_spec.claim_ids.map((claimId) => {
+      const assessment = assessmentById.get(claimId);
+      const source = semanticEvidence.baseline_assertions.find(
+        (item) => item.claim_id === claimId
+      );
+      return {
+        claim_id: claimId,
+        level: assessment?.level,
+        scope: source?.scope_ref,
+        support_review: assessment?.support_review
+      };
+    });
+    const result = compileRelativeBaselineCaseV4({
+      case_context: {
+        module_id: candidate.module_id,
+        scope_ref: assertion.scope_ref,
+        business_scope: candidate.title,
+        operation: candidate.steps.map((item) => item.action).join("\uFF1B"),
+        priority: candidate.priority,
+        ordering: candidate.ordering,
+        acceptance_role: candidate.acceptance_role,
+        fact_ids: candidate.fact_ids,
+        primary_test_point_id: candidate.primary_test_point_id,
+        business_preconditions: candidate.business_preconditions,
+        data_conditions: candidate.data_conditions
+      },
+      baseline_spec: candidate.baseline_spec
+    }, { claim_assessments: support });
+    diagnostics2.push(...result.diagnostics);
+    if (result.semantic_gaps.length || result.cases.length !== 1) {
+      diagnostics2.push({
+        category: "adapter_revision",
+        code: "BASELINE_DECLARATION_INCOMPLETE",
+        path: "/baseline_spec",
+        message: "A persisted relative baseline must already contain a complete source-declared comparison contract."
+      });
+      return candidate;
+    }
+    return {
+      ...candidate,
+      steps: result.cases[0].steps,
+      oracles: result.cases[0].oracles,
+      baseline_spec: result.cases[0].baseline_spec
+    };
+  });
+  return { cases, diagnostics: diagnostics2 };
+}
+
+// src/revision-artifact-validation-v4.mjs
 init_schema_validator();
 init_v4_contract();
+
+// src/v4-system-context.mjs
+init_canonical();
+init_source_locators_v4();
+init_v4_contract();
+init_source_subjects_v4();
+
+// src/source-runtime-registry-v4.mjs
+init_source_capture_audit();
+init_source_canonicalization();
+var PROVIDER_CONTRACTS_V1 = Object.freeze([Object.freeze({
+  provider: "cooper",
+  version: "1",
+  hosts: Object.freeze(["cooper.test", "cooper.example.test", "prd-assets.example.invalid"]),
+  kind: "cooper",
+  query_order: "sensitive"
+})]);
+var EXPIRY_MATCHERS_V1 = Object.freeze([Object.freeze({
+  provider: "cooper",
+  provider_contract_version: "1",
+  matcher_version: "cooper-expiry-v1",
+  prefix: '<span data-cooper-expiry="v1">\u4E34\u65F6\u94FE\u63A5\u5C06\u5728 ',
+  suffix: " \u5C0F\u65F6\u540E\u8FC7\u671F</span>"
+})]);
+var SOURCE_RUNTIME_REGISTRY_VERSION_V4 = "source-runtime-v1";
+function createCompilerSourceRuntimeV4() {
+  return {
+    registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
+    provider_registry: createSourceProviderRegistry([...PROVIDER_CONTRACTS_V1]),
+    expiry_registry: createExpiryMatcherRegistry([...EXPIRY_MATCHERS_V1])
+  };
+}
+
+// src/topology-discovery.mjs
+init_canonical();
+var DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+var MODULE_SUFFIX_PATTERN = /[\p{Script=Han}A-Za-z0-9_.-]{1,24}(?:系统|服务|后台|中台|端)/gu;
+var REVIEW_CLASSES = /* @__PURE__ */ new Set(["normative", "uncertain", "non_normative"]);
+var UNIT_KINDS = /* @__PURE__ */ new Set(["text_block", "table", "image"]);
+var CANDIDATE_KINDS = /* @__PURE__ */ new Set(["module_mention", "boundary_signal"]);
+function fail2(code2) {
+  throw new TypeError(code2);
+}
+function record13(value, code2) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail2(code2);
+  return (
+    /** @type {Record<string, any>} */
+    value
+  );
+}
+function closedKeys(value, keys) {
+  const allowed = new Set(keys);
+  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || !allowed.has(key))) fail2("TOPOLOGY_INPUT_UNKNOWN_FIELD");
+}
+function nonblank(value, code2) {
+  if (typeof value !== "string" || !value.trim()) fail2(code2);
+  return value.normalize("NFC").trim();
+}
+function list(value, code2) {
+  if (!Array.isArray(value)) fail2(code2);
+  return (
+    /** @type {any[]} */
+    value
+  );
+}
+function snapshotTopologyInputV4(input) {
+  const active = /* @__PURE__ */ new WeakSet();
+  const memo = /* @__PURE__ */ new WeakMap();
+  const visit = (value) => {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (!value || typeof value !== "object") fail2("TOPOLOGY_INPUT_VALUE_INVALID");
+    const source = (
+      /** @type {object} */
+      value
+    );
+    if (active.has(source)) fail2("TOPOLOGY_INPUT_CYCLIC");
+    if (memo.has(source)) return memo.get(source);
+    const isArray2 = Array.isArray(source);
+    const prototype = Object.getPrototypeOf(source);
+    if (isArray2 && prototype !== Array.prototype || !isArray2 && prototype !== Object.prototype && prototype !== null) fail2("TOPOLOGY_INPUT_PROTOTYPE");
+    const descriptors = Object.getOwnPropertyDescriptors(source);
+    if (Reflect.ownKeys(descriptors).some((key) => typeof key === "symbol")) fail2("TOPOLOGY_INPUT_SYMBOL");
+    for (const descriptor of Object.values(descriptors)) {
+      if (!Object.hasOwn(descriptor, "value")) fail2("TOPOLOGY_INPUT_ACCESSOR");
+    }
+    active.add(source);
+    if (isArray2) {
+      const length = descriptors.length?.value;
+      if (!Number.isSafeInteger(length) || length < 0) fail2("TOPOLOGY_INPUT_ARRAY_INVALID");
+      const result2 = new Array(length);
+      memo.set(source, result2);
+      const keys = Object.keys(descriptors).filter((key) => key !== "length");
+      if (keys.length !== length) fail2("TOPOLOGY_INPUT_ARRAY_INVALID");
+      for (let index = 0; index < length; index += 1) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || descriptor.enumerable !== true) fail2("TOPOLOGY_INPUT_ARRAY_INVALID");
+        result2[index] = visit(descriptor.value);
+      }
+      active.delete(source);
+      return result2;
+    }
+    const result = {};
+    memo.set(source, result);
+    for (const key of Object.keys(descriptors).sort(compareCodePoints10)) {
+      const descriptor = descriptors[key];
+      if (descriptor.enumerable !== true) fail2("TOPOLOGY_INPUT_PROPERTY_INVALID");
+      Object.defineProperty(result, key, {
+        value: visit(descriptor.value),
+        enumerable: true,
+        writable: true,
+        configurable: true
+      });
+    }
+    active.delete(source);
+    return result;
+  };
+  return visit(input);
+}
+function compareCodePoints10(left, right) {
+  const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  const length = Math.min(a.length, b.length);
+  for (let index = 0; index < length; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
+  return a.length - b.length;
+}
+function sortedUnique(values) {
+  return [...new Set(values.map((value) => value.normalize("NFC")))].sort(compareCodePoints10);
+}
+function sealDiscovery(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) sealDiscovery(child);
+  return Object.freeze(value);
+}
+function moduleLabels(content) {
+  const parts = content.normalize("NFC").split(/[\s,，。；;：:、/|（）()\[\]{}<>《》“”"'！？!?]|依赖|调用|连接|回传|返回|发送|接收|通过|流向|以及|或者|和|与|及/gu);
+  const labels = [];
+  for (const part of parts) {
+    for (const match of part.matchAll(MODULE_SUFFIX_PATTERN)) labels.push(match[0]);
+  }
+  return sortedUnique(labels);
+}
+function structuralEntityLabels(content) {
+  const normalized = content.normalize("NFC").trim();
+  const labels = moduleLabels(normalized);
+  if (normalized.length <= 64 && !/[。；;！？!?\n\r]/u.test(normalized)) labels.push(normalized);
+  return sortedUnique(labels);
+}
+function normalizeCell(cell) {
+  const item = record13(cell, "TOPOLOGY_CELL_INVALID");
+  closedKeys(item, ["cell_id", "locator_id", "text"]);
+  return {
+    cell_id: nonblank(item.cell_id, "TOPOLOGY_CELL_ID_INVALID"),
+    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID"),
+    text: nonblank(item.text, "TOPOLOGY_CELL_TEXT_INVALID")
+  };
+}
+function normalizeNode(node) {
+  const item = record13(node, "TOPOLOGY_OCR_NODE_INVALID");
+  closedKeys(item, ["node_id", "locator_id", "label"]);
+  return {
+    node_id: nonblank(item.node_id, "TOPOLOGY_OCR_NODE_ID_INVALID"),
+    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID"),
+    label: nonblank(item.label, "TOPOLOGY_OCR_LABEL_INVALID")
+  };
+}
+function normalizeArrow(arrow) {
+  const item = record13(arrow, "TOPOLOGY_OCR_ARROW_INVALID");
+  closedKeys(item, ["arrow_id", "locator_id", "from_label", "to_label", "label"]);
+  return {
+    arrow_id: nonblank(item.arrow_id, "TOPOLOGY_OCR_ARROW_ID_INVALID"),
+    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID"),
+    from_label: nonblank(item.from_label, "TOPOLOGY_OCR_ENDPOINT_INVALID"),
+    to_label: nonblank(item.to_label, "TOPOLOGY_OCR_ENDPOINT_INVALID"),
+    label: nonblank(item.label, "TOPOLOGY_OCR_LABEL_INVALID")
+  };
+}
+function normalizeUnit(unit) {
+  const item = record13(unit, "TOPOLOGY_UNIT_INVALID");
+  const kind = nonblank(item.kind, "TOPOLOGY_UNIT_KIND_INVALID");
+  if (!UNIT_KINDS.has(kind)) fail2("TOPOLOGY_UNIT_KIND_INVALID");
+  const common = {
+    kind,
+    unit_id: nonblank(item.unit_id, "TOPOLOGY_UNIT_ID_INVALID"),
+    review_class: nonblank(item.review_class, "TOPOLOGY_REVIEW_CLASS_INVALID"),
+    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID")
+  };
+  if (!REVIEW_CLASSES.has(common.review_class)) fail2("TOPOLOGY_REVIEW_CLASS_INVALID");
+  if (kind === "text_block") {
+    closedKeys(item, ["kind", "unit_id", "review_class", "locator_id", "text"]);
+    return { ...common, text: nonblank(item.text, "TOPOLOGY_BLOCK_TEXT_INVALID") };
+  }
+  if (kind === "table") {
+    closedKeys(item, ["kind", "unit_id", "review_class", "locator_id", "cells"]);
+    const cells = list(item.cells, "TOPOLOGY_TABLE_CELLS_INVALID").map(normalizeCell).sort((left, right) => compareCodePoints10(left.cell_id, right.cell_id));
+    if (!cells.length || new Set(cells.map((cell) => cell.cell_id)).size !== cells.length) fail2("TOPOLOGY_TABLE_CELLS_INVALID");
+    return { ...common, cells };
+  }
+  closedKeys(item, ["kind", "unit_id", "review_class", "locator_id", "asset_digest", "ocr_nodes", "ocr_arrows"]);
+  const asset_digest = nonblank(item.asset_digest, "TOPOLOGY_ASSET_DIGEST_INVALID");
+  if (!DIGEST_PATTERN.test(asset_digest)) fail2("TOPOLOGY_ASSET_DIGEST_INVALID");
+  const ocr_nodes = list(item.ocr_nodes, "TOPOLOGY_OCR_NODES_INVALID").map(normalizeNode).sort((left, right) => compareCodePoints10(left.node_id, right.node_id));
+  const ocr_arrows = list(item.ocr_arrows, "TOPOLOGY_OCR_ARROWS_INVALID").map(normalizeArrow).sort((left, right) => compareCodePoints10(left.arrow_id, right.arrow_id));
+  if (new Set(ocr_nodes.map((node) => node.node_id)).size !== ocr_nodes.length || new Set(ocr_arrows.map((arrow) => arrow.arrow_id)).size !== ocr_arrows.length) fail2("TOPOLOGY_OCR_ID_DUPLICATE");
+  return { ...common, asset_digest, ocr_nodes, ocr_arrows };
+}
+function normalizeStructure(input) {
+  const root = record13(snapshotTopologyInputV4(input), "TOPOLOGY_INPUT_INVALID");
+  closedKeys(root, ["sources"]);
+  const sources = list(root.sources, "TOPOLOGY_SOURCES_INVALID").map((raw) => {
+    const source = record13(raw, "TOPOLOGY_SOURCE_INVALID");
+    closedKeys(source, ["source_id", "units"]);
+    const normalized = {
+      source_id: nonblank(source.source_id, "TOPOLOGY_SOURCE_ID_INVALID"),
+      units: list(source.units, "TOPOLOGY_UNITS_INVALID").map(normalizeUnit).sort((left, right) => compareCodePoints10(left.unit_id, right.unit_id))
+    };
+    if (new Set(normalized.units.map((unit) => unit.unit_id)).size !== normalized.units.length) fail2("TOPOLOGY_UNIT_ID_DUPLICATE");
+    return normalized;
+  }).sort((left, right) => compareCodePoints10(left.source_id, right.source_id));
+  if (!sources.length || new Set(sources.map((source) => source.source_id)).size !== sources.length) fail2("TOPOLOGY_SOURCE_ID_DUPLICATE");
+  const unitIds = sources.flatMap((source) => source.units.map((unit) => unit.unit_id));
+  if (new Set(unitIds).size !== unitIds.length) fail2("TOPOLOGY_UNIT_ID_DUPLICATE");
+  return { sources };
+}
+function addCandidate(candidates2, kind, label, locatorId) {
+  if (!CANDIDATE_KINDS.has(kind)) fail2("TOPOLOGY_CANDIDATE_KIND_INVALID");
+  const normalizedLabel = label.normalize("NFC").trim();
+  const key = canonicalStringify({ kind, label: normalizedLabel });
+  const current = candidates2.get(key) ?? { kind, label: normalizedLabel, locator_ids: /* @__PURE__ */ new Set() };
+  current.locator_ids.add(locatorId.normalize("NFC"));
+  candidates2.set(key, current);
+}
+function discoverTopologyV4(sourceStructure, semanticDiscovery = { semantic_candidates: [] }) {
+  const normalized = normalizeStructure(sourceStructure);
+  const reviewedBlockIds = [];
+  const reviewedTableIds = [];
+  const reviewedAssetDigests = [];
+  const candidateMap = /* @__PURE__ */ new Map();
+  const knownLocators = /* @__PURE__ */ new Set();
+  for (const source of normalized.sources) {
+    for (const unit of source.units) {
+      if (unit.review_class === "non_normative") continue;
+      knownLocators.add(unit.locator_id);
+      if (unit.kind === "text_block") {
+        reviewedBlockIds.push(unit.unit_id);
+        for (const label of structuralEntityLabels(unit.text)) addCandidate(candidateMap, "module_mention", label, unit.locator_id);
+      } else if (unit.kind === "table") {
+        reviewedTableIds.push(unit.unit_id);
+        for (const cell of unit.cells) {
+          knownLocators.add(cell.locator_id);
+          for (const label of structuralEntityLabels(cell.text)) addCandidate(candidateMap, "module_mention", label, cell.locator_id);
+        }
+      } else {
+        reviewedAssetDigests.push(unit.asset_digest);
+        for (const node of unit.ocr_nodes) {
+          knownLocators.add(node.locator_id);
+          for (const label of structuralEntityLabels(node.label)) addCandidate(candidateMap, "module_mention", label, node.locator_id);
+        }
+        for (const arrow of unit.ocr_arrows) {
+          knownLocators.add(arrow.locator_id);
+          for (const label of structuralEntityLabels(arrow.from_label)) addCandidate(candidateMap, "module_mention", label, arrow.locator_id);
+          for (const label of structuralEntityLabels(arrow.to_label)) addCandidate(candidateMap, "module_mention", label, arrow.locator_id);
+          addCandidate(candidateMap, "boundary_signal", `${arrow.from_label} \u2192 ${arrow.to_label}`, arrow.locator_id);
+        }
+      }
+    }
+  }
+  const semantic = record13(snapshotTopologyInputV4(semanticDiscovery), "TOPOLOGY_SEMANTIC_DISCOVERY_INVALID");
+  closedKeys(semantic, ["semantic_candidates"]);
+  for (const raw of list(semantic.semantic_candidates, "TOPOLOGY_SEMANTIC_CANDIDATES_INVALID")) {
+    const candidate = record13(raw, "TOPOLOGY_SEMANTIC_CANDIDATE_INVALID");
+    closedKeys(candidate, ["kind", "label", "locator_ids"]);
+    const kind = nonblank(candidate.kind, "TOPOLOGY_CANDIDATE_KIND_INVALID");
+    const label = nonblank(candidate.label, "TOPOLOGY_CANDIDATE_LABEL_INVALID");
+    const locatorIds = list(candidate.locator_ids, "TOPOLOGY_CANDIDATE_LOCATORS_INVALID").map((locator) => nonblank(locator, "TOPOLOGY_CANDIDATE_LOCATORS_INVALID"));
+    if (!CANDIDATE_KINDS.has(kind) || !locatorIds.length || new Set(locatorIds).size !== locatorIds.length || locatorIds.some((locator) => !knownLocators.has(locator))) fail2("TOPOLOGY_SEMANTIC_CANDIDATE_INVALID");
+    const key = canonicalStringify({ kind, label });
+    if (candidateMap.has(key)) continue;
+    for (const locator of locatorIds) addCandidate(candidateMap, kind, label, locator);
+  }
+  const topologyCandidates = [...candidateMap.values()].map((item) => {
+    const signature = { kind: item.kind, label: item.label, locator_ids: sortedUnique([...item.locator_ids]) };
+    const hash5 = digest(signature);
+    return { candidate_id: `TC-${hash5}`, ...signature, discovery_digest: `sha256:${hash5}` };
+  }).sort((left, right) => compareCodePoints10(left.kind, right.kind) || compareCodePoints10(left.label, right.label) || compareCodePoints10(left.candidate_id, right.candidate_id));
+  const scanned_units = {
+    reviewed_block_ids: sortedUnique(reviewedBlockIds),
+    reviewed_table_ids: sortedUnique(reviewedTableIds),
+    reviewed_asset_digests: sortedUnique(reviewedAssetDigests)
+  };
+  const source_structure_digest = `sha256:${digest(normalized)}`;
+  const discovery_digest = `sha256:${digest({ source_structure_digest, scanned_units, topology_candidates: topologyCandidates })}`;
+  return sealDiscovery({ source_structure_digest, discovery_digest, scanned_units, topology_candidates: topologyCandidates });
+}
+
+// src/v4-system-context.mjs
+var DIMENSIONS = /* @__PURE__ */ new Set([
+  "shared-entity",
+  "role",
+  "client",
+  "interface-event",
+  "time",
+  "concurrency",
+  "side-effect"
+]);
+var RISK_KINDS2 = /* @__PURE__ */ new Set([
+  "null_or_missing",
+  "unknown_enum",
+  "api_failure",
+  "loading_failure",
+  "sync_delay",
+  "long_content",
+  "pagination",
+  "refresh",
+  "business_permission_boundary"
+]);
+var ACCEPTANCE_ROLES2 = /* @__PURE__ */ new Set(["primary_acceptance", "dependency_contract", "context_only"]);
+var NOT_APPLICABLE_REASONS = /* @__PURE__ */ new Set(["out_of_scope", "inapplicable_condition", "superseded_requirement"]);
+function record14(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function exactRecord(value, keys) {
+  return record14(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+function nonBlank(value) {
+  return typeof value === "string" && Boolean(value.trim());
+}
+function supportedClaim(claim) {
+  return claim.level !== "E1" || claim.claim_form === "decision-record";
+}
+function supportedBusinessClaim(claim) {
+  return claim.domain === "business" && supportedClaim(claim);
+}
+function comparisonContract(value) {
+  const candidate = record14(value) ? (
+    /** @type {any} */
+    value
+  ) : null;
+  if (exactRecord(candidate, ["kind", "exceptions"]) && candidate.kind === "all_observable_behavior_except" && Array.isArray(candidate.exceptions) && candidate.exceptions.every(nonBlank)) {
+    return { kind: candidate.kind, exceptions: unique(candidate.exceptions) };
+  }
+  if (exactRecord(candidate, ["kind", "dimensions", "allowed_differences"]) && candidate.kind === "selected_dimensions" && Array.isArray(candidate.dimensions) && candidate.dimensions.length > 0 && candidate.dimensions.every(nonBlank) && Array.isArray(candidate.allowed_differences) && candidate.allowed_differences.every(nonBlank)) {
+    return {
+      kind: candidate.kind,
+      dimensions: unique(candidate.dimensions),
+      allowed_differences: unique(candidate.allowed_differences)
+    };
+  }
+  return null;
+}
+function semanticContainer(claim) {
+  return record14(claim.semantic_value) ? claim.semantic_value : {};
+}
+function semanticArray(claim, field) {
+  const container = semanticContainer(claim);
+  return Array.isArray(container[field]) ? container[field] : [];
+}
+function unique(values) {
+  return [...new Set(values)].sort(compare5);
+}
+function compare5(left, right) {
+  const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return a.length - b.length;
+}
+function sourceSystem(pack) {
+  const { provider_registry, expiry_registry } = createCompilerSourceRuntimeV4();
+  return { provider_registry, expiry_registry };
+}
+function reconstructibleAcquisitions(pack, registries4, verifiedReceipts = []) {
+  const verified = new Set(verifiedReceipts.map((receipt) => receipt.source_id));
+  return pack.sources.filter((source) => !verified.has(source.source_id)).map((source) => {
+    if (!record14(source.semantic_projection) || typeof source.semantic_projection.content !== "string" || source.semantic_projection.assets.length !== 0 || source.capture_audit?.semantic_exclusions?.length !== 0) {
+      throw new TypeError("V4_SOURCE_ACQUISITION_CONTEXT_REQUIRED");
+    }
+    const generated = compileCanonicalSourceStructure(source.source_id, source.semantic_projection.content);
+    const textual = source.semantic_projection.structure.filter(
+      (unit) => !["image_region", "user_statement"].includes(unit.type)
+    );
+    if (canonicalStringify(generated) !== canonicalStringify(textual)) {
+      throw new TypeError("V4_SOURCE_STRUCTURE_RECOMPUTATION_MISMATCH");
+    }
+    return {
+      source_id: source.source_id,
+      input: {
+        stable_source_id: source.source_id,
+        source_type: source.kind,
+        capture_bytes: new TextEncoder().encode(source.semantic_projection.content),
+        assets: []
+      },
+      acquisition: {},
+      additional_units: source.semantic_projection.structure.filter(
+        (unit) => ["image_region", "user_statement"].includes(unit.type)
+      )
+    };
+  });
+}
+function subjectRegistry(pack, evidence) {
+  const descriptors = evidence.claims.filter((claim) => claim.kind === "requirement" && claim.domain === "business").map((claim) => claim.subject_descriptor);
+  if (!descriptors.length || descriptors.some((item) => !record14(item))) {
+    throw new TypeError("V4_SOURCE_SUBJECTS_REQUIRED");
+  }
+  return createSourceSubjectRegistry({
+    scope_refs: unique(descriptors.map((item) => item.scope_ref)),
+    module_ids: unique(descriptors.map((item) => item.module_id)),
+    entity_types: unique(descriptors.map((item) => item.entity_type))
+  });
+}
+function canonicalTopologyStructure(pack) {
+  return {
+    sources: [...pack.sources].sort((a, b) => compare5(a.source_id, b.source_id)).map((source) => {
+      const review = pack.source_reviews.find((item) => item.source_id === source.source_id);
+      const classification = (unit) => review?.units.find(
+        (item) => item.unit_id === unit.unit_id
+      )?.classification ?? "uncertain";
+      const locators = (unit) => pack.locators.filter(
+        (locator) => locator.source_id === source.source_id && locator.unit_id === unit.unit_id
+      );
+      const units2 = [];
+      const tableGroups = /* @__PURE__ */ new Map();
+      for (const unit of source.semantic_projection.structure) {
+        if (unit.type === "user_statement") continue;
+        const locator = locators(unit)[0];
+        if (unit.type === "table_cell") {
+          const key = unit.table_id;
+          const group = tableGroups.get(key) ?? {
+            kind: "table",
+            unit_id: key,
+            review_class: classification(unit),
+            locator_id: locator?.locator_id,
+            cells: []
+          };
+          group.cells.push({ cell_id: unit.unit_id, locator_id: locator?.locator_id, text: unit.text });
+          tableGroups.set(key, group);
+        } else if (unit.type === "image_region") {
+          units2.push({
+            kind: "image",
+            unit_id: unit.unit_id,
+            review_class: classification(unit),
+            locator_id: locator?.locator_id,
+            asset_digest: unit.asset_digest,
+            ocr_nodes: [{ node_id: unit.unit_id, locator_id: locator?.locator_id, label: unit.text }],
+            ocr_arrows: []
+          });
+        } else {
+          units2.push({
+            kind: "text_block",
+            unit_id: unit.unit_id,
+            review_class: classification(unit),
+            locator_id: locator?.locator_id,
+            text: unit.text
+          });
+        }
+      }
+      units2.push(...tableGroups.values());
+      return { source_id: source.source_id, units: units2 };
+    })
+  };
+}
+function topologySystem(evidence, canonicalSourceStructure) {
+  const authorizations = evidence.claims.filter(supportedBusinessClaim).flatMap((claim2) => {
+    const value = claim2.semantic_value?.topology_authorization;
+    if (!record14(value) || Object.keys(value).sort().join(",") !== "candidates,reviewable_interaction_cells" || !Array.isArray(value.candidates) || !Array.isArray(value.reviewable_interaction_cells)) return [];
+    return [{ claim_id: claim2.claim_id, value }];
+  });
+  const semantic_topology_candidates = authorizations.flatMap(
+    ({ value }) => value.candidates.flatMap((candidate) => {
+      if (!record14(candidate) || !["module_mention", "boundary_signal"].includes(candidate.kind) || typeof candidate.label !== "string" || !candidate.label.trim() || !Array.isArray(candidate.locator_ids) || candidate.locator_ids.length === 0) return [];
+      return [{
+        kind: candidate.kind,
+        label: candidate.label,
+        locator_ids: unique(candidate.locator_ids.filter((id2) => typeof id2 === "string"))
+      }];
+    })
+  );
+  const deterministic = discoverTopologyV4(canonicalSourceStructure, {
+    semantic_candidates: semantic_topology_candidates
+  });
+  const candidateFor = (declared) => deterministic.topology_candidates.find(
+    (item) => item.kind === declared.kind && item.label === declared.label && canonicalStringify(item.locator_ids) === canonicalStringify(unique(declared.locator_ids))
+  );
+  const claims = /* @__PURE__ */ new Map();
+  const claim = (claimId) => {
+    const current = claims.get(claimId) ?? {
+      claim_id: claimId,
+      candidate_ids: /* @__PURE__ */ new Set(),
+      authorized_topology_roles: /* @__PURE__ */ new Set(),
+      authorized_boundaries: /* @__PURE__ */ new Map(),
+      reviewable_interaction_cells: /* @__PURE__ */ new Map()
+    };
+    claims.set(claimId, current);
+    return current;
+  };
+  for (const authorization of authorizations) {
+    const current = claim(authorization.claim_id);
+    for (const declared of authorization.value.candidates) {
+      const candidate = candidateFor(declared);
+      if (!candidate) continue;
+      current.candidate_ids.add(candidate.candidate_id);
+      if (declared.disposition === "module" && ["primary", "upstream", "downstream", "external"].includes(declared.role)) {
+        current.authorized_topology_roles.add(declared.role);
+      }
+      if (declared.disposition === "boundary") {
+        const boundary = {
+          from_module_ref: declared.from_module_ref,
+          to_module_ref: declared.to_module_ref,
+          channel: declared.channel,
+          acceptance_scope: declared.acceptance_scope
+        };
+        if (Object.values(boundary).every((value) => typeof value === "string" && value.trim())) {
+          current.authorized_boundaries.set(canonicalStringify(boundary), boundary);
+        }
+      }
+    }
+    for (const declared of authorization.value.reviewable_interaction_cells) {
+      if (!record14(declared) || !Array.isArray(declared.module_ids) || !DIMENSIONS.has(declared.dimension)) continue;
+      const cell = { module_ids: unique(declared.module_ids), dimension: declared.dimension };
+      current.reviewable_interaction_cells.set(canonicalStringify(cell), cell);
+    }
+  }
+  const verified_claims = [...claims.values()].map((item) => ({
+    claim_id: item.claim_id,
+    candidate_ids: unique([...item.candidate_ids]),
+    authorized_topology_roles: unique([...item.authorized_topology_roles]),
+    authorized_boundaries: [...item.authorized_boundaries.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b))),
+    reviewable_interaction_cells: [...item.reviewable_interaction_cells.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b)))
+  })).sort((a, b) => compare5(a.claim_id, b.claim_id));
+  const effective_scope_decisions = [];
+  return {
+    canonical_source_structure: canonicalSourceStructure,
+    verified_claims,
+    effective_scope_decisions,
+    ...semantic_topology_candidates.length ? { semantic_topology_candidates } : {}
+  };
+}
+function behaviorEvidence(evidence) {
+  const facts = evidence.fact_ledger.map((fact) => ({
+    fact_id: fact.fact_id,
+    module_id: fact.module_refs[0],
+    acceptance_role: fact.acceptance_role,
+    condition_field: fact.field_path.split("/").filter(Boolean).at(-1) ?? "value"
+  }));
+  const factById = new Map(evidence.fact_ledger.map((fact) => [fact.fact_id, fact]));
+  const claims = evidence.claims.filter(supportedBusinessClaim).map((claim) => {
+    const submitted = Array.isArray(claim.semantic_value?.behavior_assertions) ? claim.semantic_value.behavior_assertions : [];
+    const entries2 = submitted.filter((assertion) => {
+      if (!record14(assertion) || Object.keys(assertion).sort().join(",") !== "fact_id,field_path,value" || typeof assertion.fact_id !== "string" || typeof assertion.field_path !== "string" || !assertion.field_path.startsWith("/")) return false;
+      const fact = factById.get(assertion.fact_id);
+      return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
+    }).map((assertion) => [
+      canonicalStringify(assertion),
+      structuredClone(assertion)
+    ]);
+    return {
+      claim_id: claim.claim_id,
+      level: claim.level,
+      supported: claim.level !== "E1" || claim.claim_form === "decision-record",
+      assertions: [...new Map(entries2).values()]
+    };
+  }).filter((claim) => claim.assertions.length > 0);
+  return { facts, claims };
+}
+function orderingSystem(pack, evidence) {
+  const locatorById = new Map(pack.locators.map((locator) => [locator.locator_id, locator]));
+  const sourceIndex = new Map(pack.sources.map((source) => [source.source_id, source]));
+  const locators = pack.locators.map((locator) => {
+    const source = sourceIndex.get(locator.source_id);
+    const unitIndex = source?.semantic_projection.structure.findIndex((unit2) => unit2.unit_id === locator.unit_id) ?? -1;
+    const unit = source?.semantic_projection.structure[unitIndex];
+    const unitKind = unit?.type === "table_cell" ? "table" : unit?.type === "image_region" ? "image" : "text";
+    const structural = unit?.type === "table_cell" ? [unitIndex, unit.row, unit.column] : [Math.max(unitIndex, 0)];
+    const start = locator.range?.start ?? locator.answer_span?.start ?? 0;
+    return {
+      locator_id: locator.locator_id,
+      stable_source_id: locator.source_id,
+      unit_kind: unitKind,
+      structural_coordinates: structural,
+      start_scalar: start
+    };
+  });
+  const candidateById = new Map(evidence.topology_discovery.topology_candidates.map((item) => [item.candidate_id, item]));
+  const modules = evidence.scope_manifest.modules.map((module) => {
+    const ids3 = evidence.topology_dispositions.filter(
+      (disposition) => disposition.disposition === "module" && disposition.module_ref === module.module_id
+    ).flatMap((disposition) => candidateById.get(disposition.candidate_id)?.locator_ids ?? []);
+    if (!ids3.length || ids3.some((id2) => !locatorById.has(id2))) {
+      throw new TypeError("V4_ORDERING_MODULE_LOCATOR_REQUIRED");
+    }
+    return { module_id: module.module_id, role: module.role, locator_ids: unique(ids3) };
+  });
+  const flows = [];
+  const actions = [];
+  const dependencies = [];
+  const verifiedClaimMap = /* @__PURE__ */ new Map();
+  const verifiedDecisionMap = /* @__PURE__ */ new Map();
+  for (const claim of evidence.claims.filter(supportedBusinessClaim)) {
+    for (const assertion of semanticArray(claim, "ordering_assertions")) {
+      let subject2;
+      if (exactRecord(assertion, ["kind", "module_id", "subject_ref", "locator_id"]) && assertion.kind === "flow" && [assertion.module_id, assertion.subject_ref, assertion.locator_id].every(nonBlank) && claim.source_locator_ids.includes(assertion.locator_id)) {
+        subject2 = { kind: "flow", module_id: assertion.module_id, subject_ref: assertion.subject_ref };
+        flows.push({
+          module_id: assertion.module_id,
+          subject_ref: assertion.subject_ref,
+          locator_id: assertion.locator_id,
+          claim_ids: [claim.claim_id]
+        });
+      } else if (exactRecord(assertion, ["kind", "module_id", "flow_subject_ref", "subject_ref", "locator_id"]) && assertion.kind === "action" && [assertion.module_id, assertion.flow_subject_ref, assertion.subject_ref, assertion.locator_id].every(nonBlank) && claim.source_locator_ids.includes(assertion.locator_id)) {
+        subject2 = {
+          kind: "action",
+          module_id: assertion.module_id,
+          flow_subject_ref: assertion.flow_subject_ref,
+          subject_ref: assertion.subject_ref
+        };
+        actions.push({
+          module_id: assertion.module_id,
+          flow_subject_ref: assertion.flow_subject_ref,
+          subject_ref: assertion.subject_ref,
+          locator_id: assertion.locator_id,
+          claim_ids: [claim.claim_id]
+        });
+      } else if (exactRecord(assertion, ["kind", "predecessor_outcome_id", "successor_outcome_id"]) && assertion.kind === "outcome_dependency" && [assertion.predecessor_outcome_id, assertion.successor_outcome_id].every(nonBlank)) {
+        subject2 = {
+          kind: "outcome_dependency",
+          predecessor_outcome_id: assertion.predecessor_outcome_id,
+          successor_outcome_id: assertion.successor_outcome_id
+        };
+        const decision = claim.claim_form === "decision-record" && nonBlank(claim.decision_id);
+        dependencies.push({
+          predecessor_outcome_id: assertion.predecessor_outcome_id,
+          successor_outcome_id: assertion.successor_outcome_id,
+          basis: decision ? { kind: "decision", decision_ids: [claim.decision_id] } : { kind: "evidence", claim_ids: [claim.claim_id] }
+        });
+        if (decision) {
+          const current2 = verifiedDecisionMap.get(claim.decision_id) ?? {
+            decision_id: claim.decision_id,
+            subjects: /* @__PURE__ */ new Map()
+          };
+          current2.subjects.set(canonicalStringify(subject2), subject2);
+          verifiedDecisionMap.set(claim.decision_id, current2);
+        }
+      }
+      if (!subject2 || claim.claim_form === "decision-record" && subject2.kind === "outcome_dependency") continue;
+      const current = verifiedClaimMap.get(claim.claim_id) ?? {
+        claim_id: claim.claim_id,
+        locator_ids: /* @__PURE__ */ new Set(),
+        subjects: /* @__PURE__ */ new Map()
+      };
+      for (const locatorId of claim.source_locator_ids) current.locator_ids.add(locatorId);
+      current.subjects.set(canonicalStringify(subject2), subject2);
+      verifiedClaimMap.set(claim.claim_id, current);
+    }
+  }
+  return {
+    sources: pack.sources.map((source) => ({ stable_source_id: source.source_id })),
+    locators,
+    modules,
+    flows,
+    actions,
+    dependencies,
+    verified_claims: [...verifiedClaimMap.values()].map((item) => ({
+      claim_id: item.claim_id,
+      locator_ids: unique([...item.locator_ids]),
+      subjects: [...item.subjects.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b)))
+    })).sort((a, b) => compare5(a.claim_id, b.claim_id)),
+    verified_decisions: [...verifiedDecisionMap.values()].map((item) => ({
+      decision_id: item.decision_id,
+      subjects: [...item.subjects.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b)))
+    })).sort((a, b) => compare5(a.decision_id, b.decision_id))
+  };
+}
+function semanticEvidenceSystem(evidence) {
+  const baseline_assertions = [];
+  const value_claims = [];
+  const supported_claim_ids = [];
+  const derivations = [];
+  const risk_review_assertions = [];
+  const not_applicable_assertions = [];
+  const diagnostics2 = [];
+  const invalid = (claim, field) => diagnostics2.push({
+    category: "adapter_revision",
+    code: "CLAIM_SEMANTIC_ASSERTION_INVALID",
+    path: `/claims/${claim.claim_id}/semantic_value/${field}`,
+    message: "Structured semantic assertions in a Claim must use their closed production contract."
+  });
+  for (const claim of evidence.claims.filter(supportedBusinessClaim)) {
+    supported_claim_ids.push(claim.claim_id);
+    const container = semanticContainer(claim);
+    const descriptor = claim.subject_descriptor;
+    for (const field of [
+      "relative_baseline_assertions",
+      "test_value_assertions",
+      "test_value_derivations",
+      "risk_review_assertions",
+      "not_applicable_assertions",
+      "ordering_assertions"
+    ]) if (Object.hasOwn(container, field) && !Array.isArray(container[field])) invalid(claim, field);
+    const baselineInputs = semanticArray(claim, "relative_baseline_assertions");
+    const rawBaseline = record14(container.source_value) ? container.source_value : null;
+    if (!baselineInputs.length && record14(rawBaseline) && nonBlank(rawBaseline.reference)) {
+      if (Array.isArray(rawBaseline.exceptions)) baselineInputs.push({
+        reference: rawBaseline.reference,
+        comparison_contract: { kind: "all_observable_behavior_except", exceptions: rawBaseline.exceptions }
+      });
+      else if (Array.isArray(rawBaseline.dimensions) && Array.isArray(rawBaseline.allowed_differences)) baselineInputs.push({
+        reference: rawBaseline.reference,
+        comparison_contract: {
+          kind: "selected_dimensions",
+          dimensions: rawBaseline.dimensions,
+          allowed_differences: rawBaseline.allowed_differences
+        }
+      });
+    }
+    for (const assertion of baselineInputs) {
+      const contract2 = record14(assertion) ? comparisonContract(assertion.comparison_contract) : null;
+      if (!exactRecord(assertion, ["reference", "comparison_contract"]) || !nonBlank(assertion.reference) || !contract2 || !record14(descriptor) || !nonBlank(descriptor.module_id) || !nonBlank(descriptor.scope_ref)) {
+        invalid(claim, "relative_baseline_assertions");
+        continue;
+      }
+      baseline_assertions.push({
+        claim_id: claim.claim_id,
+        module_id: descriptor.module_id,
+        scope_ref: descriptor.scope_ref,
+        reference: assertion.reference,
+        comparison_contract: contract2
+      });
+    }
+    for (const assertion of semanticArray(claim, "test_value_assertions")) {
+      if (!exactRecord(assertion, ["subject_ref", "field_path", "value"]) || !nonBlank(assertion.subject_ref) || !nonBlank(assertion.field_path) || !assertion.field_path.startsWith("/") || !["requirement", "example"].includes(claim.kind)) {
+        invalid(claim, "test_value_assertions");
+        continue;
+      }
+      value_claims.push({
+        claim_id: claim.claim_id,
+        origin_kind: claim.kind,
+        subject_ref: assertion.subject_ref,
+        field_path: assertion.field_path,
+        value: structuredClone(assertion.value),
+        supported: true
+      });
+    }
+    for (const assertion of semanticArray(claim, "test_value_derivations")) {
+      if (claim.claim_form !== "derived" || !exactRecord(assertion, ["method_id", "method_version", "inputs_digest", "input_claim_ids", "subject_ref", "field_path", "value"]) || ![assertion.method_id, assertion.method_version, assertion.inputs_digest, assertion.subject_ref, assertion.field_path].every(nonBlank) || !/^sha256:[0-9a-f]{64}$/u.test(assertion.inputs_digest) || !Array.isArray(assertion.input_claim_ids) || assertion.input_claim_ids.length === 0 || assertion.input_claim_ids.some((id2) => !nonBlank(id2)) || canonicalStringify(unique(assertion.input_claim_ids)) !== canonicalStringify(unique(claim.parent_claim_ids ?? []))) {
+        invalid(claim, "test_value_derivations");
+        continue;
+      }
+      derivations.push({
+        method_id: assertion.method_id,
+        method_version: assertion.method_version,
+        inputs_digest: assertion.inputs_digest,
+        input_claim_ids: unique(assertion.input_claim_ids),
+        subject_ref: assertion.subject_ref,
+        field_path: assertion.field_path,
+        value: structuredClone(assertion.value)
+      });
+    }
+    for (const assertion of semanticArray(claim, "risk_review_assertions")) {
+      if (!exactRecord(assertion, ["module_id", "risk_kind", "status"]) || !nonBlank(assertion.module_id) || !RISK_KINDS2.has(assertion.risk_kind) || !["formal", "semantic_gap"].includes(assertion.status)) {
+        invalid(claim, "risk_review_assertions");
+        continue;
+      }
+      risk_review_assertions.push({ ...structuredClone(assertion), claim_id: claim.claim_id });
+    }
+    for (const assertion of semanticArray(claim, "not_applicable_assertions")) {
+      const subject2 = record14(assertion) ? assertion.subject : null;
+      const riskSubject = exactRecord(subject2, ["kind", "module_id", "risk_kind"]) && subject2.kind === "risk" && nonBlank(subject2.module_id) && RISK_KINDS2.has(subject2.risk_kind);
+      const outcomeSubject = exactRecord(subject2, ["kind", "fact_id", "condition"]) && subject2.kind === "formal_outcome" && nonBlank(subject2.fact_id) && record14(subject2.condition);
+      if (!exactRecord(assertion, ["subject", "acceptance_role", "reason_code", "reason"]) || !riskSubject && !outcomeSubject || !ACCEPTANCE_ROLES2.has(assertion.acceptance_role) || !NOT_APPLICABLE_REASONS.has(assertion.reason_code) || !nonBlank(assertion.reason) || /(?:PRD|需求|文档).{0,8}(?:未提及|未说明|未定义)|not\s+(?:mentioned|documented)/iu.test(assertion.reason)) {
+        invalid(claim, "not_applicable_assertions");
+        continue;
+      }
+      const decision = claim.claim_form === "decision-record" && nonBlank(claim.decision_id);
+      not_applicable_assertions.push({
+        subject: structuredClone(subject2),
+        acceptance_role: assertion.acceptance_role,
+        reason_code: assertion.reason_code,
+        reason: assertion.reason,
+        basis: decision ? { kind: "scope_decision", decision_ids: [claim.decision_id] } : { kind: "evidence", claim_ids: [claim.claim_id] }
+      });
+    }
+    for (const assertion of semanticArray(claim, "ordering_assertions")) {
+      const flow = exactRecord(assertion, ["kind", "module_id", "subject_ref", "locator_id"]) && assertion.kind === "flow" && [assertion.module_id, assertion.subject_ref, assertion.locator_id].every(nonBlank);
+      const action = exactRecord(assertion, ["kind", "module_id", "flow_subject_ref", "subject_ref", "locator_id"]) && assertion.kind === "action" && [assertion.module_id, assertion.flow_subject_ref, assertion.subject_ref, assertion.locator_id].every(nonBlank);
+      const dependency = exactRecord(assertion, ["kind", "predecessor_outcome_id", "successor_outcome_id"]) && assertion.kind === "outcome_dependency" && [assertion.predecessor_outcome_id, assertion.successor_outcome_id].every(nonBlank);
+      if (!flow && !action && !dependency || (flow || action) && !claim.source_locator_ids.includes(assertion.locator_id)) {
+        invalid(claim, "ordering_assertions");
+      }
+    }
+  }
+  const byCanonical = (a, b) => compare5(canonicalStringify(a), canonicalStringify(b));
+  return {
+    baseline_assertions: baseline_assertions.sort(byCanonical),
+    value_claims: value_claims.sort(byCanonical),
+    supported_claim_ids: unique(supported_claim_ids),
+    derivations: derivations.sort(byCanonical),
+    risk_review_assertions: risk_review_assertions.sort(byCanonical),
+    not_applicable_assertions: not_applicable_assertions.sort(byCanonical),
+    diagnostics: diagnostics2
+  };
+}
+function claimAssessmentSystem(evidence) {
+  return evidence.claims.filter((claim) => claim.domain === "business").map((claim) => ({
+    claim_id: claim.claim_id,
+    domain: "business_semantics",
+    level: claim.level,
+    support_review: claim.level === "E1" && claim.claim_form !== "decision-record" ? "uncertain" : "supported"
+  }));
+}
+function deriveV4CaseSemanticContext(submittedEvidence) {
+  if (!record14(submittedEvidence) || !isV4SchemaVersion(submittedEvidence.schema_version) || !Array.isArray(submittedEvidence.claims)) {
+    throw new TypeError("V4_CASE_SEMANTIC_CONTEXT_INVALID");
+  }
+  const evidence = (
+    /** @type {any} */
+    submittedEvidence
+  );
+  return {
+    claim_assessments: claimAssessmentSystem(evidence),
+    semantic_evidence: semanticEvidenceSystem(evidence)
+  };
+}
+function deriveV4SystemContext(submittedArtifacts, sourceAcquisition = null) {
+  if (!record14(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4 || !["source_pack", "evidence_claims", "behavior_views", "case_drafts"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
+    throw new TypeError("V4_ARTIFACT_SET_INVALID");
+  }
+  const artifacts = (
+    /** @type {any} */
+    submittedArtifacts
+  );
+  const pack = artifacts.source_pack;
+  const evidence = artifacts.evidence_claims;
+  if (!isV4SchemaVersion(pack?.schema_version) || evidence?.schema_version !== pack.schema_version) {
+    throw new TypeError("V4_ARTIFACT_VERSION_INVALID");
+  }
+  const preCase = deriveV4PreCaseSystemContext(pack, evidence, sourceAcquisition);
+  return {
+    ...preCase,
+    behavior_evidence: behaviorEvidence(evidence),
+    ordering: orderingSystem(pack, evidence),
+    semantic_evidence: deriveV4CaseSemanticContext(evidence).semantic_evidence
+  };
+}
+function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, sourceAcquisition = null) {
+  if (!record14(submittedPack) || !record14(submittedEvidence) || !isV4SchemaVersion(submittedPack.schema_version) || submittedEvidence.schema_version !== submittedPack.schema_version) {
+    throw new TypeError("V4_PRE_CASE_ARTIFACT_INVALID");
+  }
+  const pack = (
+    /** @type {any} */
+    submittedPack
+  );
+  const evidence = (
+    /** @type {any} */
+    submittedEvidence
+  );
+  const registries4 = sourceSystem(pack);
+  if (sourceAcquisition !== null && (!record14(sourceAcquisition) || !Array.isArray(sourceAcquisition.verified_source_receipts) || !Array.isArray(sourceAcquisition.verified_acquisition_records) || Object.keys(sourceAcquisition).some((key) => ![
+    "verified_source_receipts",
+    "verified_acquisition_records",
+    "source_reading_summary"
+  ].includes(key)))) throw new TypeError("V4_SOURCE_ACQUISITION_CONTEXT_INVALID");
+  const receipts = sourceAcquisition?.verified_source_receipts ?? [];
+  const canonical_source_structure = canonicalTopologyStructure(pack);
+  const topology = topologySystem(evidence, canonical_source_structure);
+  const source = {
+    provider_registry: registries4.provider_registry,
+    expiry_registry: registries4.expiry_registry,
+    subject_registry: subjectRegistry(pack, evidence),
+    acquisitions: reconstructibleAcquisitions(pack, registries4, receipts),
+    ...sourceAcquisition ? {
+      verified_source_receipts: structuredClone(sourceAcquisition.verified_source_receipts),
+      verified_acquisition_records: structuredClone(sourceAcquisition.verified_acquisition_records)
+    } : {}
+  };
+  const claim_assessments = claimAssessmentSystem(evidence);
+  return {
+    source,
+    topology,
+    interaction: { verified_claims: topology.verified_claims },
+    claim_assessments,
+    decisions: { delivery_requested: false, root_statuses: [] }
+  };
+}
+
+// src/revision-artifact-validation-v4.mjs
 function canonicalDigest(value) {
   return `sha256:${createHash10("sha256").update(canonicalStringify(value), "utf8").digest("hex")}`;
 }
-function record10(value) {
+function record15(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function parseCanonicalJson(texts, key) {
@@ -47107,7 +49516,7 @@ function requireSame(left, right) {
   }
 }
 function validateRevisionArtifactsV4(input) {
-  if (!record10(input) || !record10(input.texts)) throw new TypeError("REVISION_ARTIFACT_SCHEMA_INVALID");
+  if (!record15(input) || !record15(input.texts)) throw new TypeError("REVISION_ARTIFACT_SCHEMA_INVALID");
   const texts = input.texts;
   const values = {};
   for (const key of Object.keys(texts)) {
@@ -47171,6 +49580,57 @@ function validateRevisionArtifactsV4(input) {
         throw new TypeError("REVISION_ARTIFACT_RELATION_INVALID");
       }
     }
+    if (isGeneralQualityV4Contract(contract2) && validateDesignAssuranceV4(
+      values.behavior_views.design_assurance,
+      {
+        source_claim_ids: values.evidence_claims.claims.map((item) => item.claim_id),
+        semantic_gap_ids: values.evidence_claims.semantic_gaps.map((item) => item.semantic_gap_id),
+        view_element_ids: values.behavior_views.views.flatMap(
+          (view) => view.elements.map((item) => item.element_id)
+        )
+      }
+    ).diagnostics.length) {
+      throw new TypeError("REVISION_ARTIFACT_RELATION_INVALID");
+    }
+    if (isGeneralQualityV4Contract(contract2)) {
+      let reviewTarget;
+      try {
+        const semanticContext = deriveV4CaseSemanticContext(values.evidence_claims);
+        const materialized = materializeRelativeBaselinesV4(
+          values.case_drafts.cases,
+          semanticContext.semantic_evidence,
+          semanticContext.claim_assessments
+        );
+        if (materialized.diagnostics.length) {
+          throw new TypeError("REVISION_INDEPENDENT_REVIEW_INVALID");
+        }
+        reviewTarget = compileIndependentReviewTargetV4({
+          source_revision: input.revision,
+          source_first_targets: values.case_drafts.independent_review?.source_first_targets,
+          facts: values.evidence_claims.fact_ledger,
+          views: values.behavior_views.views,
+          formal_test_points: values.test_obligations.formal_test_points,
+          candidate_responsibilities: values.behavior_views.design_assurance.candidate_responsibilities,
+          cases: materialized.cases
+        });
+      } catch {
+        throw new TypeError("REVISION_INDEPENDENT_REVIEW_INVALID");
+      }
+      const reviewResult = validateIndependentReviewV4(
+        values.case_drafts.independent_review,
+        reviewTarget,
+        {
+          source_claim_ids: values.evidence_claims.claims.map((item) => item.claim_id),
+          decision_ids: values.decision_journal.decisions.map((item) => item.decision_id),
+          semantic_gap_ids: values.checkpoint.semantic_gap_ledger.map(
+            (item) => item.semantic_gap_id
+          )
+        }
+      );
+      if (reviewResult.diagnostics.length) {
+        throw new TypeError("REVISION_INDEPENDENT_REVIEW_INVALID");
+      }
+    }
     if (values.checkpoint.behavior_views_digest !== canonicalDigest(values.behavior_views) || values.checkpoint.case_drafts_digest !== canonicalDigest(values.case_drafts)) {
       throw new TypeError("REVISION_ARTIFACT_RELATION_INVALID");
     }
@@ -47200,6 +49660,7 @@ function validateRevisionArtifactsV4(input) {
 }
 
 // src/revision-transaction-v4.mjs
+init_semantic_delivery_gate_v4();
 init_v4_contract();
 var VERSION = "4.0.0";
 var COMPILER_VERSION = "0.5.0";
@@ -47243,7 +49704,7 @@ var LEGACY_PROFILE_ARTIFACTS = Object.freeze({
   final: FINAL_ARTIFACTS
 });
 function profileArtifacts(schemaVersion) {
-  return schemaVersion === "4.2.0" ? {
+  return ["4.2.0", "4.3.0"].includes(schemaVersion) ? {
     pre_case_pending: BASE_ARTIFACTS,
     post_case_pending: POST_CASE_ARTIFACTS,
     final: CANDIDATE_FINAL_ARTIFACTS
@@ -47269,7 +49730,7 @@ function exactDigest(value) {
 function canonicalDigest2(value) {
   return exactDigest(canonicalStringify(value));
 }
-function canonicalClone(value) {
+function canonicalClone2(value) {
   return JSON.parse(canonicalStringify(value));
 }
 function requireRunInstanceSchema(value, code2) {
@@ -47594,17 +50055,17 @@ async function readCommittedRecord(runDirectory, revision) {
     value
   );
 }
-async function verifyCommittedArtifacts(runDirectory, record20) {
+async function verifyCommittedArtifacts(runDirectory, record23) {
   const required = (
     /** @type {Record<string,readonly string[]>} */
-    profileArtifacts(record20.schema_version)[record20.commit_profile]
+    profileArtifacts(record23.schema_version)[record23.commit_profile]
   );
   for (const key of required) {
     const text11 = await readTextIfPresent(
       runDirectory,
-      artifactPath(runDirectory, record20.revision, key)
+      artifactPath(runDirectory, record23.revision, key)
     );
-    if (text11 === null || exactDigest(text11) !== record20.artifact_digests[key]) {
+    if (text11 === null || exactDigest(text11) !== record23.artifact_digests[key]) {
       throw new RunStoreIntegrityError("COMMITTED_REVISION_ARTIFACT_INVALID");
     }
   }
@@ -47775,7 +50236,7 @@ async function commitCheckpoint(runDirectory, pending, artifacts) {
   await writeExactIfDifferent(runDirectory, target, artifacts.checkpoint);
 }
 async function storeCommittedRecord(runDirectory, pending) {
-  const record20 = {
+  const record23 = {
     schema_version: pending.schema_version,
     txn_id: pending.txn_id,
     revision: pending.candidate_revision,
@@ -47787,17 +50248,47 @@ async function storeCommittedRecord(runDirectory, pending) {
   };
   const target = committedRecordPath(runDirectory, pending.candidate_revision);
   const existing = await readJsonIfPresent(runDirectory, target);
-  if (existing && canonicalStringify(existing.value) !== canonicalStringify(record20)) {
+  if (existing && canonicalStringify(existing.value) !== canonicalStringify(record23)) {
     if (pending.commit_mode !== "profile_promotion" || existing.value.commit_profile !== pending.previous_profile || existing.value.semantic_digest !== pending.semantic_digest || canonicalStringify(existing.value.artifact_digests) !== canonicalStringify(pending.previous_artifact_digests)) {
       throw new RunStoreIntegrityError("COMMITTED_REVISION_RECORD_CONFLICT");
     }
-    await atomicWriteJson(runDirectory, target, record20);
+    await atomicWriteJson(runDirectory, target, record23);
     return;
   }
-  if (!existing) await atomicWriteJson(runDirectory, target, record20);
+  if (!existing) await atomicWriteJson(runDirectory, target, record23);
 }
 async function phaseHook(hooks, phase) {
   if (typeof hooks?.after_phase === "function") await hooks.after_phase(phase);
+}
+async function revokeOlderGeneralQualityDelivery(runDirectory, run, pending) {
+  if (!isGeneralQualityV4Contract(run) || pending.commit_mode !== "new_revision" || pending.commit_profile === "final") return;
+  const target = path6.join(runDirectory, "output", "current.json");
+  const current = await readJsonIfPresent(runDirectory, target);
+  if (!current) return;
+  if (current.value.status === "stale") {
+    if (current.value.schema_version !== run.schema_version || current.value.compiler_version !== run.compiler_version || current.value.run_id !== run.run_id || !Number.isSafeInteger(current.value.active_revision) || current.value.active_revision > pending.candidate_revision || !Number.isSafeInteger(current.value.previous_ready_revision) || !SHA2562.test(current.value.previous_ready_manifest_digest)) {
+      throw new RunStoreIntegrityError("CURRENT_NON_READY_CONFLICT");
+    }
+    if (current.value.active_revision === pending.candidate_revision) return;
+    await atomicWriteJson(runDirectory, target, {
+      ...current.value,
+      active_revision: pending.candidate_revision
+    });
+    return;
+  }
+  if (current.value.authority !== "canonical" || current.value.run_id !== run.run_id || current.value.schema_version !== run.schema_version || current.value.compiler_version !== run.compiler_version || current.value.revision !== pending.base_revision) {
+    throw new RunStoreIntegrityError("CURRENT_READY_BINDING_INVALID");
+  }
+  await atomicWriteJson(runDirectory, target, {
+    status: "stale",
+    schema_version: run.schema_version,
+    compiler_version: run.compiler_version,
+    run_id: run.run_id,
+    active_revision: pending.candidate_revision,
+    reason: "higher_revision_not_ready",
+    previous_ready_revision: current.value.revision,
+    previous_ready_manifest_digest: exactDigest(current.text)
+  });
 }
 async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, ownership, hooks = {}) {
   const heldLock = requireHeldLock2(ownership);
@@ -47812,7 +50303,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
         await cleanupPromotionBackup(runDirectory, stalePendingValue);
         await rm2(pendingPath(runDirectory), { force: true });
       }
-      return canonicalClone(receipt.result);
+      return canonicalClone2(receipt.result);
     }
     let pendingSnapshot = await readJsonIfPresent(runDirectory, pendingPath(runDirectory));
     let pending = pendingSnapshot?.value ?? null;
@@ -47861,7 +50352,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
           delivery_manifest_digest: base.prior.delivery_manifest_digest,
           artifact_digests: publicArtifactDigests(base.prior.artifact_digests)
         };
-        const stableResult = canonicalClone(result2);
+        const stableResult = canonicalClone2(result2);
         const completed = {
           schema_version: request.schema_version,
           transaction_kind: "revision_append",
@@ -47926,6 +50417,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
     }
     if (pending.phase === "artifacts_committed") {
       await materializeArtifacts(runDirectory, pending, request.artifacts);
+      await revokeOlderGeneralQualityDelivery(runDirectory, run, pending);
       await commitCheckpoint(runDirectory, pending, request.artifacts);
       pending = movePhase(pending, "checkpoint_committed");
       await atomicWriteJson(runDirectory, pendingPath(runDirectory), pending);
@@ -47934,6 +50426,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
     if (pending.phase === "checkpoint_committed") {
       await storeCommittedRecord(runDirectory, pending);
       if (pending.commit_profile === "final") {
+        assertSemanticBundleDeliveryGateV4(request.artifact_values.bundle);
         await writeExactIfDifferent(
           runDirectory,
           path6.join(runDirectory, "output", "current.json"),
@@ -47946,7 +50439,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
     }
     if (pending.phase !== "delivery_committed") throw new RunStoreIntegrityError("REVISION_PHASE_INVALID");
     await storeCommittedRecord(runDirectory, pending);
-    const result = canonicalClone(committedResult(pending));
+    const result = canonicalClone2(committedResult(pending));
     const complete = { ...movePhase(pending, "complete"), result };
     await atomicWriteJson(runDirectory, transactionPath(runDirectory, pending.txn_id), complete);
     await atomicWriteJson(runDirectory, appendReceiptPath(runDirectory, pending.append_key), {
@@ -47959,7 +50452,7 @@ async function commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, 
     await cleanupPromotionBackup(runDirectory, pending);
     await rm2(pendingPath(runDirectory), { force: true });
     await phaseHook(hooks, "complete");
-    return canonicalClone(result);
+    return canonicalClone2(result);
   } finally {
     heldLock.assertHealthy();
   }
@@ -47987,11 +50480,11 @@ function byteDigest4(value) {
 function canonicalDigest3(value) {
   return byteDigest4(canonicalStringify(value));
 }
-function canonicalClone2(value) {
+function canonicalClone3(value) {
   return JSON.parse(canonicalStringify(value));
 }
 function jsonArtifact(value) {
-  return { format: "json", value: canonicalClone2(value) };
+  return { format: "json", value: canonicalClone3(value) };
 }
 function siblingGenesisDigest(runId, contract2) {
   return byteDigest4(`${canonicalStringify({
@@ -48005,7 +50498,7 @@ function siblingGenesisDigest(runId, contract2) {
 function contentId2(prefix, identity2) {
   return `${prefix}-${canonicalDigest3(identity2).slice("sha256:".length)}`;
 }
-function record11(value, code2) {
+function record16(value, code2) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(code2);
   return (
     /** @type {Record<string,any>} */
@@ -48031,10 +50524,10 @@ function requireHeldLock3(ownership) {
     ownership
   );
 }
-function sortedUnique(values) {
-  return [...new Set(values.map((value) => value.normalize("NFC")))].sort(compareCodePoints10);
+function sortedUnique2(values) {
+  return [...new Set(values.map((value) => value.normalize("NFC")))].sort(compareCodePoints11);
 }
-function compareCodePoints10(left, right) {
+function compareCodePoints11(left, right) {
   const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
   const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
   for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
@@ -48060,15 +50553,15 @@ function normalizeSuspensionLedger(value) {
   if (!Array.isArray(value)) throw new TypeError("DECISION_SUSPENSION_LEDGER_INVALID");
   const byRoot = /* @__PURE__ */ new Map();
   for (const submitted of value) {
-    const item = record11(submitted, "DECISION_SUSPENSION_LEDGER_INVALID");
+    const item = record16(submitted, "DECISION_SUSPENSION_LEDGER_INVALID");
     const rootId = text4(item.root_issue_id, "DECISION_SUSPENSION_LEDGER_INVALID").normalize("NFC");
     if (byRoot.has(rootId) || !Array.isArray(item.cumulative_suspended_decision_ids)) {
       throw new TypeError("DECISION_SUSPENSION_LEDGER_INVALID");
     }
     const ids3 = item.cumulative_suspended_decision_ids.map((id2) => text4(id2, "DECISION_SUSPENSION_LEDGER_INVALID"));
-    byRoot.set(rootId, sortedUnique(ids3));
+    byRoot.set(rootId, sortedUnique2(ids3));
   }
-  return [...byRoot.entries()].sort(([left], [right]) => compareCodePoints10(left, right)).map(([root_issue_id, cumulative_suspended_decision_ids]) => ({
+  return [...byRoot.entries()].sort(([left], [right]) => compareCodePoints11(left, right)).map(([root_issue_id, cumulative_suspended_decision_ids]) => ({
     root_issue_id,
     cumulative_suspended_decision_ids
   }));
@@ -48077,17 +50570,17 @@ function normalizeTargets(value) {
   if (!Array.isArray(value) || value.length === 0) throw new TypeError("REOPEN_TARGETS_INVALID");
   const seen = /* @__PURE__ */ new Set();
   const output = value.map((submitted) => {
-    const item = record11(submitted, "REOPEN_TARGETS_INVALID");
+    const item = record16(submitted, "REOPEN_TARGETS_INVALID");
     const rootIssueId = text4(item.root_issue_id, "REOPEN_TARGETS_INVALID").normalize("NFC");
     const priorDigest = sha(item.prior_root_version_digest ?? item.root_version_digest, "REOPEN_TARGETS_INVALID");
     if (seen.has(rootIssueId)) throw new TypeError("REOPEN_TARGETS_INVALID");
     seen.add(rootIssueId);
     return { root_issue_id: rootIssueId, prior_root_version_digest: priorDigest };
   });
-  return output.sort((left, right) => compareCodePoints10(left.root_issue_id, right.root_issue_id));
+  return output.sort((left, right) => compareCodePoints11(left.root_issue_id, right.root_issue_id));
 }
 function projectEffectiveDecisionsV4(submittedDecisions, submittedLedger) {
-  const journal = decisions(submittedDecisions).map((item) => canonicalClone2(record11(item, "DECISION_INVALID")));
+  const journal = decisions(submittedDecisions).map((item) => canonicalClone3(record16(item, "DECISION_INVALID")));
   const ledger = normalizeSuspensionLedger(submittedLedger);
   const byId = /* @__PURE__ */ new Map();
   for (const decision of journal) {
@@ -48105,20 +50598,20 @@ function projectEffectiveDecisionsV4(submittedDecisions, submittedLedger) {
   const suspended = new Set(ledger.flatMap((item) => item.cumulative_suspended_decision_ids));
   const candidates2 = journal.filter((item) => !suspended.has(item.decision_id) && (item.status === void 0 || item.status === "active"));
   const superseded = new Set(candidates2.flatMap((item) => Array.isArray(item.supersedes_decision_ids) ? item.supersedes_decision_ids : []));
-  const effective = candidates2.filter((item) => !superseded.has(item.decision_id)).sort((left, right) => compareCodePoints10(String(left.decision_id), String(right.decision_id)));
-  const audit = journal.map((item) => suspended.has(item.decision_id) ? { ...item, status: "suspended_by_reopen" } : item).sort((left, right) => compareCodePoints10(String(left.decision_id), String(right.decision_id)));
+  const effective = candidates2.filter((item) => !superseded.has(item.decision_id)).sort((left, right) => compareCodePoints11(String(left.decision_id), String(right.decision_id)));
+  const audit = journal.map((item) => suspended.has(item.decision_id) ? { ...item, status: "suspended_by_reopen" } : item).sort((left, right) => compareCodePoints11(String(left.decision_id), String(right.decision_id)));
   return { effective_decisions: effective, audit_decisions: audit };
 }
 function deriveDecisionReopenOverlayV4(input) {
-  const value = record11(input, "REOPEN_OVERLAY_INPUT_INVALID");
+  const value = record16(input, "REOPEN_OVERLAY_INPUT_INVALID");
   const eventId = text4(value.reopen_event_id, "REOPEN_EVENT_ID_INVALID").normalize("NFC");
   const targets = normalizeTargets(value.targets);
   const priorLedger = normalizeSuspensionLedger(value.prior_suspension_ledger ?? []);
   const priorByRoot = new Map(priorLedger.map((item) => [item.root_issue_id, item.cumulative_suspended_decision_ids]));
   const projection = projectEffectiveDecisionsV4(value.decisions, priorLedger);
   const reopenedTargets = targets.map((target) => {
-    const newly = sortedUnique(projection.effective_decisions.filter((decision) => decision.target?.root_issue_id === target.root_issue_id).map((decision) => text4(decision.decision_id, "DECISION_ID_INVALID")));
-    const cumulative = sortedUnique([...priorByRoot.get(target.root_issue_id) ?? [], ...newly]);
+    const newly = sortedUnique2(projection.effective_decisions.filter((decision) => decision.target?.root_issue_id === target.root_issue_id).map((decision) => text4(decision.decision_id, "DECISION_ID_INVALID")));
+    const cumulative = sortedUnique2([...priorByRoot.get(target.root_issue_id) ?? [], ...newly]);
     priorByRoot.set(target.root_issue_id, cumulative);
     const reopenedRootVersionDigest = canonicalDigest3({
       root_issue_id: target.root_issue_id,
@@ -48137,9 +50630,9 @@ function deriveDecisionReopenOverlayV4(input) {
       }
     };
   });
-  const decisionSuspensionLedger = [...priorByRoot.entries()].sort(([left], [right]) => compareCodePoints10(left, right)).map(([root_issue_id, cumulative_suspended_decision_ids]) => ({
+  const decisionSuspensionLedger = [...priorByRoot.entries()].sort(([left], [right]) => compareCodePoints11(left, right)).map(([root_issue_id, cumulative_suspended_decision_ids]) => ({
     root_issue_id,
-    cumulative_suspended_decision_ids: sortedUnique(cumulative_suspended_decision_ids)
+    cumulative_suspended_decision_ids: sortedUnique2(cumulative_suspended_decision_ids)
   }));
   const overlayDigest = canonicalDigest3({
     decision_suspension_ledger: decisionSuspensionLedger,
@@ -48200,7 +50693,7 @@ async function writeImmutableText(catalogRoot2, target, content) {
   if (existing === null) await atomicWriteText(catalogRoot2, target, content);
 }
 async function readInheritedObject(catalogRoot2, reference) {
-  const value = record11(reference, "REOPEN_INHERITED_REF_INVALID");
+  const value = record16(reference, "REOPEN_INHERITED_REF_INVALID");
   const expectedDigest = sha(value.digest, "REOPEN_INHERITED_REF_INVALID");
   const expectedPath = objectPath(catalogRoot2, expectedDigest);
   if (typeof value.object_path !== "string" || path7.resolve(catalogRoot2, value.object_path) !== path7.resolve(expectedPath)) {
@@ -48217,13 +50710,13 @@ async function readInheritedObject(catalogRoot2, reference) {
   }
 }
 function projectReopenedEvidenceV4(submittedEvidence, submittedLedger, submittedRoots) {
-  const evidence = canonicalClone2(record11(submittedEvidence, "REOPEN_EVIDENCE_INVALID"));
+  const evidence = canonicalClone3(record16(submittedEvidence, "REOPEN_EVIDENCE_INVALID"));
   if (!Array.isArray(evidence.claims) || !Array.isArray(evidence.fact_ledger)) {
     throw new TypeError("REOPEN_EVIDENCE_INVALID");
   }
   const ledger = normalizeSuspensionLedger(submittedLedger);
   const suspendedDecisionIds = new Set(ledger.flatMap((item) => item.cumulative_suspended_decision_ids));
-  const originalClaims = evidence.claims.map((claim) => canonicalClone2(record11(claim, "REOPEN_EVIDENCE_INVALID")));
+  const originalClaims = evidence.claims.map((claim) => canonicalClone3(record16(claim, "REOPEN_EVIDENCE_INVALID")));
   const claimById = new Map(originalClaims.map((claim) => [claim.claim_id, claim]));
   if (claimById.size !== originalClaims.length || [...claimById.keys()].some((id2) => typeof id2 !== "string")) {
     throw new TypeError("REOPEN_EVIDENCE_INVALID");
@@ -48240,7 +50733,7 @@ function projectReopenedEvidenceV4(submittedEvidence, submittedLedger, submitted
     if (visited.has(claimId)) throw new TypeError("REOPEN_EVIDENCE_SUPERSESSION_CYCLE");
     const nextVisited = new Set(visited);
     nextVisited.add(claimId);
-    return sortedUnique((predecessors.get(claimId) ?? []).flatMap((id2) => restoredClaimIds(id2, nextVisited)));
+    return sortedUnique2((predecessors.get(claimId) ?? []).flatMap((id2) => restoredClaimIds(id2, nextVisited)));
   };
   const retained = originalClaims.filter((claim) => !removedClaimIds.has(claim.claim_id));
   for (const claim of retained) {
@@ -48260,15 +50753,15 @@ function projectReopenedEvidenceV4(submittedEvidence, submittedLedger, submitted
       if (!removedClaimIds.has(cursor)) claim.superseded_by = cursor;
     }
     if (Array.isArray(claim.parent_claim_ids)) {
-      claim.parent_claim_ids = sortedUnique(claim.parent_claim_ids.flatMap((id2) => typeof id2 === "string" ? restoredClaimIds(id2) : []));
+      claim.parent_claim_ids = sortedUnique2(claim.parent_claim_ids.flatMap((id2) => typeof id2 === "string" ? restoredClaimIds(id2) : []));
     }
   }
-  const roots = Array.isArray(submittedRoots) ? submittedRoots.map((root) => record11(root, "REOPEN_ROOTS_INVALID")) : [];
+  const roots = Array.isArray(submittedRoots) ? submittedRoots.map((root) => record16(root, "REOPEN_ROOTS_INVALID")) : [];
   const reopenedFactIds = new Set(roots.flatMap((root) => Array.isArray(root.subject_fact_ids) ? root.subject_fact_ids.filter((id2) => typeof id2 === "string") : []));
   for (const fact of evidence.fact_ledger) {
     if (!reopenedFactIds.has(fact.fact_id)) continue;
     if (Array.isArray(fact.claim_ids)) {
-      const restored = sortedUnique(fact.claim_ids.flatMap((id2) => typeof id2 === "string" ? restoredClaimIds(id2) : []));
+      const restored = sortedUnique2(fact.claim_ids.flatMap((id2) => typeof id2 === "string" ? restoredClaimIds(id2) : []));
       if (restored.length === 0) throw new TypeError("REOPEN_EVIDENCE_ANCESTRY_MISSING");
       fact.claim_ids = restored;
     } else if (typeof fact.claim_id === "string") {
@@ -48276,7 +50769,7 @@ function projectReopenedEvidenceV4(submittedEvidence, submittedLedger, submitted
       if (restored.length !== 1) throw new TypeError("REOPEN_EVIDENCE_ANCESTRY_AMBIGUOUS");
       fact.claim_id = restored[0];
       if (Array.isArray(fact.source_claim_ids)) {
-        fact.source_claim_ids = sortedUnique(fact.source_claim_ids.flatMap((id2) => typeof id2 === "string" ? restoredClaimIds(id2) : []));
+        fact.source_claim_ids = sortedUnique2(fact.source_claim_ids.flatMap((id2) => typeof id2 === "string" ? restoredClaimIds(id2) : []));
       }
     }
     fact.status = "ambiguous";
@@ -48286,7 +50779,7 @@ function projectReopenedEvidenceV4(submittedEvidence, submittedLedger, submitted
 }
 function compareReopenRoots(left, right) {
   const risk = /* @__PURE__ */ new Map([["critical", 0], ["high", 1], ["medium", 2], ["low", 3]]);
-  return (risk.get(left.risk_level) ?? 4) - (risk.get(right.risk_level) ?? 4) || compareCodePoints10(String(left.scope_ref), String(right.scope_ref)) || compareCodePoints10(String(left.missing_aspect), String(right.missing_aspect)) || compareCodePoints10(String(left.root_issue_id), String(right.root_issue_id));
+  return (risk.get(left.risk_level) ?? 4) - (risk.get(right.risk_level) ?? 4) || compareCodePoints11(String(left.scope_ref), String(right.scope_ref)) || compareCodePoints11(String(left.missing_aspect), String(right.missing_aspect)) || compareCodePoints11(String(left.root_issue_id), String(right.root_issue_id));
 }
 function reopenedQuestionPart(root, presentationId) {
   return {
@@ -48318,8 +50811,8 @@ function compileReopenedPresentation(checkpoint2, supersedesPresentationId) {
   const roots = new Map(checkpoint2.semantic_gap_ledger.map((root) => [root.root_issue_id, root]));
   const pending = checkpoint2.clarification_state.root_states.filter((state) => state.status === "presented").map((state) => roots.get(state.root_issue_id)).filter(Boolean).sort(compareReopenRoots);
   if (pending.length === 0) return null;
-  const answeredPartIds = checkpoint2.clarification_state.root_states.filter((state) => state.status === "resolved_final" || state.status === "resolved_temporary").map((state) => state.question_part_id).sort(compareCodePoints10);
-  const remainingPartIds = pending.map((root) => root.question_part_id).sort(compareCodePoints10);
+  const answeredPartIds = checkpoint2.clarification_state.root_states.filter((state) => state.status === "resolved_final" || state.status === "resolved_temporary").map((state) => state.question_part_id).sort(compareCodePoints11);
+  const remainingPartIds = pending.map((root) => root.question_part_id).sort(compareCodePoints11);
   const cycleDigest = canonicalDigest3(pending.map((root) => ({
     root_issue_id: root.root_issue_id,
     root_version_digest: root.root_version_digest,
@@ -48354,10 +50847,10 @@ function compileReopenedPresentation(checkpoint2, supersedesPresentationId) {
   };
 }
 function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParentCheckpoint, submittedProjectedEvidence, submittedScopeManifest) {
-  const seed = record11(submittedSeed, "REOPEN_SIBLING_SEED_INVALID");
-  const parent = record11(submittedParentCheckpoint, "REOPEN_PARENT_CHECKPOINT_INVALID");
-  const evidence = record11(submittedProjectedEvidence, "REOPEN_EVIDENCE_INVALID");
-  const scopeManifest = record11(submittedScopeManifest, "REOPEN_SCOPE_MANIFEST_INVALID");
+  const seed = record16(submittedSeed, "REOPEN_SIBLING_SEED_INVALID");
+  const parent = record16(submittedParentCheckpoint, "REOPEN_PARENT_CHECKPOINT_INVALID");
+  const evidence = record16(submittedProjectedEvidence, "REOPEN_EVIDENCE_INVALID");
+  const scopeManifest = record16(submittedScopeManifest, "REOPEN_SCOPE_MANIFEST_INVALID");
   const contract2 = v4ContractForIdentity(seed);
   if (!contract2 || parent.schema_version !== contract2.schema_version || parent.compiler_version !== contract2.compiler_version || evidence.schema_version !== contract2.schema_version || validateSemanticClarificationCheckpointV4(parent).length || canonicalStringify(parent.semantic_gap_ledger) !== canonicalStringify(seed.parent_semantic_gap_ledger) || canonicalStringify(parent.clarification_state?.root_states) !== canonicalStringify(seed.parent_root_states)) {
     throw new TypeError("REOPEN_PARENT_CHECKPOINT_INVALID");
@@ -48370,10 +50863,10 @@ function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParent
   validateTargetVersions(parent, targets);
   const semanticGapLedger = parent.semantic_gap_ledger.map((root) => {
     const target = targetByRoot.get(root.root_issue_id);
-    if (!target) return canonicalClone2(root);
+    if (!target) return canonicalClone3(root);
     const rootVersionDigest = target.reopened_root_version_digest;
     return {
-      ...canonicalClone2(root),
+      ...canonicalClone3(root),
       semantic_gap_id: contentId2("SG", {
         root_issue_id: root.root_issue_id,
         root_version_digest: rootVersionDigest
@@ -48385,10 +50878,10 @@ function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParent
         missing_aspect: root.missing_aspect
       })
     };
-  }).sort((left, right) => compareCodePoints10(left.root_issue_id, right.root_issue_id));
+  }).sort((left, right) => compareCodePoints11(left.root_issue_id, right.root_issue_id));
   const gapByRoot = new Map(semanticGapLedger.map((root) => [root.root_issue_id, root]));
   const rootStates = parent.clarification_state.root_states.map((state) => {
-    if (!targetByRoot.has(state.root_issue_id)) return canonicalClone2(state);
+    if (!targetByRoot.has(state.root_issue_id)) return canonicalClone3(state);
     const root = gapByRoot.get(state.root_issue_id);
     return {
       root_issue_id: state.root_issue_id,
@@ -48396,14 +50889,14 @@ function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParent
       question_part_id: root.question_part_id,
       status: "presented"
     };
-  }).sort((left, right) => compareCodePoints10(left.root_issue_id, right.root_issue_id));
+  }).sort((left, right) => compareCodePoints11(left.root_issue_id, right.root_issue_id));
   const checkpoint2 = {
     schema_version: contract2.schema_version,
     compiler_version: contract2.compiler_version,
     run_id: text4(seed.run_id, "REOPEN_SIBLING_SEED_INVALID"),
     revision: 0,
     commit_profile: "pre_case_pending",
-    source_review_witness: canonicalClone2(parent.source_review_witness),
+    source_review_witness: canonicalClone3(parent.source_review_witness),
     fact_ledger_digest: canonicalDigest3(evidence.fact_ledger),
     scope_manifest_digest: canonicalDigest3(scopeManifest),
     behavior_views_digest: null,
@@ -48412,7 +50905,7 @@ function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParent
     // checkpoint remains available through the content-addressed seed, while
     // the sibling revision transaction must bind its own canonical genesis.
     base_checkpoint_digest: siblingGenesisDigest(seed.run_id, contract2),
-    reopened_targets: canonicalClone2(seed.reopened_targets),
+    reopened_targets: canonicalClone3(seed.reopened_targets),
     decision_suspension_ledger: normalizeSuspensionLedger(seed.decision_suspension_ledger),
     decision_reopen_overlay_digest: sha(
       seed.decision_reopen_overlay_digest,
@@ -48432,16 +50925,16 @@ function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParent
   };
   const supersedesPresentationId = typeof parent.clarification_state.latest_presentation_id === "string" ? parent.clarification_state.latest_presentation_id : null;
   const presentation = compileReopenedPresentation(checkpoint2, supersedesPresentationId);
-  checkpoint2.clarification_state.answered_part_ids = rootStates.filter((state) => state.status === "resolved_final" || state.status === "resolved_temporary").map((state) => state.question_part_id).sort(compareCodePoints10);
+  checkpoint2.clarification_state.answered_part_ids = rootStates.filter((state) => state.status === "resolved_final" || state.status === "resolved_temporary").map((state) => state.question_part_id).sort(compareCodePoints11);
   checkpoint2.clarification_state.remaining_part_ids = presentation?.remaining_part_ids ?? [];
-  checkpoint2.clarification_state.closed_for_delivery_part_ids = rootStates.filter((state) => state.status === "closed_for_delivery").map((state) => state.question_part_id).sort(compareCodePoints10);
+  checkpoint2.clarification_state.closed_for_delivery_part_ids = rootStates.filter((state) => state.status === "closed_for_delivery").map((state) => state.question_part_id).sort(compareCodePoints11);
   checkpoint2.clarification_state.cycle_digest = presentation?.cycle_digest ?? canonicalDigest3([]);
   checkpoint2.clarification_state.latest_presentation_id = presentation?.presentation_id ?? supersedesPresentationId;
   checkpoint2.clarification_state.presentation = presentation;
   checkpoint2.clarification_state.presentation_digest = presentation ? canonicalDigest3(presentation) : null;
   const diagnostics2 = validateSemanticClarificationCheckpointV4(checkpoint2);
   if (diagnostics2.length) throw new TypeError(diagnostics2[0].code);
-  return canonicalClone2(checkpoint2);
+  return canonicalClone3(checkpoint2);
 }
 async function compileProductionSiblingRevision(catalogRoot2, seed) {
   const contract2 = v4ContractForIdentity(seed);
@@ -48463,7 +50956,7 @@ async function compileProductionSiblingRevision(catalogRoot2, seed) {
     catalogRoot2,
     seed.inherited_artifact_refs?.scope_manifest
   );
-  const scopeManifest = canonicalClone2(scopeArtifact);
+  const scopeManifest = canonicalClone3(scopeArtifact);
   delete scopeManifest.schema_version;
   delete scopeManifest.source_revision;
   const projectedEvidence = projectReopenedEvidenceV4(
@@ -48474,10 +50967,10 @@ async function compileProductionSiblingRevision(catalogRoot2, seed) {
     ))
   );
   projectedEvidence.source_revision = 0;
-  const sourcePack = canonicalClone2(record11(inheritedSource, "REOPEN_INHERITED_SOURCE_INVALID"));
+  const sourcePack = canonicalClone3(record16(inheritedSource, "REOPEN_INHERITED_SOURCE_INVALID"));
   sourcePack.run_instance_id = seed.run_id;
   sourcePack.source_revision = 0;
-  sourcePack.decision_records = canonicalClone2(decisions(inheritedJournal));
+  sourcePack.decision_records = canonicalClone3(decisions(inheritedJournal));
   const checkpoint2 = compileSemanticReopenSiblingCheckpointV4(
     seed,
     parentCheckpoint,
@@ -48487,22 +50980,22 @@ async function compileProductionSiblingRevision(catalogRoot2, seed) {
   const decisionJournal = {
     schema_version: contract2.schema_version,
     source_revision: 0,
-    decisions: canonicalClone2(sourcePack.decision_records)
+    decisions: canonicalClone3(sourcePack.decision_records)
   };
   const factLedger2 = {
     schema_version: contract2.schema_version,
     source_revision: 0,
-    facts: canonicalClone2(projectedEvidence.fact_ledger)
+    facts: canonicalClone3(projectedEvidence.fact_ledger)
   };
   const persistedScopeManifest = {
     schema_version: contract2.schema_version,
     source_revision: 0,
-    ...canonicalClone2(scopeManifest)
+    ...canonicalClone3(scopeManifest)
   };
   const clarificationState = {
     schema_version: contract2.schema_version,
     source_revision: 0,
-    ...canonicalClone2(checkpoint2.clarification_state)
+    ...canonicalClone3(checkpoint2.clarification_state)
   };
   const semanticDigest = canonicalDigest3({
     source_semantic_digests: Array.isArray(sourcePack.sources) ? sourcePack.sources.map((source) => source.semantic_digest) : [],
@@ -48614,7 +51107,7 @@ async function readParentCase(catalogRoot2, caseDirectory, reference) {
   return { manifest, manifestText, bundleText, artifactTexts, checkpoint: checkpoint2, journal };
 }
 async function readCaseDocumentSemanticRootRefsV4(catalogRoot2, submittedReference) {
-  const reference = record11(submittedReference, "REOPEN_CASE_DOCUMENT_REF_INVALID");
+  const reference = record16(submittedReference, "REOPEN_CASE_DOCUMENT_REF_INVALID");
   const caseRunId = text4(reference.run_id, "REOPEN_CASE_DOCUMENT_REF_INVALID");
   if (!Number.isSafeInteger(reference.revision) || reference.revision < 0) {
     throw new TypeError("REOPEN_CASE_DOCUMENT_REF_INVALID");
@@ -48652,11 +51145,11 @@ async function readCaseDocumentSemanticRootRefsV4(catalogRoot2, submittedReferen
       root_version_digest: root.root_version_digest
     });
   }
-  const sorted2 = refs3.sort((left, right) => compareCodePoints10(left.root_issue_id, right.root_issue_id));
-  if (new Set(sorted2.map((item) => item.root_issue_id)).size !== sorted2.length) {
+  const sorted3 = refs3.sort((left, right) => compareCodePoints11(left.root_issue_id, right.root_issue_id));
+  if (new Set(sorted3.map((item) => item.root_issue_id)).size !== sorted3.length) {
     throw new RunStoreIntegrityError("REOPEN_PARENT_ROOT_STATE_INVALID");
   }
-  return canonicalClone2(sorted2);
+  return canonicalClone3(sorted3);
 }
 function validateTargetVersions(checkpoint2, targets) {
   const gaps = (
@@ -48687,7 +51180,7 @@ function validateParentSuspensionLineage(instance, checkpoint2) {
   const expectedDigest = instance.lineage.decision_reopen_overlay_digest;
   if (!Array.isArray(targets) || !SHA2563.test(String(expectedDigest)) || checkpoint2.decision_reopen_overlay_digest !== expectedDigest || canonicalDigest3({
     decision_suspension_ledger: normalizeSuspensionLedger(ledger),
-    reopened_targets: canonicalClone2(targets)
+    reopened_targets: canonicalClone3(targets)
   }) !== expectedDigest) {
     throw new RunStoreIntegrityError("REOPEN_PARENT_SUSPENSION_LINEAGE_INVALID");
   }
@@ -48725,7 +51218,7 @@ function validateSiblingCheckpoint(checkpoint2, seed) {
   }
 }
 function resultFor(transaction) {
-  return canonicalClone2({
+  return canonicalClone3({
     status: "semantic_reopen_committed",
     txn_id: transaction.txn_id,
     sibling_run_id: transaction.sibling_run_id,
@@ -48734,11 +51227,11 @@ function resultFor(transaction) {
   });
 }
 async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, services, hooks = {}) {
-  const event = record11(submittedEvent, "REOPEN_EVENT_INVALID");
+  const event = record16(submittedEvent, "REOPEN_EVENT_INVALID");
   if (event.event_type !== "reopen_semantic_question") throw new TypeError("REOPEN_EVENT_INVALID");
   const executionRunId = text4(event.run_id, "REOPEN_EVENT_INVALID");
   const reopenEventId = text4(event.reopen_event_id, "REOPEN_EVENT_INVALID").normalize("NFC");
-  const reference = record11(event.case_document_ref, "REOPEN_CASE_DOCUMENT_REF_INVALID");
+  const reference = record16(event.case_document_ref, "REOPEN_CASE_DOCUMENT_REF_INVALID");
   const caseRunId = text4(reference.run_id, "REOPEN_CASE_DOCUMENT_REF_INVALID");
   if (!Number.isSafeInteger(reference.revision) || reference.revision < 0) {
     throw new TypeError("REOPEN_CASE_DOCUMENT_REF_INVALID");
@@ -48752,7 +51245,7 @@ async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, 
   const payload = {
     execution_run_id: executionRunId,
     reopen_event_id: reopenEventId,
-    case_document_ref: canonicalClone2(reference),
+    case_document_ref: canonicalClone3(reference),
     targets
   };
   const payloadDigest = canonicalDigest3(payload);
@@ -48765,7 +51258,7 @@ async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, 
       if (transaction.payload_digest !== payloadDigest) {
         throw new RunStoreIntegrityError("REOPEN_EVENT_PAYLOAD_CONFLICT");
       }
-      if (transaction.phase === "complete") return canonicalClone2(transaction.result);
+      if (transaction.phase === "complete") return canonicalClone3(transaction.result);
     } else {
       const executionDirectory2 = requireCatalogDescendant(
         catalogRoot2,
@@ -48829,7 +51322,7 @@ async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, 
       const siblingRunId = `RUN-${hash5.slice(0, 8)}-${hash5.slice(8, 12)}-${hash5.slice(12, 16)}-${hash5.slice(16, 20)}-${hash5.slice(20, 32)}`;
       const lineage = {
         creation_reason: "reopen_semantic_question",
-        parent_case_document_ref: canonicalClone2(reference),
+        parent_case_document_ref: canonicalClone3(reference),
         parent_execution_run_id: executionRunId,
         reopen_event_id: reopenEventId,
         reopened_targets: overlay.reopened_targets,
@@ -48843,8 +51336,8 @@ async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, 
         revision: 0,
         parent_checkpoint_digest: refs3.parent_checkpoint,
         inherited_artifact_refs: Object.fromEntries(Object.entries(refs3).map(([key, digestValue]) => [key, { digest: digestValue, object_path: path7.relative(catalogRoot2, objectPath(catalogRoot2, digestValue)) }])),
-        parent_semantic_gap_ledger: canonicalClone2(parent.checkpoint.semantic_gap_ledger),
-        parent_root_states: canonicalClone2(parent.checkpoint.clarification_state.root_states),
+        parent_semantic_gap_ledger: canonicalClone3(parent.checkpoint.semantic_gap_ledger),
+        parent_root_states: canonicalClone3(parent.checkpoint.clarification_state.root_states),
         reopened_targets: overlay.reopened_targets,
         decision_suspension_ledger: overlay.decision_suspension_ledger,
         decision_reopen_overlay_digest: overlay.decision_reopen_overlay_digest
@@ -48902,7 +51395,7 @@ async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, 
       if (!existingSeed) await atomicWriteJson(catalogRoot2, seedPath, transaction.seed);
       const compiled = await compileProductionSiblingRevision(
         catalogRoot2,
-        canonicalClone2(transaction.seed)
+        canonicalClone3(transaction.seed)
       );
       validateSiblingCheckpoint(compiled.checkpoint, transaction.seed);
       await commitRevisionTransactionV4(siblingDirectory, compiled.request);
@@ -48941,7 +51434,7 @@ async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, 
     transaction = { ...nextPhase(transaction, "complete"), result };
     await atomicWriteJson(catalogRoot2, targetPath, transaction);
     await phaseHook2(hooks, "complete");
-    return canonicalClone2(result);
+    return canonicalClone3(result);
   } finally {
     await release();
   }
@@ -49040,7 +51533,7 @@ function createNeedArtifactReplyV4(input) {
 
 // src/execution-run-v4.mjs
 init_v4_contract();
-function record12(value) {
+function record17(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function qualityFailure(runId, code2, summary) {
@@ -49141,7 +51634,7 @@ async function commitFinalConfirmationPresentation(runDirectory, runId, revision
     runner_projection: result.runner_projection,
     plan_digest: executionPlanDigest(result)
   });
-  const record20 = {
+  const record23 = {
     schema_version: contract2.schema_version,
     compiler_version: contract2.compiler_version,
     run_id: runId,
@@ -49152,37 +51645,37 @@ async function commitFinalConfirmationPresentation(runDirectory, runId, revision
     presentation_digest: `sha256:${digest(presentation)}`
   };
   const existing = await readJsonIfPresent(runDirectory, finalConfirmationPath(runDirectory));
-  if (existing && existing.value.source_revision === revision && canonicalStringify(existing.value) !== canonicalStringify(record20)) {
+  if (existing && existing.value.source_revision === revision && canonicalStringify(existing.value) !== canonicalStringify(record23)) {
     throw new TypeError("FINAL_CONFIRMATION_STATE_CONFLICT");
   }
   if (!existing || existing.value.source_revision !== revision) {
-    await atomicWriteJson(runDirectory, finalConfirmationPath(runDirectory), record20);
+    await atomicWriteJson(runDirectory, finalConfirmationPath(runDirectory), record23);
   }
   return presentation;
 }
 async function verifyDisplayedFinalConfirmation(runDirectory, runId, source, result, event, contract2) {
   const snapshot2 = await readJsonIfPresent(runDirectory, finalConfirmationPath(runDirectory));
-  const record20 = snapshot2?.value;
-  if (!record20 || record20.schema_version !== contract2.schema_version || record20.compiler_version !== contract2.compiler_version || record20.run_id !== runId || record20.status !== "pending" || !Number.isSafeInteger(record20.source_revision) || record20.source_revision + 1 !== source.source_revision || record20.source_pack_digest !== `sha256:${digest({
+  const record23 = snapshot2?.value;
+  if (!record23 || record23.schema_version !== contract2.schema_version || record23.compiler_version !== contract2.compiler_version || record23.run_id !== runId || record23.status !== "pending" || !Number.isSafeInteger(record23.source_revision) || record23.source_revision + 1 !== source.source_revision || record23.source_pack_digest !== `sha256:${digest({
     ...source,
-    source_revision: record20.source_revision,
+    source_revision: record23.source_revision,
     execution_events: source.execution_events.slice(0, -1)
-  })}` || record20.presentation_digest !== `sha256:${digest(record20.presentation)}`) {
+  })}` || record23.presentation_digest !== `sha256:${digest(record23.presentation)}`) {
     throw new TypeError("FINAL_CONFIRMATION_NOT_DISPLAYED");
   }
   const expected = createV4FinalConfirmationPresentation({
     run_id: runId,
-    source_revision: record20.source_revision,
+    source_revision: record23.source_revision,
     case_document_ref: source.case_document_ref,
     result_kind: result.result_kind,
     runner_projection: result.runner_projection,
     plan_digest: executionPlanDigest(result)
   });
-  if (canonicalStringify(record20.presentation) !== canonicalStringify(expected)) {
+  if (canonicalStringify(record23.presentation) !== canonicalStringify(expected)) {
     throw new TypeError("FINAL_CONFIRMATION_STALE");
   }
   validateV4FinalConfirmationEvent(expected, event);
-  return record20;
+  return record23;
 }
 function catalogRunRoot(runDirectory) {
   return path8.dirname(runDirectory);
@@ -49192,7 +51685,7 @@ function catalogRoot(runDirectory) {
 }
 function caseDocumentResolver(runDirectory) {
   return async (ref2) => {
-    if (!record12(ref2) || typeof ref2.run_id !== "string" || path8.basename(ref2.run_id) !== ref2.run_id || ref2.run_id.includes(path8.sep)) {
+    if (!record17(ref2) || typeof ref2.run_id !== "string" || path8.basename(ref2.run_id) !== ref2.run_id || ref2.run_id.includes(path8.sep)) {
       throw new TypeError("CASE_DOCUMENT_REFERENCE_INVALID");
     }
     const documentDirectory = path8.resolve(catalogRunRoot(runDirectory), ref2.run_id);
@@ -49207,7 +51700,7 @@ function caseDocumentResolver(runDirectory) {
     } catch {
       throw new TypeError("CASE_DOCUMENT_MANIFEST_INVALID");
     }
-    if (!record12(manifest?.bundle) || typeof manifest.bundle.path !== "string") {
+    if (!record17(manifest?.bundle) || typeof manifest.bundle.path !== "string") {
       throw new TypeError("CASE_DOCUMENT_MANIFEST_INVALID");
     }
     const bundlePath = path8.resolve(documentDirectory, manifest.bundle.path);
@@ -49238,7 +51731,7 @@ async function persistCapabilityReceiptLedger(runDirectory, runId, caseDocumentR
   const existing = await readJsonIfPresent(runDirectory, capabilityReceiptLedgerPath(runDirectory));
   if (existing) {
     const value = existing.value;
-    if (!record12(value) || value.schema_version !== contract2.schema_version || value.compiler_version !== contract2.compiler_version || value.run_id !== runId || canonicalStringify(value.case_document_ref) !== canonicalStringify(caseDocumentRef) || !Array.isArray(value.receipts) || value.ledger_digest !== `sha256:${digest({
+    if (!record17(value) || value.schema_version !== contract2.schema_version || value.compiler_version !== contract2.compiler_version || value.run_id !== runId || canonicalStringify(value.case_document_ref) !== canonicalStringify(caseDocumentRef) || !Array.isArray(value.receipts) || value.ledger_digest !== `sha256:${digest({
       schema_version: value.schema_version,
       compiler_version: value.compiler_version,
       run_id: value.run_id,
@@ -49545,7 +52038,7 @@ async function advanceExecutionRunV4Locked(runDirectory, registry, runInstance, 
       candidateDiagnostics,
       runId
     );
-    if (!record12(candidate.value) || candidate.value.schema_version !== contract2.schema_version || candidate.value.delivery_intent !== "execution_plan" || candidate.value.run_instance_id !== runId) return revisionReply(
+    if (!record17(candidate.value) || candidate.value.schema_version !== contract2.schema_version || candidate.value.delivery_intent !== "execution_plan" || candidate.value.run_instance_id !== runId) return revisionReply(
       runDirectory,
       expectedRevision,
       candidate.value,
@@ -50019,7 +52512,7 @@ init_schema_validator();
 var riskKinds = Object.freeze([...test_obligations_schema_default.$defs.riskReviewBase.properties.risk_kind.enum]);
 var text5 = { type: "string", minLength: 1, pattern: "\\S" };
 var role = { enum: ["primary_acceptance", "dependency_contract", "context_only"] };
-var closed7 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var closed8 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 var contract = (name) => ({ $defs: test_obligations_schema_default.$defs, $ref: `#/$defs/${name}` });
 var notApplicableSubjectSchema = contract("notApplicableSubject");
 var exclusionBasisSchema = contract("exclusionBasis");
@@ -50029,11 +52522,11 @@ var justification = {
   reason_code: { enum: ["out_of_scope", "inapplicable_condition", "superseded_requirement"] },
   basis: exclusionBasisSchema
 };
-var intentSchema = { $defs: test_obligations_schema_default.$defs, ...closed7({ ...justification, reason: text5 }) };
+var intentSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({ ...justification, reason: text5 }) };
 var notApplicableRecordSchema = contract("notApplicableRecord");
-var notApplicableContextSchema = { $defs: test_obligations_schema_default.$defs, ...closed7({
-  subjects: { type: "array", items: closed7({ subject: notApplicableSubjectSchema, acceptance_role: role }) },
-  verified_bases: { type: "array", items: closed7(justification) }
+var notApplicableContextSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({
+  subjects: { type: "array", items: closed8({ subject: notApplicableSubjectSchema, acceptance_role: role }) },
+  verified_bases: { type: "array", items: closed8(justification) }
 }) };
 function compareScalar(left, right) {
   const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
@@ -50082,16 +52575,16 @@ function compileNotApplicable(input, systemContext) {
   }
   return { not_applicable_record_id: `NA-${digest(identity2)}`, ...request };
 }
-function validateNotApplicable(record20, systemContext) {
-  const errors = validateAgainstSchema(record20, notApplicableRecordSchema);
+function validateNotApplicable(record23, systemContext) {
+  const errors = validateAgainstSchema(record23, notApplicableRecordSchema);
   if (errors.length) return errors;
   const { not_applicable_record_id, ...request } = (
     /** @type {any} */
-    record20
+    record23
   );
   try {
     const expected = compileNotApplicable(request, systemContext);
-    if (canonicalStringify(expected) !== canonicalStringify(record20)) return [{ category: "quality_failure", code: "NOT_APPLICABLE_RECORD_MISMATCH", path: "/", message: "NotApplicable record must match its canonical compiler-derived identity and basis." }];
+    if (canonicalStringify(expected) !== canonicalStringify(record23)) return [{ category: "quality_failure", code: "NOT_APPLICABLE_RECORD_MISMATCH", path: "/", message: "NotApplicable record must match its canonical compiler-derived identity and basis." }];
     return [];
   } catch (error) {
     return [{ category: "quality_failure", code: error instanceof Error ? error.message : "NOT_APPLICABLE_INVALID", path: "/", message: "NotApplicable subject, role and verified basis must all resolve." }];
@@ -50109,13 +52602,13 @@ init_canonical();
 init_schema_validator();
 var text6 = { type: "string", minLength: 1, pattern: "\\S" };
 var ids = { type: "array", minItems: 1, uniqueItems: true, items: text6 };
-var closed8 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var closed9 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 var subject = { module_id: text6, risk_kind: { enum: [...riskKinds] }, acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] } };
-var contextSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({
+var contextSchema = { $defs: test_obligations_schema_default.$defs, ...closed9({
   primary_module_ids: { ...ids, minItems: 0 },
-  formal_test_points: { type: "array", items: closed8({ ...subject, formal_test_point_id: text6, claim_ids: ids }) },
-  semantic_gaps: { type: "array", items: closed8({ ...subject, semantic_gap_id: text6, subject_fact_ids: ids, missing_aspect: text6 }) },
-  exploratory: { type: "array", items: closed8({ ...subject, exploratory_id: text6, policy_id: text6, policy_version: text6 }) },
+  formal_test_points: { type: "array", items: closed9({ ...subject, formal_test_point_id: text6, claim_ids: ids }) },
+  semantic_gaps: { type: "array", items: closed9({ ...subject, semantic_gap_id: text6, subject_fact_ids: ids, missing_aspect: text6 }) },
+  exploratory: { type: "array", items: closed9({ ...subject, exploratory_id: text6, policy_id: text6, policy_version: text6 }) },
   not_applicable_records: { type: "array", items: notApplicableRecordSchema },
   not_applicable_context: notApplicableContextSchema
 }) };
@@ -50185,22 +52678,22 @@ init_behavior_views_schema();
 init_canonical();
 init_schema_validator();
 var text7 = { type: "string", minLength: 1, pattern: "\\S" };
-var closed9 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
-var sparseEvidenceContextSchema = closed9({
-  facts: { type: "array", items: closed9({
+var closed10 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var sparseEvidenceContextSchema = closed10({
+  facts: { type: "array", items: closed10({
     fact_id: text7,
     module_id: text7,
     acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
     condition_field: text7
   }) },
-  claims: { type: "array", items: closed9({
+  claims: { type: "array", items: closed10({
     claim_id: text7,
     level: { enum: ["E3", "E2", "E1"] },
     supported: { type: "boolean" },
-    assertions: { type: "array", minItems: 1, items: closed9({ fact_id: text7, field_path: text7, value: {} }) }
+    assertions: { type: "array", minItems: 1, items: closed10({ fact_id: text7, field_path: text7, value: {} }) }
   }) }
 });
-var diagnostic17 = (code2, path14, message) => ({ category: "adapter_revision", code: code2, path: path14, message });
+var diagnostic18 = (code2, path14, message) => ({ category: "adapter_revision", code: code2, path: path14, message });
 function at(value, pointer) {
   let target = value;
   for (const segment of pointer.slice(1).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))) {
@@ -50227,7 +52720,7 @@ function requiredBehaviorBindingsV4(element) {
 function validateSparseBehaviorElementV4(input, systemContext) {
   const diagnostics2 = validateAgainstSchema(input, { $defs: behavior_views_schema_default.$defs, $ref: "#/$defs/v4Element" }).map((item) => ({ ...item, category: "adapter_revision" }));
   if (diagnostics2.length) return diagnostics2;
-  if (validateAgainstSchema(systemContext, sparseEvidenceContextSchema).length) return [diagnostic17("BEHAVIOR_EVIDENCE_CONTEXT_INVALID", "/", "Sparse behavior requires compiler-owned Evidence context.")];
+  if (validateAgainstSchema(systemContext, sparseEvidenceContextSchema).length) return [diagnostic18("BEHAVIOR_EVIDENCE_CONTEXT_INVALID", "/", "Sparse behavior requires compiler-owned Evidence context.")];
   const element = (
     /** @type {any} */
     input
@@ -50237,10 +52730,10 @@ function validateSparseBehaviorElementV4(input, systemContext) {
     systemContext
   );
   const facts = context.facts.filter((item) => item.fact_id === element.fact_id);
-  if (facts.length !== 1) diagnostics2.push(diagnostic17("BEHAVIOR_FACT_UNRESOLVED", "/fact_id", "Each element must own one known atomic Fact; split independent Facts."));
+  if (facts.length !== 1) diagnostics2.push(diagnostic18("BEHAVIOR_FACT_UNRESOLVED", "/fact_id", "Each element must own one known atomic Fact; split independent Facts."));
   const byClaim = /* @__PURE__ */ new Map();
   for (const claim of context.claims) {
-    if (byClaim.has(claim.claim_id)) diagnostics2.push(diagnostic17("BEHAVIOR_CLAIM_AMBIGUOUS", "/evidence_bindings", "Claim IDs must resolve uniquely."));
+    if (byClaim.has(claim.claim_id)) diagnostics2.push(diagnostic18("BEHAVIOR_CLAIM_AMBIGUOUS", "/evidence_bindings", "Claim IDs must resolve uniquely."));
     byClaim.set(claim.claim_id, claim);
   }
   const required = new Set(requiredBehaviorBindingsV4(element));
@@ -50248,34 +52741,34 @@ function validateSparseBehaviorElementV4(input, systemContext) {
   for (const [index, binding] of element.evidence_bindings.entries()) {
     const field = at(element, binding.field_path);
     if (seen.has(binding.field_path) || !required.has(binding.field_path) || !field.exists) {
-      diagnostics2.push(diagnostic17("BEHAVIOR_BINDING_INVALID", `/evidence_bindings/${index}`, "A binding must uniquely identify an existing semantic field."));
+      diagnostics2.push(diagnostic18("BEHAVIOR_BINDING_INVALID", `/evidence_bindings/${index}`, "A binding must uniquely identify an existing semantic field."));
     }
     seen.add(binding.field_path);
     for (const claimId of binding.claim_ids) {
       const claim = byClaim.get(claimId);
       if (!claim?.supported || !claim.assertions.some((assertion) => assertion.fact_id === element.fact_id && assertion.field_path === binding.field_path && canonicalStringify(assertion.value) === canonicalStringify(field.value))) {
-        diagnostics2.push(diagnostic17("BEHAVIOR_FIELD_UNSUPPORTED", binding.field_path, "Every formal value and assertion requires a positive Claim for this exact Fact, field and value."));
+        diagnostics2.push(diagnostic18("BEHAVIOR_FIELD_UNSUPPORTED", binding.field_path, "Every formal value and assertion requires a positive Claim for this exact Fact, field and value."));
       }
     }
   }
   for (const path14 of required) {
-    if (!seen.has(path14)) diagnostics2.push(diagnostic17("BEHAVIOR_BINDING_MISSING", path14, "This semantic field requires a source-backed evidence binding."));
+    if (!seen.has(path14)) diagnostics2.push(diagnostic18("BEHAVIOR_BINDING_MISSING", path14, "This semantic field requires a source-backed evidence binding."));
     const value = at(element, path14).value;
     if (typeof value === "string" && (/^(?:N\/?A|not applicable)$/iu.test(value.trim()) || /PRD\s*(?:未定义|未提及)|(?:not defined|not specified)\s+(?:in|by)\s+(?:the\s+)?PRD/iu.test(value))) {
-      diagnostics2.push(diagnostic17("BEHAVIOR_PLACEHOLDER_FORBIDDEN", path14, "Missing requirements or N/A placeholders cannot become formal business semantics."));
+      diagnostics2.push(diagnostic18("BEHAVIOR_PLACEHOLDER_FORBIDDEN", path14, "Missing requirements or N/A placeholders cannot become formal business semantics."));
     }
   }
   const partitions = /* @__PURE__ */ new Set();
   for (const [index, partition] of (element.partitions ?? []).entries()) {
-    if (partition.kind === "range" && partition.bounds.lower > partition.bounds.upper) diagnostics2.push(diagnostic17("BEHAVIOR_RANGE_INVALID", `/partitions/${index}`, "A range must have ordered source-backed bounds."));
+    if (partition.kind === "range" && partition.bounds.lower > partition.bounds.upper) diagnostics2.push(diagnostic18("BEHAVIOR_RANGE_INVALID", `/partitions/${index}`, "A range must have ordered source-backed bounds."));
     const signature = canonicalStringify(partition.kind === "enum" ? { kind: partition.kind, value: partition.value } : { kind: partition.kind, bounds: partition.bounds });
-    if (partitions.has(signature)) diagnostics2.push(diagnostic17("BEHAVIOR_PARTITION_DUPLICATE", `/partitions/${index}`, "A partition cannot declare two independent or conflicting results."));
+    if (partitions.has(signature)) diagnostics2.push(diagnostic18("BEHAVIOR_PARTITION_DUPLICATE", `/partitions/${index}`, "A partition cannot declare two independent or conflicting results."));
     partitions.add(signature);
   }
   for (const [index, effect] of (element.semantic_effects ?? []).entries()) {
     const bound = element.evidence_bindings.filter((binding) => binding.field_path.startsWith(`/semantic_effects/${index}/`));
     const refs3 = canonicalIds(bound.flatMap((binding) => binding.claim_ids));
-    if (canonicalStringify(refs3) !== canonicalStringify(canonicalIds(effect.claim_ids))) diagnostics2.push(diagnostic17("BEHAVIOR_EFFECT_EVIDENCE_MISMATCH", `/semantic_effects/${index}/claim_ids`, "Effect Claim IDs must exactly summarize its field-level evidence."));
+    if (canonicalStringify(refs3) !== canonicalStringify(canonicalIds(effect.claim_ids))) diagnostics2.push(diagnostic18("BEHAVIOR_EFFECT_EVIDENCE_MISMATCH", `/semantic_effects/${index}/claim_ids`, "Effect Claim IDs must exactly summarize its field-level evidence."));
   }
   return diagnostics2;
 }
@@ -50283,18 +52776,18 @@ function validateSparseBehaviorElementV4(input, systemContext) {
 // src/obligations/business-outcomes-v4.mjs
 var text8 = { type: "string", minLength: 1, pattern: "\\S" };
 var refs2 = { type: "array", uniqueItems: true, items: text8 };
-var closed10 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var closed11 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 var ref = (name) => ({ $ref: `#/$defs/${name}` });
-var compilationSchema = { $defs: test_obligations_schema_default.$defs, ...closed10({
+var compilationSchema = { $defs: test_obligations_schema_default.$defs, ...closed11({
   kind: { const: "compiled" },
   source_revision: { type: "integer", minimum: 0 },
   outcomes: { type: "array", items: ref("outcome") },
   formal_test_points: { type: "array", items: ref("formalTestPoint") },
   supporting_observations: { type: "array", items: ref("supportingObservation") },
-  fact_modules: { type: "array", items: closed10({ fact_id: text8, module_id: text8 }) },
+  fact_modules: { type: "array", items: closed11({ fact_id: text8, module_id: text8 }) },
   diagnostics: { type: "array", maxItems: 0 }
 }) };
-var problem = (code2, path14 = "/") => ({ category: "quality_failure", code: code2, path: path14, message: "Business outcome compilation and coverage require complete, verified, consistently owned semantic records." });
+var problem2 = (code2, path14 = "/") => ({ category: "quality_failure", code: code2, path: path14, message: "Business outcome compilation and coverage require complete, verified, consistently owned semantic records." });
 var fatal = (diagnostics2) => ({ kind: "fatal", result_kind: "quality_failure", diagnostics: diagnostics2 });
 function normalize3(input) {
   if (typeof input === "string") return input.normalize("NFC");
@@ -50304,20 +52797,20 @@ function normalize3(input) {
 }
 var outcomeIdentity = (outcome) => ({ fact_id: outcome.fact_id, condition: outcome.condition, expected: outcome.expected, acceptance_role: outcome.acceptance_role });
 var observationIdentity = (observation) => ({ outcome_id: observation.outcome_id, surface: observation.surface, assertion: observation.assertion });
-var sorted = (values, key) => values.sort((left, right) => compareScalar(left[key], right[key]));
+var sorted2 = (values, key) => values.sort((left, right) => compareScalar(left[key], right[key]));
 function compileBusinessOutcomesV4(input, systemContext) {
   const artifact = normalize3(input);
   const context = normalize3(systemContext);
   const diagnostics2 = validateAgainstSchema(artifact, { $defs: behavior_views_schema_default.$defs, $ref: "#/$defs/v4Artifact" });
   if (diagnostics2.length) return { kind: "need_revision", stage: "behavior_views", diagnostics: diagnostics2 };
-  if (validateAgainstSchema(context, sparseEvidenceContextSchema).length) return fatal([problem("BEHAVIOR_EVIDENCE_CONTEXT_INVALID")]);
+  if (validateAgainstSchema(context, sparseEvidenceContextSchema).length) return fatal([problem2("BEHAVIOR_EVIDENCE_CONTEXT_INVALID")]);
   const outcomes = /* @__PURE__ */ new Map();
   const observations = /* @__PURE__ */ new Map();
   const factModules = /* @__PURE__ */ new Map();
   const viewIds = /* @__PURE__ */ new Set();
   const conditionOwners = /* @__PURE__ */ new Map();
   for (const view of artifact.views) {
-    if (viewIds.has(view.view_id)) diagnostics2.push(problem("BEHAVIOR_VIEW_ID_DUPLICATE"));
+    if (viewIds.has(view.view_id)) diagnostics2.push(problem2("BEHAVIOR_VIEW_ID_DUPLICATE"));
     viewIds.add(view.view_id);
     const elementIds = /* @__PURE__ */ new Set();
     for (const element of view.elements) {
@@ -50326,11 +52819,11 @@ function compileBusinessOutcomesV4(input, systemContext) {
       if (elementDiagnostics.length) continue;
       const fact = context.facts.find((item) => item.fact_id === element.fact_id);
       const kind = element.kind === "input_domain" ? "input-domain" : element.kind;
-      if (fact.module_id !== view.module_id || kind !== view.type) diagnostics2.push(problem("BEHAVIOR_OWNER_MISMATCH"));
-      if (elementIds.has(element.element_id)) diagnostics2.push(problem("BEHAVIOR_ELEMENT_ID_DUPLICATE"));
+      if (fact.module_id !== view.module_id || kind !== view.type) diagnostics2.push(problem2("BEHAVIOR_OWNER_MISMATCH"));
+      if (elementIds.has(element.element_id)) diagnostics2.push(problem2("BEHAVIOR_ELEMENT_ID_DUPLICATE"));
       elementIds.add(element.element_id);
       const allRefs = canonicalIds(element.evidence_bindings.flatMap((binding) => binding.claim_ids));
-      if (allRefs.some((id2) => !view.source_claim_ids.includes(id2))) diagnostics2.push(problem("BEHAVIOR_VIEW_EVIDENCE_MISSING"));
+      if (allRefs.some((id2) => !view.source_claim_ids.includes(id2))) diagnostics2.push(problem2("BEHAVIOR_VIEW_EVIDENCE_MISSING"));
       factModules.set(fact.fact_id, { fact_id: fact.fact_id, module_id: fact.module_id });
       const descriptors = element.kind === "input_domain" ? element.partitions.map((partition, index) => ({
         condition: { [fact.condition_field]: partition.kind === "enum" ? partition.value : { ...partition.bounds } },
@@ -50341,7 +52834,7 @@ function compileBusinessOutcomesV4(input, systemContext) {
         const body = { fact_id: fact.fact_id, condition: descriptor.condition, expected: descriptor.expected, acceptance_role: fact.acceptance_role };
         const outcomeId = `OUT-${digest(body)}`;
         const owner = canonicalStringify({ fact_id: fact.fact_id, condition: descriptor.condition, acceptance_role: fact.acceptance_role });
-        if (conditionOwners.has(owner) && conditionOwners.get(owner) !== outcomeId) diagnostics2.push(problem("BUSINESS_OUTCOME_CONFLICT"));
+        if (conditionOwners.has(owner) && conditionOwners.get(owner) !== outcomeId) diagnostics2.push(problem2("BUSINESS_OUTCOME_CONFLICT"));
         conditionOwners.set(owner, outcomeId);
         const claimIds = canonicalIds(element.evidence_bindings.filter((binding) => descriptor.prefix === null || !binding.field_path.startsWith("/partitions/") || binding.field_path.startsWith(descriptor.prefix)).flatMap((binding) => binding.claim_ids));
         const previous = outcomes.get(outcomeId);
@@ -50360,10 +52853,10 @@ function compileBusinessOutcomesV4(input, systemContext) {
   const result = {
     kind: "compiled",
     source_revision: artifact.source_revision,
-    outcomes: sorted([...outcomes.values()], "outcome_id"),
-    formal_test_points: sorted([...outcomes.keys()].map((outcome_id) => ({ formal_test_point_id: `TP-${digest({ outcome_id })}`, outcome_id, semantic_gap_refs: [] })), "formal_test_point_id"),
-    supporting_observations: sorted([...observations.values()], "supporting_observation_id"),
-    fact_modules: sorted([...factModules.values()], "fact_id"),
+    outcomes: sorted2([...outcomes.values()], "outcome_id"),
+    formal_test_points: sorted2([...outcomes.keys()].map((outcome_id) => ({ formal_test_point_id: `TP-${digest({ outcome_id })}`, outcome_id, semantic_gap_refs: [] })), "formal_test_point_id"),
+    supporting_observations: sorted2([...observations.values()], "supporting_observation_id"),
+    fact_modules: sorted2([...factModules.values()], "fact_id"),
     diagnostics: []
   };
   const errors = validateAgainstSchema(result, compilationSchema);
@@ -50378,22 +52871,22 @@ function compilationErrors(compiled) {
   const observationIds = /* @__PURE__ */ new Set();
   const factIds = /* @__PURE__ */ new Set();
   for (const fact of compiled.fact_modules) {
-    if (factIds.has(fact.fact_id)) errors.push(problem("OUTCOME_FACT_OWNER_AMBIGUOUS"));
+    if (factIds.has(fact.fact_id)) errors.push(problem2("OUTCOME_FACT_OWNER_AMBIGUOUS"));
     factIds.add(fact.fact_id);
   }
   for (const outcome of compiled.outcomes) {
-    if (outcomeIds.has(outcome.outcome_id) || outcome.outcome_id !== `OUT-${digest(outcomeIdentity(outcome))}`) errors.push(problem("OUTCOME_ID_MISMATCH"));
-    if (!factIds.has(outcome.fact_id)) errors.push(problem("OUTCOME_FACT_OWNER_MISSING"));
+    if (outcomeIds.has(outcome.outcome_id) || outcome.outcome_id !== `OUT-${digest(outcomeIdentity(outcome))}`) errors.push(problem2("OUTCOME_ID_MISMATCH"));
+    if (!factIds.has(outcome.fact_id)) errors.push(problem2("OUTCOME_FACT_OWNER_MISSING"));
     outcomeIds.add(outcome.outcome_id);
   }
   for (const point of compiled.formal_test_points) {
-    if (pointIds.has(point.formal_test_point_id) || pointOutcomes.has(point.outcome_id) || !outcomeIds.has(point.outcome_id) || point.formal_test_point_id !== `TP-${digest({ outcome_id: point.outcome_id })}`) errors.push(problem("FORMAL_TEST_POINT_ID_MISMATCH"));
+    if (pointIds.has(point.formal_test_point_id) || pointOutcomes.has(point.outcome_id) || !outcomeIds.has(point.outcome_id) || point.formal_test_point_id !== `TP-${digest({ outcome_id: point.outcome_id })}`) errors.push(problem2("FORMAL_TEST_POINT_ID_MISMATCH"));
     pointIds.add(point.formal_test_point_id);
     pointOutcomes.add(point.outcome_id);
   }
-  if (pointOutcomes.size !== outcomeIds.size) errors.push(problem("FORMAL_TEST_POINT_MISSING"));
+  if (pointOutcomes.size !== outcomeIds.size) errors.push(problem2("FORMAL_TEST_POINT_MISSING"));
   for (const observation of compiled.supporting_observations) {
-    if (observationIds.has(observation.supporting_observation_id) || !outcomeIds.has(observation.outcome_id) || observation.supporting_observation_id !== `OBS-${digest(observationIdentity(observation))}`) errors.push(problem("SUPPORTING_OBSERVATION_ID_MISMATCH"));
+    if (observationIds.has(observation.supporting_observation_id) || !outcomeIds.has(observation.outcome_id) || observation.supporting_observation_id !== `OBS-${digest(observationIdentity(observation))}`) errors.push(problem2("SUPPORTING_OBSERVATION_ID_MISMATCH"));
     observationIds.add(observation.supporting_observation_id);
   }
   return errors;
@@ -50401,21 +52894,21 @@ function compilationErrors(compiled) {
 function exclusionErrors(compiled, context) {
   const errors = [];
   const ids3 = /* @__PURE__ */ new Set();
-  for (const record20 of context.not_applicable_records) {
-    errors.push(...validateNotApplicable(record20, context.not_applicable_context));
-    if (ids3.has(record20.not_applicable_record_id)) errors.push(problem("NOT_APPLICABLE_RECORD_DUPLICATE"));
-    ids3.add(record20.not_applicable_record_id);
-    if (record20.subject.kind !== "formal_test_point") continue;
-    const point = compiled.formal_test_points.find((item) => item.formal_test_point_id === record20.subject.formal_test_point_id);
+  for (const record23 of context.not_applicable_records) {
+    errors.push(...validateNotApplicable(record23, context.not_applicable_context));
+    if (ids3.has(record23.not_applicable_record_id)) errors.push(problem2("NOT_APPLICABLE_RECORD_DUPLICATE"));
+    ids3.add(record23.not_applicable_record_id);
+    if (record23.subject.kind !== "formal_test_point") continue;
+    const point = compiled.formal_test_points.find((item) => item.formal_test_point_id === record23.subject.formal_test_point_id);
     const outcome = compiled.outcomes.find((item) => item.outcome_id === point?.outcome_id);
-    if (!outcome) errors.push(problem("NOT_APPLICABLE_TEST_POINT_UNRESOLVED"));
-    else if (outcome.acceptance_role !== record20.acceptance_role) errors.push(problem("NOT_APPLICABLE_ROLE_MISMATCH"));
+    if (!outcome) errors.push(problem2("NOT_APPLICABLE_TEST_POINT_UNRESOLVED"));
+    else if (outcome.acceptance_role !== record23.acceptance_role) errors.push(problem2("NOT_APPLICABLE_ROLE_MISMATCH"));
   }
   return errors;
 }
-var candidateSchema = closed10({ case_id: text8, primary_test_point_id: text8, valid: { type: "boolean" }, semantic_status: { enum: ["Grounded", "Conditional", "Blocked"] } });
-var coverageContextSchema = { $defs: test_obligations_schema_default.$defs, ...closed10({
-  semantic_gaps: { type: "array", items: closed10({ semantic_gap_id: text8, formal_test_point_ids: { ...refs2, minItems: 1 } }) },
+var candidateSchema = closed11({ case_id: text8, primary_test_point_id: text8, valid: { type: "boolean" }, semantic_status: { enum: ["Grounded", "Conditional", "Blocked"] } });
+var coverageContextSchema = { $defs: test_obligations_schema_default.$defs, ...closed11({
+  semantic_gaps: { type: "array", items: closed11({ semantic_gap_id: text8, formal_test_point_ids: { ...refs2, minItems: 1 } }) },
   not_applicable_records: { type: "array", items: notApplicableRecordSchema },
   not_applicable_context: notApplicableContextSchema
 }) };
@@ -50434,12 +52927,12 @@ function aggregateBusinessOutcomeCoverageV4(compiled, inputCases, systemContext)
   const points = new Map(compiled.formal_test_points.map((point) => [point.formal_test_point_id, point]));
   const seenCases = /* @__PURE__ */ new Set();
   for (const item of cases) {
-    if (seenCases.has(item.case_id) || !points.has(item.primary_test_point_id)) errors.push(problem("CASE_TEST_POINT_UNRESOLVED"));
+    if (seenCases.has(item.case_id) || !points.has(item.primary_test_point_id)) errors.push(problem2("CASE_TEST_POINT_UNRESOLVED"));
     seenCases.add(item.case_id);
   }
   const gapIds = /* @__PURE__ */ new Set();
   for (const gap of context.semantic_gaps) {
-    if (gapIds.has(gap.semantic_gap_id) || gap.formal_test_point_ids.some((id2) => !points.has(id2))) errors.push(problem("SEMANTIC_GAP_TEST_POINT_UNRESOLVED"));
+    if (gapIds.has(gap.semantic_gap_id) || gap.formal_test_point_ids.some((id2) => !points.has(id2))) errors.push(problem2("SEMANTIC_GAP_TEST_POINT_UNRESOLVED"));
     gapIds.add(gap.semantic_gap_id);
   }
   errors.push(...exclusionErrors(compiled, context));
@@ -50452,10 +52945,10 @@ function aggregateBusinessOutcomeCoverageV4(compiled, inputCases, systemContext)
     );
     const candidates2 = cases.filter((item) => item.primary_test_point_id === point.formal_test_point_id && item.valid);
     const gaps = context.semantic_gaps.filter((gap) => gap.formal_test_point_ids.includes(point.formal_test_point_id));
-    const exclusions = context.not_applicable_records.filter((record20) => record20.subject.kind === "formal_test_point" && record20.subject.formal_test_point_id === point.formal_test_point_id);
-    if (exclusions.some((record20) => record20.acceptance_role !== outcome.acceptance_role)) errors.push(problem("NOT_APPLICABLE_ROLE_MISMATCH"));
+    const exclusions = context.not_applicable_records.filter((record23) => record23.subject.kind === "formal_test_point" && record23.subject.formal_test_point_id === point.formal_test_point_id);
+    if (exclusions.some((record23) => record23.acceptance_role !== outcome.acceptance_role)) errors.push(problem2("NOT_APPLICABLE_ROLE_MISMATCH"));
     const classification = candidates2.some((item) => item.semantic_status === "Grounded") ? "Grounded" : candidates2.some((item) => item.semantic_status === "Conditional") ? "Conditional" : gaps.length ? "Blocked" : exclusions.length ? "NotApplicable" : null;
-    if (classification === null) errors.push(problem("FORMAL_TEST_POINT_UNCOVERED", `/formal_test_points/${point.formal_test_point_id}`));
+    if (classification === null) errors.push(problem2("FORMAL_TEST_POINT_UNCOVERED", `/formal_test_points/${point.formal_test_point_id}`));
     return {
       formal_test_point_id: point.formal_test_point_id,
       outcome_id: point.outcome_id,
@@ -50463,7 +52956,7 @@ function aggregateBusinessOutcomeCoverageV4(compiled, inputCases, systemContext)
       classification,
       case_ids: canonicalIds(candidates2.filter((item) => item.semantic_status === classification).map((item) => item.case_id)),
       semantic_gap_refs: canonicalIds(gaps.map((gap) => gap.semantic_gap_id)),
-      not_applicable_record_ids: canonicalIds(exclusions.map((record20) => record20.not_applicable_record_id))
+      not_applicable_record_ids: canonicalIds(exclusions.map((record23) => record23.not_applicable_record_id))
     };
   });
   const primary = ledger.filter((item) => item.acceptance_role === "primary_acceptance");
@@ -50481,7 +52974,7 @@ function assembleObligationsArtifactV4(compiled, ledger, context) {
   if (errors.length) return fatal(errors);
   for (const outcome of compiled.outcomes.filter((item) => item.acceptance_role === "primary_acceptance")) {
     const owner = compiled.fact_modules.find((fact) => fact.fact_id === outcome.fact_id);
-    if (!context.primary_module_ids.includes(owner.module_id)) errors.push(problem("PRIMARY_RISK_MODULE_MISSING"));
+    if (!context.primary_module_ids.includes(owner.module_id)) errors.push(problem2("PRIMARY_RISK_MODULE_MISSING"));
   }
   const pointById = new Map(compiled.formal_test_points.map((point) => [point.formal_test_point_id, point]));
   for (const target of context.formal_test_points) {
@@ -50491,7 +52984,7 @@ function assembleObligationsArtifactV4(compiled, ledger, context) {
     );
     const outcome = compiled.outcomes.find((item) => item.outcome_id === point?.outcome_id);
     const owner = compiled.fact_modules.find((item) => item.fact_id === outcome?.fact_id);
-    if (!outcome || outcome.acceptance_role !== target.acceptance_role || owner?.module_id !== target.module_id || target.claim_ids.some((id2) => !outcome.claim_ids.includes(id2))) errors.push(problem("RISK_FORMAL_OUTCOME_MISMATCH"));
+    if (!outcome || outcome.acceptance_role !== target.acceptance_role || owner?.module_id !== target.module_id || target.claim_ids.some((id2) => !outcome.claim_ids.includes(id2))) errors.push(problem2("RISK_FORMAL_OUTCOME_MISMATCH"));
   }
   errors.push(...exclusionErrors(compiled, context));
   if (errors.length) return fatal(errors);
@@ -50509,8 +53002,8 @@ function assembleObligationsArtifactV4(compiled, ledger, context) {
       /** @type {any[]} */
       ledger.map(canonicalReview).sort((a, b) => compareScalar(a.module_id, b.module_id) || compareScalar(a.risk_kind, b.risk_kind))
     ),
-    not_applicable_records: sorted(context.not_applicable_records.map(canonicalReview), "not_applicable_record_id"),
-    exploratory: sorted(context.exploratory.map(canonicalReview), "exploratory_id")
+    not_applicable_records: sorted2(context.not_applicable_records.map(canonicalReview), "not_applicable_record_id"),
+    exploratory: sorted2(context.exploratory.map(canonicalReview), "exploratory_id")
   };
   errors.push(...validateAgainstSchema(artifact, test_obligations_schema_default));
   return errors.length ? fatal(errors) : { kind: "assembled", artifact, diagnostics: [] };
@@ -50713,37 +53206,37 @@ init_schema_validator();
 var text9 = { type: "string", minLength: 1, pattern: "\\S" };
 var ids2 = { type: "array", minItems: 1, uniqueItems: true, items: text9 };
 var integer2 = { type: "integer", minimum: 0 };
-var closed11 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var closed12 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 var array2 = (items) => ({ type: "array", items });
 var flowSubject = { module_id: text9, subject_ref: text9 };
 var actionSubject = { module_id: text9, flow_subject_ref: text9, subject_ref: text9 };
 var dependencySubject = { predecessor_outcome_id: text9, successor_outcome_id: text9 };
 var basisSchema = { oneOf: [
-  closed11({ kind: { const: "evidence" }, claim_ids: ids2 }),
-  closed11({ kind: { const: "decision" }, decision_ids: ids2 })
+  closed12({ kind: { const: "evidence" }, claim_ids: ids2 }),
+  closed12({ kind: { const: "decision" }, decision_ids: ids2 })
 ] };
 var semanticSubjectSchema = { oneOf: [
-  closed11({ kind: { const: "flow" }, ...flowSubject }),
-  closed11({ kind: { const: "action" }, ...actionSubject }),
-  closed11({ kind: { const: "outcome_dependency" }, ...dependencySubject })
+  closed12({ kind: { const: "flow" }, ...flowSubject }),
+  closed12({ kind: { const: "action" }, ...actionSubject }),
+  closed12({ kind: { const: "outcome_dependency" }, ...dependencySubject })
 ] };
-var contextSchema2 = closed11({
-  sources: array2(closed11({ stable_source_id: text9 })),
-  locators: array2(closed11({
+var contextSchema2 = closed12({
+  sources: array2(closed12({ stable_source_id: text9 })),
+  locators: array2(closed12({
     locator_id: text9,
     stable_source_id: text9,
     unit_kind: { enum: ["text", "table", "image"] },
     structural_coordinates: { type: "array", minItems: 1, items: integer2 },
     start_scalar: integer2
   })),
-  modules: array2(closed11({ module_id: text9, role: { enum: ["primary", "upstream", "downstream", "external"] }, locator_ids: ids2 })),
-  flows: array2(closed11({ ...flowSubject, locator_id: text9, claim_ids: ids2 })),
-  actions: array2(closed11({ ...actionSubject, locator_id: text9, claim_ids: ids2 })),
-  dependencies: array2(closed11({ ...dependencySubject, basis: basisSchema })),
-  verified_claims: array2(closed11({ claim_id: text9, locator_ids: ids2, subjects: { ...array2(semanticSubjectSchema), minItems: 1, uniqueItems: true } })),
-  verified_decisions: array2(closed11({ decision_id: text9, subjects: { ...array2(closed11({ kind: { const: "outcome_dependency" }, ...dependencySubject })), minItems: 1, uniqueItems: true } }))
+  modules: array2(closed12({ module_id: text9, role: { enum: ["primary", "upstream", "downstream", "external"] }, locator_ids: ids2 })),
+  flows: array2(closed12({ ...flowSubject, locator_id: text9, claim_ids: ids2 })),
+  actions: array2(closed12({ ...actionSubject, locator_id: text9, claim_ids: ids2 })),
+  dependencies: array2(closed12({ ...dependencySubject, basis: basisSchema })),
+  verified_claims: array2(closed12({ claim_id: text9, locator_ids: ids2, subjects: { ...array2(semanticSubjectSchema), minItems: 1, uniqueItems: true } })),
+  verified_decisions: array2(closed12({ decision_id: text9, subjects: { ...array2(closed12({ kind: { const: "outcome_dependency" }, ...dependencySubject })), minItems: 1, uniqueItems: true } }))
 });
-var pointSchema = closed11({ formal_test_point_id: text9, outcome_id: text9, acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] } });
+var pointSchema = closed12({ formal_test_point_id: text9, outcome_id: text9, acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] } });
 var moduleRoles = ["primary", "upstream", "downstream", "external"];
 var units = ["text", "table", "image"];
 function normalize4(input) {
@@ -50928,275 +53421,12 @@ function compileCaseOrdering(inputCases, inputPoints, registry, systemContext) {
 
 // src/v4-pipeline.mjs
 init_semantic_gaps_v4();
+init_semantic_delivery_gate_v4();
 
 // src/scope-manifest-v4.mjs
 init_canonical();
-
-// src/topology-discovery.mjs
-init_canonical();
-var DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/u;
-var MODULE_SUFFIX_PATTERN = /[\p{Script=Han}A-Za-z0-9_.-]{1,24}(?:系统|服务|后台|中台|端)/gu;
-var REVIEW_CLASSES = /* @__PURE__ */ new Set(["normative", "uncertain", "non_normative"]);
-var UNIT_KINDS = /* @__PURE__ */ new Set(["text_block", "table", "image"]);
-var CANDIDATE_KINDS = /* @__PURE__ */ new Set(["module_mention", "boundary_signal"]);
-function fail2(code2) {
-  throw new TypeError(code2);
-}
-function record13(value, code2) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) fail2(code2);
-  return (
-    /** @type {Record<string, any>} */
-    value
-  );
-}
-function closedKeys(value, keys) {
-  const allowed = new Set(keys);
-  if (Reflect.ownKeys(value).some((key) => typeof key !== "string" || !allowed.has(key))) fail2("TOPOLOGY_INPUT_UNKNOWN_FIELD");
-}
-function nonblank(value, code2) {
-  if (typeof value !== "string" || !value.trim()) fail2(code2);
-  return value.normalize("NFC").trim();
-}
-function list(value, code2) {
-  if (!Array.isArray(value)) fail2(code2);
-  return (
-    /** @type {any[]} */
-    value
-  );
-}
-function snapshotTopologyInputV4(input) {
-  const active = /* @__PURE__ */ new WeakSet();
-  const memo = /* @__PURE__ */ new WeakMap();
-  const visit = (value) => {
-    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (!value || typeof value !== "object") fail2("TOPOLOGY_INPUT_VALUE_INVALID");
-    const source = (
-      /** @type {object} */
-      value
-    );
-    if (active.has(source)) fail2("TOPOLOGY_INPUT_CYCLIC");
-    if (memo.has(source)) return memo.get(source);
-    const isArray2 = Array.isArray(source);
-    const prototype = Object.getPrototypeOf(source);
-    if (isArray2 && prototype !== Array.prototype || !isArray2 && prototype !== Object.prototype && prototype !== null) fail2("TOPOLOGY_INPUT_PROTOTYPE");
-    const descriptors = Object.getOwnPropertyDescriptors(source);
-    if (Reflect.ownKeys(descriptors).some((key) => typeof key === "symbol")) fail2("TOPOLOGY_INPUT_SYMBOL");
-    for (const descriptor of Object.values(descriptors)) {
-      if (!Object.hasOwn(descriptor, "value")) fail2("TOPOLOGY_INPUT_ACCESSOR");
-    }
-    active.add(source);
-    if (isArray2) {
-      const length = descriptors.length?.value;
-      if (!Number.isSafeInteger(length) || length < 0) fail2("TOPOLOGY_INPUT_ARRAY_INVALID");
-      const result2 = new Array(length);
-      memo.set(source, result2);
-      const keys = Object.keys(descriptors).filter((key) => key !== "length");
-      if (keys.length !== length) fail2("TOPOLOGY_INPUT_ARRAY_INVALID");
-      for (let index = 0; index < length; index += 1) {
-        const descriptor = descriptors[String(index)];
-        if (!descriptor || descriptor.enumerable !== true) fail2("TOPOLOGY_INPUT_ARRAY_INVALID");
-        result2[index] = visit(descriptor.value);
-      }
-      active.delete(source);
-      return result2;
-    }
-    const result = {};
-    memo.set(source, result);
-    for (const key of Object.keys(descriptors).sort(compareCodePoints11)) {
-      const descriptor = descriptors[key];
-      if (descriptor.enumerable !== true) fail2("TOPOLOGY_INPUT_PROPERTY_INVALID");
-      Object.defineProperty(result, key, {
-        value: visit(descriptor.value),
-        enumerable: true,
-        writable: true,
-        configurable: true
-      });
-    }
-    active.delete(source);
-    return result;
-  };
-  return visit(input);
-}
-function compareCodePoints11(left, right) {
-  const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
-  const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
-  const length = Math.min(a.length, b.length);
-  for (let index = 0; index < length; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
-  return a.length - b.length;
-}
-function sortedUnique2(values) {
-  return [...new Set(values.map((value) => value.normalize("NFC")))].sort(compareCodePoints11);
-}
-function sealDiscovery(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) sealDiscovery(child);
-  return Object.freeze(value);
-}
-function moduleLabels(content) {
-  const parts = content.normalize("NFC").split(/[\s,，。；;：:、/|（）()\[\]{}<>《》“”"'！？!?]|依赖|调用|连接|回传|返回|发送|接收|通过|流向|以及|或者|和|与|及/gu);
-  const labels = [];
-  for (const part of parts) {
-    for (const match of part.matchAll(MODULE_SUFFIX_PATTERN)) labels.push(match[0]);
-  }
-  return sortedUnique2(labels);
-}
-function structuralEntityLabels(content) {
-  const normalized = content.normalize("NFC").trim();
-  const labels = moduleLabels(normalized);
-  if (normalized.length <= 64 && !/[。；;！？!?\n\r]/u.test(normalized)) labels.push(normalized);
-  return sortedUnique2(labels);
-}
-function normalizeCell(cell) {
-  const item = record13(cell, "TOPOLOGY_CELL_INVALID");
-  closedKeys(item, ["cell_id", "locator_id", "text"]);
-  return {
-    cell_id: nonblank(item.cell_id, "TOPOLOGY_CELL_ID_INVALID"),
-    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID"),
-    text: nonblank(item.text, "TOPOLOGY_CELL_TEXT_INVALID")
-  };
-}
-function normalizeNode(node) {
-  const item = record13(node, "TOPOLOGY_OCR_NODE_INVALID");
-  closedKeys(item, ["node_id", "locator_id", "label"]);
-  return {
-    node_id: nonblank(item.node_id, "TOPOLOGY_OCR_NODE_ID_INVALID"),
-    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID"),
-    label: nonblank(item.label, "TOPOLOGY_OCR_LABEL_INVALID")
-  };
-}
-function normalizeArrow(arrow) {
-  const item = record13(arrow, "TOPOLOGY_OCR_ARROW_INVALID");
-  closedKeys(item, ["arrow_id", "locator_id", "from_label", "to_label", "label"]);
-  return {
-    arrow_id: nonblank(item.arrow_id, "TOPOLOGY_OCR_ARROW_ID_INVALID"),
-    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID"),
-    from_label: nonblank(item.from_label, "TOPOLOGY_OCR_ENDPOINT_INVALID"),
-    to_label: nonblank(item.to_label, "TOPOLOGY_OCR_ENDPOINT_INVALID"),
-    label: nonblank(item.label, "TOPOLOGY_OCR_LABEL_INVALID")
-  };
-}
-function normalizeUnit(unit) {
-  const item = record13(unit, "TOPOLOGY_UNIT_INVALID");
-  const kind = nonblank(item.kind, "TOPOLOGY_UNIT_KIND_INVALID");
-  if (!UNIT_KINDS.has(kind)) fail2("TOPOLOGY_UNIT_KIND_INVALID");
-  const common = {
-    kind,
-    unit_id: nonblank(item.unit_id, "TOPOLOGY_UNIT_ID_INVALID"),
-    review_class: nonblank(item.review_class, "TOPOLOGY_REVIEW_CLASS_INVALID"),
-    locator_id: nonblank(item.locator_id, "TOPOLOGY_LOCATOR_INVALID")
-  };
-  if (!REVIEW_CLASSES.has(common.review_class)) fail2("TOPOLOGY_REVIEW_CLASS_INVALID");
-  if (kind === "text_block") {
-    closedKeys(item, ["kind", "unit_id", "review_class", "locator_id", "text"]);
-    return { ...common, text: nonblank(item.text, "TOPOLOGY_BLOCK_TEXT_INVALID") };
-  }
-  if (kind === "table") {
-    closedKeys(item, ["kind", "unit_id", "review_class", "locator_id", "cells"]);
-    const cells = list(item.cells, "TOPOLOGY_TABLE_CELLS_INVALID").map(normalizeCell).sort((left, right) => compareCodePoints11(left.cell_id, right.cell_id));
-    if (!cells.length || new Set(cells.map((cell) => cell.cell_id)).size !== cells.length) fail2("TOPOLOGY_TABLE_CELLS_INVALID");
-    return { ...common, cells };
-  }
-  closedKeys(item, ["kind", "unit_id", "review_class", "locator_id", "asset_digest", "ocr_nodes", "ocr_arrows"]);
-  const asset_digest = nonblank(item.asset_digest, "TOPOLOGY_ASSET_DIGEST_INVALID");
-  if (!DIGEST_PATTERN.test(asset_digest)) fail2("TOPOLOGY_ASSET_DIGEST_INVALID");
-  const ocr_nodes = list(item.ocr_nodes, "TOPOLOGY_OCR_NODES_INVALID").map(normalizeNode).sort((left, right) => compareCodePoints11(left.node_id, right.node_id));
-  const ocr_arrows = list(item.ocr_arrows, "TOPOLOGY_OCR_ARROWS_INVALID").map(normalizeArrow).sort((left, right) => compareCodePoints11(left.arrow_id, right.arrow_id));
-  if (new Set(ocr_nodes.map((node) => node.node_id)).size !== ocr_nodes.length || new Set(ocr_arrows.map((arrow) => arrow.arrow_id)).size !== ocr_arrows.length) fail2("TOPOLOGY_OCR_ID_DUPLICATE");
-  return { ...common, asset_digest, ocr_nodes, ocr_arrows };
-}
-function normalizeStructure(input) {
-  const root = record13(snapshotTopologyInputV4(input), "TOPOLOGY_INPUT_INVALID");
-  closedKeys(root, ["sources"]);
-  const sources = list(root.sources, "TOPOLOGY_SOURCES_INVALID").map((raw) => {
-    const source = record13(raw, "TOPOLOGY_SOURCE_INVALID");
-    closedKeys(source, ["source_id", "units"]);
-    const normalized = {
-      source_id: nonblank(source.source_id, "TOPOLOGY_SOURCE_ID_INVALID"),
-      units: list(source.units, "TOPOLOGY_UNITS_INVALID").map(normalizeUnit).sort((left, right) => compareCodePoints11(left.unit_id, right.unit_id))
-    };
-    if (new Set(normalized.units.map((unit) => unit.unit_id)).size !== normalized.units.length) fail2("TOPOLOGY_UNIT_ID_DUPLICATE");
-    return normalized;
-  }).sort((left, right) => compareCodePoints11(left.source_id, right.source_id));
-  if (!sources.length || new Set(sources.map((source) => source.source_id)).size !== sources.length) fail2("TOPOLOGY_SOURCE_ID_DUPLICATE");
-  const unitIds = sources.flatMap((source) => source.units.map((unit) => unit.unit_id));
-  if (new Set(unitIds).size !== unitIds.length) fail2("TOPOLOGY_UNIT_ID_DUPLICATE");
-  return { sources };
-}
-function addCandidate(candidates2, kind, label, locatorId) {
-  if (!CANDIDATE_KINDS.has(kind)) fail2("TOPOLOGY_CANDIDATE_KIND_INVALID");
-  const normalizedLabel = label.normalize("NFC").trim();
-  const key = canonicalStringify({ kind, label: normalizedLabel });
-  const current = candidates2.get(key) ?? { kind, label: normalizedLabel, locator_ids: /* @__PURE__ */ new Set() };
-  current.locator_ids.add(locatorId.normalize("NFC"));
-  candidates2.set(key, current);
-}
-function discoverTopologyV4(sourceStructure, semanticDiscovery = { semantic_candidates: [] }) {
-  const normalized = normalizeStructure(sourceStructure);
-  const reviewedBlockIds = [];
-  const reviewedTableIds = [];
-  const reviewedAssetDigests = [];
-  const candidateMap = /* @__PURE__ */ new Map();
-  const knownLocators = /* @__PURE__ */ new Set();
-  for (const source of normalized.sources) {
-    for (const unit of source.units) {
-      if (unit.review_class === "non_normative") continue;
-      knownLocators.add(unit.locator_id);
-      if (unit.kind === "text_block") {
-        reviewedBlockIds.push(unit.unit_id);
-        for (const label of structuralEntityLabels(unit.text)) addCandidate(candidateMap, "module_mention", label, unit.locator_id);
-      } else if (unit.kind === "table") {
-        reviewedTableIds.push(unit.unit_id);
-        for (const cell of unit.cells) {
-          knownLocators.add(cell.locator_id);
-          for (const label of structuralEntityLabels(cell.text)) addCandidate(candidateMap, "module_mention", label, cell.locator_id);
-        }
-      } else {
-        reviewedAssetDigests.push(unit.asset_digest);
-        for (const node of unit.ocr_nodes) {
-          knownLocators.add(node.locator_id);
-          for (const label of structuralEntityLabels(node.label)) addCandidate(candidateMap, "module_mention", label, node.locator_id);
-        }
-        for (const arrow of unit.ocr_arrows) {
-          knownLocators.add(arrow.locator_id);
-          for (const label of structuralEntityLabels(arrow.from_label)) addCandidate(candidateMap, "module_mention", label, arrow.locator_id);
-          for (const label of structuralEntityLabels(arrow.to_label)) addCandidate(candidateMap, "module_mention", label, arrow.locator_id);
-          addCandidate(candidateMap, "boundary_signal", `${arrow.from_label} \u2192 ${arrow.to_label}`, arrow.locator_id);
-        }
-      }
-    }
-  }
-  const semantic = record13(snapshotTopologyInputV4(semanticDiscovery), "TOPOLOGY_SEMANTIC_DISCOVERY_INVALID");
-  closedKeys(semantic, ["semantic_candidates"]);
-  for (const raw of list(semantic.semantic_candidates, "TOPOLOGY_SEMANTIC_CANDIDATES_INVALID")) {
-    const candidate = record13(raw, "TOPOLOGY_SEMANTIC_CANDIDATE_INVALID");
-    closedKeys(candidate, ["kind", "label", "locator_ids"]);
-    const kind = nonblank(candidate.kind, "TOPOLOGY_CANDIDATE_KIND_INVALID");
-    const label = nonblank(candidate.label, "TOPOLOGY_CANDIDATE_LABEL_INVALID");
-    const locatorIds = list(candidate.locator_ids, "TOPOLOGY_CANDIDATE_LOCATORS_INVALID").map((locator) => nonblank(locator, "TOPOLOGY_CANDIDATE_LOCATORS_INVALID"));
-    if (!CANDIDATE_KINDS.has(kind) || !locatorIds.length || new Set(locatorIds).size !== locatorIds.length || locatorIds.some((locator) => !knownLocators.has(locator))) fail2("TOPOLOGY_SEMANTIC_CANDIDATE_INVALID");
-    const key = canonicalStringify({ kind, label });
-    if (candidateMap.has(key)) continue;
-    for (const locator of locatorIds) addCandidate(candidateMap, kind, label, locator);
-  }
-  const topologyCandidates = [...candidateMap.values()].map((item) => {
-    const signature = { kind: item.kind, label: item.label, locator_ids: sortedUnique2([...item.locator_ids]) };
-    const hash5 = digest(signature);
-    return { candidate_id: `TC-${hash5}`, ...signature, discovery_digest: `sha256:${hash5}` };
-  }).sort((left, right) => compareCodePoints11(left.kind, right.kind) || compareCodePoints11(left.label, right.label) || compareCodePoints11(left.candidate_id, right.candidate_id));
-  const scanned_units = {
-    reviewed_block_ids: sortedUnique2(reviewedBlockIds),
-    reviewed_table_ids: sortedUnique2(reviewedTableIds),
-    reviewed_asset_digests: sortedUnique2(reviewedAssetDigests)
-  };
-  const source_structure_digest = `sha256:${digest(normalized)}`;
-  const discovery_digest = `sha256:${digest({ source_structure_digest, scanned_units, topology_candidates: topologyCandidates })}`;
-  return sealDiscovery({ source_structure_digest, discovery_digest, scanned_units, topology_candidates: topologyCandidates });
-}
-
-// src/scope-manifest-v4.mjs
 var TOPOLOGY_ROLES = /* @__PURE__ */ new Set(["primary", "upstream", "downstream", "external"]);
-var DIMENSIONS = ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"];
+var DIMENSIONS2 = ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"];
 function compareCodePoints12(left, right) {
   const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
   const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
@@ -51220,7 +53450,7 @@ function hasExactKeys3(value, expected) {
   const actual = Reflect.ownKeys(value);
   return actual.every((key) => typeof key === "string") && actual.length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
-function diagnostic18(category, code2, path14, message) {
+function diagnostic19(category, code2, path14, message) {
   return { category, code: code2, path: path14, message };
 }
 function sameStrings2(left, right) {
@@ -51243,13 +53473,13 @@ function normalizeTopologyContext(systemContext, diagnostics2) {
   try {
     value = snapshotTopologyInputV4(systemContext);
   } catch (error) {
-    diagnostics2.push(diagnostic18("quality_failure", "TOPOLOGY_SYSTEM_CONTEXT_INVALID", "/", String(error)));
+    diagnostics2.push(diagnostic19("quality_failure", "TOPOLOGY_SYSTEM_CONTEXT_INVALID", "/", String(error)));
     return null;
   }
   const baseKeys = ["canonical_source_structure", "verified_claims", "effective_scope_decisions"];
   const contextShapeValid = hasExactKeys3(value, baseKeys) || hasExactKeys3(value, [...baseKeys, "semantic_topology_candidates"]);
   if (!contextShapeValid || !Array.isArray(value.verified_claims) || !Array.isArray(value.effective_scope_decisions)) {
-    diagnostics2.push(diagnostic18("quality_failure", "TOPOLOGY_SYSTEM_CONTEXT_INVALID", "/", "Compiler topology context must use the closed trusted shape."));
+    diagnostics2.push(diagnostic19("quality_failure", "TOPOLOGY_SYSTEM_CONTEXT_INVALID", "/", "Compiler topology context must use the closed trusted shape."));
     return null;
   }
   const claims = /* @__PURE__ */ new Map();
@@ -51257,11 +53487,11 @@ function normalizeTopologyContext(systemContext, diagnostics2) {
     const candidateIds = strings5(claim?.candidate_ids);
     const roles = strings5(claim?.authorized_topology_roles);
     if (!hasExactKeys3(claim, ["claim_id", "candidate_ids", "authorized_topology_roles", "authorized_boundaries", "reviewable_interaction_cells"]) || !isText(claim.claim_id) || !candidateIds || !roles || roles.some((role2) => !TOPOLOGY_ROLES.has(role2)) || !Array.isArray(claim.authorized_boundaries) || !Array.isArray(claim.reviewable_interaction_cells) || claim.authorized_boundaries.some((item) => !normalizeBoundary(item))) {
-      diagnostics2.push(diagnostic18("quality_failure", "TOPOLOGY_VERIFIED_CLAIM_INVALID", `/verified_claims/${index}`, "Verified topology Claim has an invalid closed authorization."));
+      diagnostics2.push(diagnostic19("quality_failure", "TOPOLOGY_VERIFIED_CLAIM_INVALID", `/verified_claims/${index}`, "Verified topology Claim has an invalid closed authorization."));
       continue;
     }
     if (claims.has(claim.claim_id)) {
-      diagnostics2.push(diagnostic18("quality_failure", "TOPOLOGY_VERIFIED_CLAIM_DUPLICATE", `/verified_claims/${index}/claim_id`, "Verified Claim identity must be unique."));
+      diagnostics2.push(diagnostic19("quality_failure", "TOPOLOGY_VERIFIED_CLAIM_DUPLICATE", `/verified_claims/${index}/claim_id`, "Verified Claim identity must be unique."));
       continue;
     }
     claims.set(claim.claim_id, {
@@ -51276,7 +53506,7 @@ function normalizeTopologyContext(systemContext, diagnostics2) {
   for (const [index, decision] of value.effective_scope_decisions.entries()) {
     const candidateIds = strings5(decision?.candidate_ids);
     if (!hasExactKeys3(decision, ["decision_id", "effective", "candidate_ids"]) || !isText(decision.decision_id) || typeof decision.effective !== "boolean" || !candidateIds || decisions2.has(decision.decision_id)) {
-      diagnostics2.push(diagnostic18("quality_failure", "TOPOLOGY_SCOPE_DECISION_INVALID", `/effective_scope_decisions/${index}`, "Scope Decision must be unique, closed and explicitly effective or inactive."));
+      diagnostics2.push(diagnostic19("quality_failure", "TOPOLOGY_SCOPE_DECISION_INVALID", `/effective_scope_decisions/${index}`, "Scope Decision must be unique, closed and explicitly effective or inactive."));
       continue;
     }
     decisions2.set(decision.decision_id, { ...decision, candidate_ids: candidateIds });
@@ -51293,30 +53523,30 @@ function compileScopeManifestV4(review, systemContext) {
       semantic_candidates: context.value.semantic_topology_candidates ?? []
     });
   } catch (error) {
-    diagnostics2.push(diagnostic18("quality_failure", "TOPOLOGY_DISCOVERY_FAILED", "/canonical_source_structure", String(error)));
+    diagnostics2.push(diagnostic19("quality_failure", "TOPOLOGY_DISCOVERY_FAILED", "/canonical_source_structure", String(error)));
     return { discovery: null, scope_manifest: null, scope_manifest_digest: null, diagnostics: diagnostics2 };
   }
   let input;
   try {
     input = snapshotTopologyInputV4(review);
   } catch (error) {
-    diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_REVIEW_INPUT_INVALID", "/", String(error)));
+    diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_REVIEW_INPUT_INVALID", "/", String(error)));
     return { discovery, scope_manifest: null, scope_manifest_digest: null, diagnostics: diagnostics2 };
   }
   if (!hasExactKeys3(input, ["discovery_digest", "primary_surface", "topology_review", "topology_dispositions"])) {
-    diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_REVIEW_INPUT_INVALID", "/", "Topology review cannot submit or omit compiler-owned fields."));
+    diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_REVIEW_INPUT_INVALID", "/", "Topology review cannot submit or omit compiler-owned fields."));
     return { discovery, scope_manifest: null, scope_manifest_digest: null, diagnostics: diagnostics2 };
   }
-  if (input.discovery_digest !== discovery.discovery_digest) diagnostics2.push(diagnostic18(
+  if (input.discovery_digest !== discovery.discovery_digest) diagnostics2.push(diagnostic19(
     "adapter_revision",
     "TOPOLOGY_DISCOVERY_DIGEST_MISMATCH",
     "/discovery_digest",
     "Review must bind the current compiler discovery digest."
   ));
-  if (!isText(input.primary_surface)) diagnostics2.push(diagnostic18("adapter_revision", "SCOPE_PRIMARY_SURFACE_INVALID", "/primary_surface", "Primary surface must name a source-backed module."));
+  if (!isText(input.primary_surface)) diagnostics2.push(diagnostic19("adapter_revision", "SCOPE_PRIMARY_SURFACE_INVALID", "/primary_surface", "Primary surface must name a source-backed module."));
   const topologyReview = input.topology_review;
   const expectedReviewKeys = ["reviewed_block_ids", "reviewed_table_ids", "reviewed_asset_digests", "unresolved_candidate_ids"];
-  if (!hasExactKeys3(topologyReview, expectedReviewKeys)) diagnostics2.push(diagnostic18(
+  if (!hasExactKeys3(topologyReview, expectedReviewKeys)) diagnostics2.push(diagnostic19(
     "adapter_revision",
     "TOPOLOGY_COMPLETENESS_WITNESS_INVALID",
     "/topology_review",
@@ -51326,14 +53556,14 @@ function compileScopeManifestV4(review, systemContext) {
   const reviewedTables = strings5(topologyReview?.reviewed_table_ids);
   const reviewedAssets = strings5(topologyReview?.reviewed_asset_digests);
   const unresolvedSubmitted = strings5(topologyReview?.unresolved_candidate_ids);
-  if (!reviewedBlocks || !sameStrings2(reviewedBlocks, discovery.scanned_units.reviewed_block_ids) || !reviewedTables || !sameStrings2(reviewedTables, discovery.scanned_units.reviewed_table_ids) || !reviewedAssets || !sameStrings2(reviewedAssets, discovery.scanned_units.reviewed_asset_digests)) diagnostics2.push(diagnostic18(
+  if (!reviewedBlocks || !sameStrings2(reviewedBlocks, discovery.scanned_units.reviewed_block_ids) || !reviewedTables || !sameStrings2(reviewedTables, discovery.scanned_units.reviewed_table_ids) || !reviewedAssets || !sameStrings2(reviewedAssets, discovery.scanned_units.reviewed_asset_digests)) diagnostics2.push(diagnostic19(
     "adapter_revision",
     "TOPOLOGY_STRUCTURE_REVIEW_INCOMPLETE",
     "/topology_review",
     "Every normative or uncertain text block, table and image asset must be reviewed exactly once."
   ));
   if (!Array.isArray(input.topology_dispositions)) {
-    diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_DISPOSITIONS_INVALID", "/topology_dispositions", "Candidate dispositions must be an array."));
+    diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_DISPOSITIONS_INVALID", "/topology_dispositions", "Candidate dispositions must be an array."));
     return { discovery, scope_manifest: null, scope_manifest_digest: null, diagnostics: diagnostics2 };
   }
   const candidateById = new Map(discovery.topology_candidates.map((candidate) => [candidate.candidate_id, candidate]));
@@ -51344,18 +53574,18 @@ function compileScopeManifestV4(review, systemContext) {
   for (const [index, raw] of input.topology_dispositions.entries()) {
     const path14 = `/topology_dispositions/${index}`;
     if (!isRecord8(raw) || !isText(raw.candidate_id) || !isText(raw.disposition)) {
-      diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_DISPOSITION_INVALID", path14, "Candidate disposition is not a closed typed object."));
+      diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_DISPOSITION_INVALID", path14, "Candidate disposition is not a closed typed object."));
       continue;
     }
     const candidate = candidateById.get(raw.candidate_id);
     if (!candidate || seen.has(raw.candidate_id)) {
-      diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_CANDIDATE_SET_MISMATCH", `${path14}/candidate_id`, "Disposition must identify one current compiler candidate exactly once."));
+      diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_CANDIDATE_SET_MISMATCH", `${path14}/candidate_id`, "Disposition must identify one current compiler candidate exactly once."));
       continue;
     }
     seen.add(raw.candidate_id);
     if (raw.disposition === "module") {
       if (!hasExactKeys3(raw, ["candidate_id", "disposition", "module_ref", "role", "review_basis_claim_ids"]) || candidate.kind !== "module_mention" || !isText(raw.module_ref) || !TOPOLOGY_ROLES.has(raw.role)) {
-        diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_MODULE_DISPOSITION_INVALID", path14, "Module disposition must map a module candidate using one supported topology role."));
+        diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_MODULE_DISPOSITION_INVALID", path14, "Module disposition must map a module candidate using one supported topology role."));
         continue;
       }
       const basis = strings5(raw.review_basis_claim_ids);
@@ -51364,12 +53594,12 @@ function compileScopeManifestV4(review, systemContext) {
         return claim?.candidate_ids.includes(candidate.candidate_id) && claim.authorized_topology_roles.includes(raw.role);
       });
       if (!validBasis) {
-        diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_ROLE_BASIS_INVALID", `${path14}/review_basis_claim_ids`, "Module role must be authorized by source-backed reviewed Claims for this candidate."));
+        diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_ROLE_BASIS_INVALID", `${path14}/review_basis_claim_ids`, "Module role must be authorized by source-backed reviewed Claims for this candidate."));
         continue;
       }
       const moduleRef = raw.module_ref.normalize("NFC");
       const priorRef = moduleRefByCandidateLabel.get(candidate.label);
-      if (priorRef && priorRef !== moduleRef) diagnostics2.push(diagnostic18(
+      if (priorRef && priorRef !== moduleRef) diagnostics2.push(diagnostic19(
         "adapter_revision",
         "TOPOLOGY_MODULE_ID_CONFLICT",
         `${path14}/module_ref`,
@@ -51385,7 +53615,7 @@ function compileScopeManifestV4(review, systemContext) {
         acceptance_scope: raw.acceptance_scope
       });
       if (!hasExactKeys3(raw, ["candidate_id", "disposition", "from_module_ref", "to_module_ref", "channel", "acceptance_scope", "review_basis_claim_ids"]) || candidate.kind !== "boundary_signal" || !boundary) {
-        diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_BOUNDARY_DISPOSITION_INVALID", path14, "Boundary disposition must map one arrow candidate using the closed contract-only shape."));
+        diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_BOUNDARY_DISPOSITION_INVALID", path14, "Boundary disposition must map one arrow candidate using the closed contract-only shape."));
         continue;
       }
       const basis = strings5(raw.review_basis_claim_ids);
@@ -51394,7 +53624,7 @@ function compileScopeManifestV4(review, systemContext) {
         return claim?.candidate_ids.includes(candidate.candidate_id) && claim.authorized_boundaries.some((item) => sameBoundary(item, boundary));
       });
       if (!validBasis) {
-        diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_BOUNDARY_BASIS_INVALID", `${path14}/review_basis_claim_ids`, "Boundary contract must be authorized by reviewed Claims for this arrow."));
+        diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_BOUNDARY_BASIS_INVALID", `${path14}/review_basis_claim_ids`, "Boundary contract must be authorized by reviewed Claims for this arrow."));
         continue;
       }
       boundaries.push({
@@ -51407,7 +53637,7 @@ function compileScopeManifestV4(review, systemContext) {
       });
     } else if (raw.disposition === "not_relevant") {
       if (!hasExactKeys3(raw, ["candidate_id", "disposition", "reason", "review_basis"]) || !isText(raw.reason) || !isRecord8(raw.review_basis)) {
-        diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_NOT_RELEVANT_BASIS_INVALID", path14, "Not-relevant disposition requires a readable reason and supported basis."));
+        diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_NOT_RELEVANT_BASIS_INVALID", path14, "Not-relevant disposition requires a readable reason and supported basis."));
         continue;
       }
       const basis = raw.review_basis;
@@ -51422,17 +53652,17 @@ function compileScopeManifestV4(review, systemContext) {
           return decision?.effective === true && decision.candidate_ids.includes(candidate.candidate_id);
         }));
       }
-      if (!valid) diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_NOT_RELEVANT_BASIS_INVALID", `${path14}/review_basis`, "Not-relevant basis must be supported evidence or an effective scope Decision for this candidate."));
-    } else diagnostics2.push(diagnostic18("adapter_revision", "TOPOLOGY_DISPOSITION_INVALID", `${path14}/disposition`, "Disposition must be module, boundary or not_relevant."));
+      if (!valid) diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_NOT_RELEVANT_BASIS_INVALID", `${path14}/review_basis`, "Not-relevant basis must be supported evidence or an effective scope Decision for this candidate."));
+    } else diagnostics2.push(diagnostic19("adapter_revision", "TOPOLOGY_DISPOSITION_INVALID", `${path14}/disposition`, "Disposition must be module, boundary or not_relevant."));
   }
   const unresolvedActual = discovery.topology_candidates.map((candidate) => String(candidate.candidate_id)).filter((candidateId) => !seen.has(candidateId)).sort(compareCodePoints12);
-  if (!unresolvedSubmitted || !sameStrings2(unresolvedSubmitted, unresolvedActual)) diagnostics2.push(diagnostic18(
+  if (!unresolvedSubmitted || !sameStrings2(unresolvedSubmitted, unresolvedActual)) diagnostics2.push(diagnostic19(
     "adapter_revision",
     "TOPOLOGY_UNRESOLVED_WITNESS_MISMATCH",
     "/topology_review/unresolved_candidate_ids",
     "Unresolved witness must equal the compiler candidate set without a disposition."
   ));
-  if (unresolvedActual.length) diagnostics2.push(diagnostic18(
+  if (unresolvedActual.length) diagnostics2.push(diagnostic19(
     "adapter_revision",
     "TOPOLOGY_CANDIDATE_REVIEW_INCOMPLETE",
     "/topology_dispositions",
@@ -51441,7 +53671,7 @@ function compileScopeManifestV4(review, systemContext) {
   const mergedModules = /* @__PURE__ */ new Map();
   for (const module of modules) {
     const current = mergedModules.get(module.module_id);
-    if (current && current.role !== module.role) diagnostics2.push(diagnostic18(
+    if (current && current.role !== module.role) diagnostics2.push(diagnostic19(
       "adapter_revision",
       "TOPOLOGY_MODULE_ROLE_CONFLICT",
       "/topology_dispositions",
@@ -51454,14 +53684,14 @@ function compileScopeManifestV4(review, systemContext) {
   }
   const moduleIds = new Set(mergedModules.keys());
   for (const [index, boundary] of boundaries.entries()) {
-    if (!moduleIds.has(boundary.from) || !moduleIds.has(boundary.to) || boundary.from === boundary.to) diagnostics2.push(diagnostic18(
+    if (!moduleIds.has(boundary.from) || !moduleIds.has(boundary.to) || boundary.from === boundary.to) diagnostics2.push(diagnostic19(
       "adapter_revision",
       "TOPOLOGY_BOUNDARY_ENDPOINT_INVALID",
       `/topology_dispositions/${index}`,
       "Boundary endpoints must resolve to two distinct manifest modules."
     ));
     const labels = boundary.signal_label.split(" \u2192 ");
-    if (labels.length !== 2 || moduleRefByCandidateLabel.get(labels[0]) !== boundary.from || moduleRefByCandidateLabel.get(labels[1]) !== boundary.to) diagnostics2.push(diagnostic18(
+    if (labels.length !== 2 || moduleRefByCandidateLabel.get(labels[0]) !== boundary.from || moduleRefByCandidateLabel.get(labels[1]) !== boundary.to) diagnostics2.push(diagnostic19(
       "adapter_revision",
       "TOPOLOGY_BOUNDARY_ENDPOINT_MISMATCH",
       `/topology_dispositions/${index}`,
@@ -51469,7 +53699,7 @@ function compileScopeManifestV4(review, systemContext) {
     ));
   }
   const primarySurface = isText(input.primary_surface) ? input.primary_surface.normalize("NFC") : "";
-  if (!moduleIds.has(primarySurface) || mergedModules.get(primarySurface)?.role !== "primary") diagnostics2.push(diagnostic18(
+  if (!moduleIds.has(primarySurface) || mergedModules.get(primarySurface)?.role !== "primary") diagnostics2.push(diagnostic19(
     "adapter_revision",
     "SCOPE_PRIMARY_SURFACE_INVALID",
     "/primary_surface",
@@ -51500,10 +53730,10 @@ function expectedInteractionCellsV4(manifest) {
   }
   const cells = [];
   if (moduleIds.length === 1) {
-    for (const dimension of DIMENSIONS) cells.push({ module_ids: [moduleIds[0]], dimension });
+    for (const dimension of DIMENSIONS2) cells.push({ module_ids: [moduleIds[0]], dimension });
   } else {
     for (let left = 0; left < moduleIds.length; left += 1) for (let right = left + 1; right < moduleIds.length; right += 1) {
-      for (const dimension of DIMENSIONS) cells.push({ module_ids: [moduleIds[left], moduleIds[right]], dimension });
+      for (const dimension of DIMENSIONS2) cells.push({ module_ids: [moduleIds[left], moduleIds[right]], dimension });
     }
   }
   return cells;
@@ -51511,7 +53741,7 @@ function expectedInteractionCellsV4(manifest) {
 function normalizeCell2(value) {
   if (!isRecord8(value)) return null;
   const moduleIds = strings5(value.module_ids);
-  if (!moduleIds || !moduleIds.length || moduleIds.length > 2 || !DIMENSIONS.includes(value.dimension)) return null;
+  if (!moduleIds || !moduleIds.length || moduleIds.length > 2 || !DIMENSIONS2.includes(value.dimension)) return null;
   return { module_ids: moduleIds, dimension: value.dimension };
 }
 function cellKey2(cell) {
@@ -51522,17 +53752,17 @@ function interactionClaims(systemContext, diagnostics2) {
   try {
     value = snapshotTopologyInputV4(systemContext);
   } catch (error) {
-    diagnostics2.push(diagnostic18("quality_failure", "INTERACTION_REVIEW_CONTEXT_INVALID", "/", String(error)));
+    diagnostics2.push(diagnostic19("quality_failure", "INTERACTION_REVIEW_CONTEXT_INVALID", "/", String(error)));
     return null;
   }
   if (!hasExactKeys3(value, ["verified_claims"]) || !Array.isArray(value.verified_claims)) {
-    diagnostics2.push(diagnostic18("quality_failure", "INTERACTION_REVIEW_CONTEXT_INVALID", "/", "Interaction review requires compiler-verified Claims."));
+    diagnostics2.push(diagnostic19("quality_failure", "INTERACTION_REVIEW_CONTEXT_INVALID", "/", "Interaction review requires compiler-verified Claims."));
     return null;
   }
   const claims = /* @__PURE__ */ new Map();
   for (const [index, claim] of value.verified_claims.entries()) {
     if (!hasExactKeys3(claim, ["claim_id", "candidate_ids", "authorized_topology_roles", "authorized_boundaries", "reviewable_interaction_cells"]) || !isText(claim.claim_id) || claims.has(claim.claim_id) || !Array.isArray(claim.reviewable_interaction_cells)) {
-      diagnostics2.push(diagnostic18("quality_failure", "INTERACTION_REVIEW_CLAIM_INVALID", `/verified_claims/${index}`, "Interaction Claim authorization must use the closed unique shape."));
+      diagnostics2.push(diagnostic19("quality_failure", "INTERACTION_REVIEW_CLAIM_INVALID", `/verified_claims/${index}`, "Interaction Claim authorization must use the closed unique shape."));
       continue;
     }
     const cells = (
@@ -51540,7 +53770,7 @@ function interactionClaims(systemContext, diagnostics2) {
       claim.reviewable_interaction_cells.map(normalizeCell2)
     );
     if (cells.some((item) => !item)) {
-      diagnostics2.push(diagnostic18("quality_failure", "INTERACTION_REVIEW_CLAIM_INVALID", `/verified_claims/${index}/reviewable_interaction_cells`, "Reviewable cells must identify canonical manifest cells."));
+      diagnostics2.push(diagnostic19("quality_failure", "INTERACTION_REVIEW_CLAIM_INVALID", `/verified_claims/${index}/reviewable_interaction_cells`, "Reviewable cells must identify canonical manifest cells."));
       continue;
     }
     const validCells = (
@@ -51557,18 +53787,18 @@ function validateInteractionReviewV4(manifest, review, systemContext) {
   try {
     expected = expectedInteractionCellsV4(manifest);
   } catch (error) {
-    return [diagnostic18("quality_failure", "SCOPE_MANIFEST_INVALID", "/", String(error))];
+    return [diagnostic19("quality_failure", "SCOPE_MANIFEST_INVALID", "/", String(error))];
   }
   const claims = interactionClaims(systemContext, diagnostics2);
   let items;
   try {
     items = snapshotTopologyInputV4(review);
   } catch (error) {
-    diagnostics2.push(diagnostic18("adapter_revision", "INTERACTION_REVIEW_INVALID", "/", String(error)));
+    diagnostics2.push(diagnostic19("adapter_revision", "INTERACTION_REVIEW_INVALID", "/", String(error)));
     return diagnostics2;
   }
   if (!Array.isArray(items)) {
-    diagnostics2.push(diagnostic18("adapter_revision", "INTERACTION_REVIEW_INVALID", "/", "Interaction review must be an array."));
+    diagnostics2.push(diagnostic19("adapter_revision", "INTERACTION_REVIEW_INVALID", "/", "Interaction review must be an array."));
     return diagnostics2;
   }
   const expectedKeys = new Set(expected.map(cellKey2));
@@ -51577,17 +53807,17 @@ function validateInteractionReviewV4(manifest, review, systemContext) {
     const path14 = `/${index}`;
     const cell = normalizeCell2(item);
     if (!cell || !isText(item.status) || !["candidate", "checked-no-signal"].includes(item.status)) {
-      diagnostics2.push(diagnostic18("adapter_revision", "INTERACTION_REVIEW_CELL_INVALID", path14, "Interaction review item must identify one expected cell and one supported status."));
+      diagnostics2.push(diagnostic19("adapter_revision", "INTERACTION_REVIEW_CELL_INVALID", path14, "Interaction review item must identify one expected cell and one supported status."));
       continue;
     }
     const key = cellKey2(cell);
     if (!expectedKeys.has(key) || seen.has(key)) {
-      diagnostics2.push(diagnostic18("adapter_revision", "INTERACTION_REVIEW_CELL_SET_MISMATCH", path14, "Interaction review cannot add, duplicate or omit manifest-generated cells."));
+      diagnostics2.push(diagnostic19("adapter_revision", "INTERACTION_REVIEW_CELL_SET_MISMATCH", path14, "Interaction review cannot add, duplicate or omit manifest-generated cells."));
       continue;
     }
     seen.add(key);
     if (item.status === "candidate") {
-      if (!hasExactKeys3(item, ["module_ids", "dimension", "status"])) diagnostics2.push(diagnostic18(
+      if (!hasExactKeys3(item, ["module_ids", "dimension", "status"])) diagnostics2.push(diagnostic19(
         "adapter_revision",
         "INTERACTION_REVIEW_CELL_INVALID",
         path14,
@@ -51596,18 +53826,18 @@ function validateInteractionReviewV4(manifest, review, systemContext) {
       continue;
     }
     if (!hasExactKeys3(item, ["module_ids", "dimension", "status", "reviewed_claim_ids", "review_basis"])) {
-      diagnostics2.push(diagnostic18("adapter_revision", "INTERACTION_NO_SIGNAL_BASIS_INVALID", path14, "Checked-no-signal requires reviewed Claims and review basis."));
+      diagnostics2.push(diagnostic19("adapter_revision", "INTERACTION_NO_SIGNAL_BASIS_INVALID", path14, "Checked-no-signal requires reviewed Claims and review basis."));
       continue;
     }
     const reviewedClaimIds = strings5(item.reviewed_claim_ids);
-    if (!reviewedClaimIds?.length || !isText(item.review_basis) || !claims || reviewedClaimIds.some((claimId) => !claims.get(claimId)?.has(key))) diagnostics2.push(diagnostic18(
+    if (!reviewedClaimIds?.length || !isText(item.review_basis) || !claims || reviewedClaimIds.some((claimId) => !claims.get(claimId)?.has(key))) diagnostics2.push(diagnostic19(
       "adapter_revision",
       "INTERACTION_NO_SIGNAL_BASIS_INVALID",
       path14,
       "Checked-no-signal Claims must be verified for this exact module pair and dimension."
     ));
   }
-  if (seen.size !== expectedKeys.size) diagnostics2.push(diagnostic18(
+  if (seen.size !== expectedKeys.size) diagnostics2.push(diagnostic19(
     "adapter_revision",
     "INTERACTION_REVIEW_INCOMPLETE",
     "/",
@@ -51810,8 +54040,8 @@ function validateProvideArtifactEvent(context, event, registry) {
   if (id2 !== "EVENT-" + digest(payload)) throw new TypeError("ARTIFACT_EVENT_ID_MISMATCH");
   if (previous.length) {
     const result = previous[0];
-    const record20 = result.acquisition_record;
-    if (result.status !== "acquired" || !record20 || record20.event_id !== id2 || record20.artifact_request_id !== request.artifact_request_id || record20.input_identity !== hash3(event.input) || !Number.isSafeInteger(record20.byte_length) || record20.byte_length < 0 || !/^sha256:[0-9a-f]{64}$/u.test(record20.content_digest) || event.input.kind === "safe_upload_ref" && (record20.byte_length !== event.input.byte_length || record20.content_digest !== event.input.content_digest)) {
+    const record23 = result.acquisition_record;
+    if (result.status !== "acquired" || !record23 || record23.event_id !== id2 || record23.artifact_request_id !== request.artifact_request_id || record23.input_identity !== hash3(event.input) || !Number.isSafeInteger(record23.byte_length) || record23.byte_length < 0 || !/^sha256:[0-9a-f]{64}$/u.test(record23.content_digest) || event.input.kind === "safe_upload_ref" && (record23.byte_length !== event.input.byte_length || record23.content_digest !== event.input.content_digest)) {
       throw new TypeError("ARTIFACT_HISTORY_INVALID");
     }
     return { status: "replayed", result: structuredClone(result) };
@@ -51841,8 +54071,8 @@ function acceptProvidedArtifact(context, event, acquiredBytes, registry) {
 }
 
 // src/source-compiler-v4.mjs
-var diagnostic19 = (code2) => ({ category: "traceability", code: code2, path: "/source_pack", message: "Source acquisition, canonical identity, evidence coordinates and review must agree." });
-var rejected2 = (code2) => ({ status: "rejected", diagnostics: [diagnostic19(code2)] });
+var diagnostic20 = (code2) => ({ category: "traceability", code: code2, path: "/source_pack", message: "Source acquisition, canonical identity, evidence coordinates and review must agree." });
+var rejected2 = (code2) => ({ status: "rejected", diagnostics: [diagnostic20(code2)] });
 var hasOnly = (value, keys) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).every((key) => keys.includes(key));
 var SOURCE_METADATA_KEYS = ["source_id", "kind", "version", "status", "authority", "title", "scope", "domain"];
 var sourceMetadataSchema = {
@@ -51912,13 +54142,13 @@ function compileAuditedSource(metadata, entry, system) {
   }
 }
 function needArtifact(context, requests, reason) {
-  const sorted2 = [...requests].sort((a, b) => a.artifact_request_id.localeCompare(b.artifact_request_id));
+  const sorted3 = [...requests].sort((a, b) => a.artifact_request_id.localeCompare(b.artifact_request_id));
   return {
     status: "need_artifact",
     reason_code: reason,
     diagnostics: [],
-    artifact_requests: sorted2,
-    resume_ref: createArtifactResumeRef({ ...context, artifact_requests: sorted2 })
+    artifact_requests: sorted3,
+    resume_ref: createArtifactResumeRef({ ...context, artifact_requests: sorted3 })
   };
 }
 function markerLocation(units2, ordinal) {
@@ -51987,20 +54217,20 @@ function prepareAssets(pack, source, entry, system) {
     }
     const records6 = pack.source_assets.filter((item) => item.source_id === source.source_id && item.canonical_uri === url.canonical_uri);
     if (records6.length !== 1) throw new TypeError("SOURCE_ASSET_METADATA_INVALID");
-    const record20 = records6[0];
+    const record23 = records6[0];
     if (asset.bytes instanceof Uint8Array) {
       assets.push(asset);
       continue;
     }
     const proof = {
       source_id: source.source_id,
-      asset_id: record20.asset_id,
+      asset_id: record23.asset_id,
       canonical_uri: url.canonical_uri,
       capture_digest: sourceByteDigest(entry.input.capture_bytes),
-      review_basis_digest: "sha256:" + digest(record20.review_basis)
+      review_basis_digest: "sha256:" + digest(record23.review_basis)
     };
-    if (record20.classification === "non_normative" && record20.status !== "reviewed" && (system.non_normative_asset_proofs ?? []).some((candidate) => canonicalStringify(candidate) === canonicalStringify(proof))) {
-      skipped.push(record20.asset_id);
+    if (record23.classification === "non_normative" && record23.status !== "reviewed" && (system.non_normative_asset_proofs ?? []).some((candidate) => canonicalStringify(candidate) === canonicalStringify(proof))) {
+      skipped.push(record23.asset_id);
       continue;
     }
     requests.push(createArtifactRequest({
@@ -52174,7 +54404,7 @@ var ALLOWED_SYSTEM_KEYS = /* @__PURE__ */ new Set([
   "execution_resources",
   "semantic_evidence"
 ]);
-function record14(value) {
+function record18(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function needRevision(stage, diagnostics2) {
@@ -52204,6 +54434,57 @@ function qualityFailure2(code2, diagnostics2 = []) {
     }]
   };
 }
+function independentReviewRevision(review, target, diagnostics2) {
+  return {
+    status: "need_revision",
+    stage: "case_drafts",
+    diagnostics: diagnostics2,
+    review_request: target ? {
+      protocol_version: "1.0.0",
+      review_mode: "independent_source_first",
+      reviewer_identity: structuredClone(review?.reviewer_identity),
+      source_first_targets: structuredClone(target.projection.source_first_targets),
+      review_target_digest: target.digest,
+      review_target_projection: structuredClone(target.projection)
+    } : null
+  };
+}
+var DESIGN_DISPOSITIONS = Object.freeze([
+  "retained",
+  "representative_value",
+  "equivalent_merge",
+  "evidence_exclusion",
+  "semantic_gap",
+  "exploratory"
+]);
+function designAssuranceSummary(assurance) {
+  const counts = Object.fromEntries(DESIGN_DISPOSITIONS.map((kind) => [kind, 0]));
+  for (const item of assurance.candidate_dispositions) counts[item.disposition] += 1;
+  return {
+    status: "complete",
+    plan_revision: assurance.plan_revision,
+    batch_count: assurance.batches.length,
+    rule_group_count: assurance.rule_groups.length,
+    candidate_responsibility_count: assurance.candidate_responsibilities.length,
+    candidate_disposition_counts: counts
+  };
+}
+function independentReviewSummary(review) {
+  const assessmentCounts = { verified: 0, semantic_gap: 0, evidence_excluded: 0 };
+  for (const item of review.target_assessments) assessmentCounts[item.disposition] += 1;
+  const findingCounts = { confirmed: 0, rejected: 0 };
+  for (const item of review.findings) findingCounts[item.adjudication] += 1;
+  return {
+    status: "completed",
+    protocol_version: review.protocol_version,
+    review_mode: review.review_mode,
+    reviewer_identity_class: review.reviewer_identity.identity_class,
+    source_first_target_count: review.source_first_targets.length,
+    target_assessment_counts: assessmentCounts,
+    finding_counts: findingCounts,
+    review_target_digest: review.review_target_digest
+  };
+}
 function validateArtifact(artifact, schema, stage) {
   const diagnostics2 = validateAgainstSchema(artifact, schema);
   return diagnostics2.length ? needRevision(stage, diagnostics2) : null;
@@ -52216,8 +54497,9 @@ function pointsWithRoles(points, outcomes) {
     acceptance_role: byId.get(point.outcome_id)?.acceptance_role
   }));
 }
-function semanticRoots(evidence, phase) {
+function semanticRoots(evidence, phase, contract2) {
   return compileSemanticGapRootsV4({
+    contract: contract2,
     facts: evidence.fact_ledger,
     claims: evidence.claims,
     diagnostic_candidates: evidence.semantic_gaps.filter(
@@ -52227,11 +54509,18 @@ function semanticRoots(evidence, phase) {
   });
 }
 function rootState(roots, rootStatuses) {
-  const statusById = new Map(rootStatuses.map((item) => [item.root_issue_id, item.status]));
-  return roots.map((root) => ({ ...root, status: statusById.get(root.root_issue_id) ?? "presented" }));
+  const statusById = new Map(rootStatuses.map((item) => [item.root_issue_id, item]));
+  return roots.map((root) => {
+    const state = statusById.get(root.root_issue_id);
+    return {
+      ...root,
+      status: state?.status ?? "presented",
+      state_root_version_digest: state?.root_version_digest ?? null
+    };
+  });
 }
-function openRoots(roots) {
-  return roots.filter((root) => root.status === "presented");
+function openRoots(roots, contract2) {
+  return roots.filter((root) => root.status === "presented" || isGeneralQualityV4Contract(contract2) && requiresRecoverableCriticalQuestionV4(root, root));
 }
 function compileNotApplicableReview(behavior, scopeManifest, semanticEvidence) {
   const outcomes = new Map(behavior.outcomes.map((item) => [item.outcome_id, item]));
@@ -52414,74 +54703,22 @@ function presentNotApplicable(records6, behavior) {
   const pointById = new Map(behavior.formal_test_points.map((item) => [item.formal_test_point_id, item]));
   const outcomeById = new Map(behavior.outcomes.map((item) => [item.outcome_id, item]));
   const moduleByFact = new Map(behavior.fact_modules.map((item) => [item.fact_id, item.module_id]));
-  return records6.map((record20) => {
-    if (record20.subject.kind === "risk") return {
-      not_applicable_record_id: record20.not_applicable_record_id,
-      module_id: record20.subject.module_id,
-      subject: `\u98CE\u9669 ${record20.subject.risk_kind}`,
-      reason: record20.reason
+  return records6.map((record23) => {
+    if (record23.subject.kind === "risk") return {
+      not_applicable_record_id: record23.not_applicable_record_id,
+      module_id: record23.subject.module_id,
+      subject: `\u98CE\u9669 ${record23.subject.risk_kind}`,
+      reason: record23.reason
     };
-    const point = pointById.get(record20.subject.formal_test_point_id);
+    const point = pointById.get(record23.subject.formal_test_point_id);
     const outcome = outcomeById.get(point?.outcome_id);
     return {
-      not_applicable_record_id: record20.not_applicable_record_id,
+      not_applicable_record_id: record23.not_applicable_record_id,
       module_id: moduleByFact.get(outcome?.fact_id),
       subject: outcome?.expected,
-      reason: record20.reason
+      reason: record23.reason
     };
   });
-}
-function materializeRelativeBaselines(candidates2, semanticEvidence, claimAssessments) {
-  const assessmentById = new Map((Array.isArray(claimAssessments) ? claimAssessments : []).map((item) => [item.claim_id, item]));
-  const diagnostics2 = [];
-  const cases = candidates2.map((candidate) => {
-    if (!candidate.baseline_spec) return candidate;
-    const assertion = semanticEvidence.baseline_assertions.find((item) => candidate.baseline_spec.claim_ids.includes(item.claim_id));
-    if (!assertion) return candidate;
-    const support = candidate.baseline_spec.claim_ids.map((claimId) => {
-      const assessment = assessmentById.get(claimId);
-      const source = semanticEvidence.baseline_assertions.find((item) => item.claim_id === claimId);
-      return {
-        claim_id: claimId,
-        level: assessment?.level,
-        scope: source?.scope_ref,
-        support_review: assessment?.support_review
-      };
-    });
-    const result = compileRelativeBaselineCaseV4({
-      case_context: {
-        module_id: candidate.module_id,
-        scope_ref: assertion.scope_ref,
-        business_scope: candidate.title,
-        operation: candidate.steps.map((item) => item.action).join("\uFF1B"),
-        priority: candidate.priority,
-        ordering: candidate.ordering,
-        acceptance_role: candidate.acceptance_role,
-        fact_ids: candidate.fact_ids,
-        primary_test_point_id: candidate.primary_test_point_id,
-        business_preconditions: candidate.business_preconditions,
-        data_conditions: candidate.data_conditions
-      },
-      baseline_spec: candidate.baseline_spec
-    }, { claim_assessments: support });
-    diagnostics2.push(...result.diagnostics);
-    if (result.semantic_gaps.length || result.cases.length !== 1) {
-      diagnostics2.push({
-        category: "adapter_revision",
-        code: "BASELINE_DECLARATION_INCOMPLETE",
-        path: "/baseline_spec",
-        message: "A persisted relative baseline must already contain a complete source-declared comparison contract."
-      });
-      return candidate;
-    }
-    return {
-      ...candidate,
-      steps: result.cases[0].steps,
-      oracles: result.cases[0].oracles,
-      baseline_spec: result.cases[0].baseline_spec
-    };
-  });
-  return { cases, diagnostics: diagnostics2 };
 }
 function coverageSummary(coverage, exploratory, notApplicable, gaps) {
   const lane = (acceptanceRole2) => {
@@ -52500,7 +54737,7 @@ function coverageSummary(coverage, exploratory, notApplicable, gaps) {
     not_applicable_count: notApplicable.length
   };
 }
-function presentRoots(roots, compiled) {
+function presentRoots(roots, compiled, contract2, semanticDeliveryGate) {
   const outcomes = new Map(compiled.outcomes.map((outcome) => [outcome.outcome_id, outcome]));
   return roots.map((root) => {
     const affected = compiled.formal_test_points.filter((point) => {
@@ -52516,24 +54753,33 @@ function presentRoots(roots, compiled) {
       item_id: root.semantic_gap_id,
       display_name: root.unresolved_outcome
     });
+    const strict = isGeneralQualityV4Contract(contract2);
+    const resolutionBasis = strict ? semanticDeliveryGate?.resolved_critical_roots?.find(
+      (item) => item.root_issue_id === root.root_issue_id
+    ) ?? null : null;
     return {
       root_issue_id: root.root_issue_id,
-      status: root.status === "resolved_final" || root.status === "resolved_temporary" ? "resolved" : root.status,
+      status: strict ? root.status : root.status === "resolved_final" || root.status === "resolved_temporary" ? "resolved" : root.status,
       title: root.missing_aspect,
       business_object: root.scope_ref,
       question: root.question,
       why_needed: root.why_needed,
       decision_impact: root.decision_impact,
       unresolved_outcome: root.unresolved_outcome,
-      affected_business_items: affected
+      affected_business_items: affected,
+      ...strict ? {
+        root_version_digest: root.root_version_digest,
+        acceptance_impact: structuredClone(root.acceptance_impact),
+        critical_resolution_basis: resolutionBasis ? structuredClone(resolutionBasis) : null
+      } : {}
     };
   });
 }
 function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
-  if (!record14(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4 || !["source_pack", "evidence_claims", "behavior_views", "case_drafts"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
+  if (!record18(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4 || !["source_pack", "evidence_claims", "behavior_views", "case_drafts"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
     return needRevision("source_pack", [{ code: "V4_ARTIFACT_SET_INVALID", path: "/", message: "Exactly four Agent artifacts are required." }]);
   }
-  if (!record14(submittedSystem) || Object.keys(submittedSystem).some((key) => !ALLOWED_SYSTEM_KEYS.has(key))) {
+  if (!record18(submittedSystem) || Object.keys(submittedSystem).some((key) => !ALLOWED_SYSTEM_KEYS.has(key))) {
     return qualityFailure2("V4_SYSTEM_CONTEXT_INVALID");
   }
   const artifacts = (
@@ -52545,14 +54791,14 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     submittedSystem
   );
   const sourcePack = artifacts.source_pack;
-  const contract2 = record14(sourcePack) ? v4ContractForSchema(sourcePack.schema_version) : null;
+  const contract2 = record18(sourcePack) ? v4ContractForSchema(sourcePack.schema_version) : null;
   if (!contract2) {
     return needRevision("source_pack", [{ code: "V4_SOURCE_PACK_REQUIRED", path: "/schema_version", message: "The v4 pipeline requires a supported explicit v4 contract." }]);
   }
   const revision = sourcePack.source_revision;
   for (const stage of ["evidence_claims"]) {
     const artifact = artifacts[stage];
-    if (record14(artifact) && (artifact.schema_version !== contract2.schema_version || artifact.source_revision !== void 0 && artifact.source_revision !== revision)) {
+    if (record18(artifact) && (artifact.schema_version !== contract2.schema_version || artifact.source_revision !== void 0 && artifact.source_revision !== revision)) {
       return needRevision(stage, [{
         category: "traceability",
         code: "SOURCE_REVISION_MISMATCH",
@@ -52603,7 +54849,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   if (interactionDiagnostics.length) return needRevision("evidence_claims", interactionDiagnostics);
   let preCaseRoots;
   try {
-    preCaseRoots = rootState(semanticRoots(evidence, "pre_case"), system.decisions?.root_statuses ?? []);
+    preCaseRoots = rootState(semanticRoots(evidence, "pre_case", contract2), system.decisions?.root_statuses ?? []);
   } catch (error) {
     return needRevision("evidence_claims", [{
       code: error instanceof Error ? error.message : "SEMANTIC_GAP_INVALID",
@@ -52611,7 +54857,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
       message: "Semantic-gap inputs must bind verified Facts and Claims."
     }]);
   }
-  const pendingPreCase = openRoots(preCaseRoots);
+  const pendingPreCase = openRoots(preCaseRoots, contract2);
   if (pendingPreCase.length) return {
     status: "need_user_answers",
     phase: "requirements_analysis",
@@ -52620,7 +54866,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   };
   for (const stage of ["behavior_views", "case_drafts"]) {
     const artifact = artifacts[stage];
-    if (record14(artifact) && (artifact.schema_version !== contract2.schema_version || artifact.source_revision !== void 0 && artifact.source_revision !== revision)) {
+    if (record18(artifact) && (artifact.schema_version !== contract2.schema_version || artifact.source_revision !== void 0 && artifact.source_revision !== revision)) {
       return needRevision(stage, [{
         category: "traceability",
         code: "SOURCE_REVISION_MISMATCH",
@@ -52631,6 +54877,18 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   }
   const behaviorSchemaFailure = validateArtifact(artifacts.behavior_views, behavior_views_schema_default, "behavior_views");
   if (behaviorSchemaFailure) return behaviorSchemaFailure;
+  let currentDesignAssurance = null;
+  if (isGeneralQualityV4Contract(contract2)) {
+    const assurance = validateDesignAssuranceV4(artifacts.behavior_views.design_assurance, {
+      source_claim_ids: evidence.claims.map((item) => item.claim_id),
+      semantic_gap_ids: evidence.semantic_gaps.map((item) => item.semantic_gap_id),
+      view_element_ids: artifacts.behavior_views.views.flatMap(
+        (view) => view.elements.map((item) => item.element_id)
+      )
+    });
+    if (assurance.diagnostics.length) return needRevision("behavior_views", assurance.diagnostics);
+    currentDesignAssurance = assurance.normalized;
+  }
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
   if (behavior.kind === "need_revision") return needRevision("behavior_views", behavior.diagnostics);
   if (behavior.kind !== "compiled") return qualityFailure2("BUSINESS_OUTCOME_COMPILATION_FAILED", behavior.diagnostics);
@@ -52640,7 +54898,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     const diagnostics2 = validateRelativeBaselineEvidenceV4(candidate, semanticEvidence);
     if (diagnostics2.length) return needRevision("case_drafts", diagnostics2);
   }
-  const materializedDrafts = materializeRelativeBaselines(
+  const materializedDrafts = materializeRelativeBaselinesV4(
     artifacts.case_drafts.cases,
     semanticEvidence,
     system.claim_assessments
@@ -52665,7 +54923,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   }
   let postCaseRoots;
   try {
-    postCaseRoots = rootState(semanticRoots(evidence, "post_case"), system.decisions?.root_statuses ?? []);
+    postCaseRoots = rootState(semanticRoots(evidence, "post_case", contract2), system.decisions?.root_statuses ?? []);
   } catch (error) {
     return needRevision("evidence_claims", [{
       code: error instanceof Error ? error.message : "SEMANTIC_GAP_INVALID",
@@ -52703,7 +54961,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   }));
   const ordered = compileCaseOrdering(orderingInputs, formalPoints, orderingRegistry, system.ordering);
   if (ordered.kind !== "ordered") return qualityFailure2("CASE_ORDERING_FAILED", ordered.diagnostics);
-  const pendingPostCase = openRoots(postCaseRoots);
+  const pendingPostCase = openRoots(postCaseRoots, contract2);
   const activeGaps = allRoots.filter((root) => !["resolved_final", "resolved_temporary", "obsolete"].includes(root.status));
   const mappedGaps = activeGaps.map((root) => ({
     semantic_gap_id: root.semantic_gap_id,
@@ -52767,6 +55025,74 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     obligations: obligations.artifact,
     non_blocking_diagnostics: []
   };
+  let currentIndependentReview = null;
+  if (isGeneralQualityV4Contract(contract2)) {
+    const review = artifacts.case_drafts.independent_review;
+    if (!record18(review)) return independentReviewRevision(null, null, [{
+      category: "quality",
+      code: "INDEPENDENT_REVIEW_REQUIRED",
+      path: "/independent_review",
+      message: "A 4.3 Case Draft requires a source-first independent review record."
+    }]);
+    let reviewTarget;
+    try {
+      reviewTarget = compileIndependentReviewTargetV4({
+        source_revision: revision,
+        source_first_targets: review.source_first_targets,
+        facts: evidence.fact_ledger,
+        views: artifacts.behavior_views.views,
+        formal_test_points: behavior.formal_test_points,
+        candidate_responsibilities: artifacts.behavior_views.design_assurance.candidate_responsibilities,
+        cases: materializedDrafts.cases
+      });
+    } catch (error) {
+      return independentReviewRevision(review, null, [{
+        category: "quality",
+        code: error instanceof Error ? error.message : "INDEPENDENT_REVIEW_TARGET_INVALID",
+        path: "/independent_review/source_first_targets",
+        message: "The source-first inventory could not form a compiler-owned review target."
+      }]);
+    }
+    const reviewResult = validateIndependentReviewV4(review, reviewTarget, {
+      source_claim_ids: evidence.claims.map((item) => item.claim_id),
+      decision_ids: (sourcePack.decision_records ?? []).map((item) => item.decision_id),
+      semantic_gap_ids: allRoots.map((root) => root.semantic_gap_id)
+    });
+    if (reviewResult.diagnostics.length) {
+      const pending = review.status === "pending";
+      return independentReviewRevision(review, reviewTarget, pending ? [{
+        category: "quality",
+        code: "INDEPENDENT_REVIEW_REQUIRED",
+        path: "/independent_review",
+        message: "Complete the source-first review against the compiler-issued target."
+      }] : reviewResult.diagnostics);
+    }
+    currentIndependentReview = reviewResult.normalized;
+  }
+  let semanticDeliveryGate;
+  try {
+    semanticDeliveryGate = deriveSemanticDeliveryGateV4({
+      contract: contract2,
+      roots: allRoots,
+      rootStates: allRoots.map((root) => ({
+        root_issue_id: root.root_issue_id,
+        root_version_digest: isGeneralQualityV4Contract(contract2) ? root.state_root_version_digest : root.root_version_digest,
+        status: root.status
+      })),
+      decisions: system.decisions?.records ?? []
+    });
+  } catch (error) {
+    return qualityFailure2(error instanceof Error ? error.message : "SEMANTIC_DELIVERY_GATE_INVALID");
+  }
+  if (!semanticDeliveryGate.can_materialize_formal_case_document) return {
+    status: "need_user_answers",
+    phase: "case_design",
+    result_kind: null,
+    reason_code: "CRITICAL_SEMANTIC_GAPS_REMAIN",
+    semantic_roots: allRoots.filter((root) => semanticDeliveryGate.unresolved_critical_root_ids.includes(root.root_issue_id)),
+    obligations: obligations.artifact,
+    non_blocking_diagnostics: []
+  };
   const closedForDelivery = activeGaps.filter((root) => root.status === "closed_for_delivery").length;
   const outcome = classifyFinalOutcomeV4({
     delivery_intent: "case_document",
@@ -52779,9 +55105,16 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     open_semantic_gap_count: activeGaps.length - closedForDelivery,
     not_applicable_count: notApplicable.length,
     all_reviewed_formal_points_not_applicable: coverage.ledger.length > 0 && coverage.ledger.every((item) => item.classification === "NotApplicable"),
-    delivery_requested: Boolean(system.decisions?.delivery_requested)
+    delivery_requested: Boolean(system.decisions?.delivery_requested),
+    ...isGeneralQualityV4Contract(contract2) ? {
+      strict_semantic_delivery: true,
+      unresolved_critical_semantic_gap_count: semanticDeliveryGate.unresolved_critical_root_ids.length
+    } : {}
   });
   if (outcome.status !== "finished") return outcome.status === "fatal" ? qualityFailure2(outcome.reason_code) : { ...outcome, semantic_roots: openRoots(activeGaps) };
+  if (isGeneralQualityV4Contract(contract2) && (!currentDesignAssurance || !currentIndependentReview)) {
+    return qualityFailure2("GENERAL_QUALITY_SUMMARY_INPUT_MISSING");
+  }
   const bundle = {
     schema_version: contract2.schema_version,
     compiler_version: contract2.compiler_version,
@@ -52795,7 +55128,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     // Canonical JSON is the audit authority: resolved/obsolete roots stay in
     // the ledger even though only active roots contribute to delivery gaps and
     // user-facing unresolved sections.
-    semantic_root_groups: presentRoots(allRoots, behavior),
+    semantic_root_groups: presentRoots(allRoots, behavior, contract2, semanticDeliveryGate),
     exploratory: risk.exploratory.map((item) => ({
       exploratory_id: item.exploratory_id,
       module_id: item.module_id,
@@ -52803,617 +55136,21 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
       reason: `\u4F9D\u636E ${item.policy_id}@${item.policy_version} \u5BA1\u9605\u901A\u7528\u98CE\u9669\u3002`
     })),
     not_applicable: presentNotApplicable(notApplicable, behavior),
-    risk_review_ledger: risk.ledger
+    risk_review_ledger: risk.ledger,
+    ...isGeneralQualityV4Contract(contract2) ? {
+      design_assurance_summary: designAssuranceSummary(
+        /** @type {Record<string,any>} */
+        currentDesignAssurance
+      ),
+      independent_review_summary: independentReviewSummary(
+        /** @type {Record<string,any>} */
+        currentIndependentReview
+      )
+    } : {}
   };
   const bundleDiagnostics = validateAgainstSchema(bundle, test_bundle_schema_default);
   if (bundleDiagnostics.length) return qualityFailure2("CANONICAL_BUNDLE_INVALID", bundleDiagnostics);
   return { status: "compiled", result_kind: outcome.result_kind, bundle, obligations: obligations.artifact };
-}
-
-// src/v4-system-context.mjs
-init_canonical();
-init_source_locators_v4();
-init_v4_contract();
-init_source_subjects_v4();
-
-// src/source-runtime-registry-v4.mjs
-init_source_capture_audit();
-init_source_canonicalization();
-var PROVIDER_CONTRACTS_V1 = Object.freeze([Object.freeze({
-  provider: "cooper",
-  version: "1",
-  hosts: Object.freeze(["cooper.test", "cooper.example.test", "prd-assets.example.invalid"]),
-  kind: "cooper",
-  query_order: "sensitive"
-})]);
-var EXPIRY_MATCHERS_V1 = Object.freeze([Object.freeze({
-  provider: "cooper",
-  provider_contract_version: "1",
-  matcher_version: "cooper-expiry-v1",
-  prefix: '<span data-cooper-expiry="v1">\u4E34\u65F6\u94FE\u63A5\u5C06\u5728 ',
-  suffix: " \u5C0F\u65F6\u540E\u8FC7\u671F</span>"
-})]);
-var SOURCE_RUNTIME_REGISTRY_VERSION_V4 = "source-runtime-v1";
-function createCompilerSourceRuntimeV4() {
-  return {
-    registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
-    provider_registry: createSourceProviderRegistry([...PROVIDER_CONTRACTS_V1]),
-    expiry_registry: createExpiryMatcherRegistry([...EXPIRY_MATCHERS_V1])
-  };
-}
-
-// src/v4-system-context.mjs
-var DIMENSIONS2 = /* @__PURE__ */ new Set([
-  "shared-entity",
-  "role",
-  "client",
-  "interface-event",
-  "time",
-  "concurrency",
-  "side-effect"
-]);
-var RISK_KINDS2 = /* @__PURE__ */ new Set([
-  "null_or_missing",
-  "unknown_enum",
-  "api_failure",
-  "loading_failure",
-  "sync_delay",
-  "long_content",
-  "pagination",
-  "refresh",
-  "business_permission_boundary"
-]);
-var ACCEPTANCE_ROLES = /* @__PURE__ */ new Set(["primary_acceptance", "dependency_contract", "context_only"]);
-var NOT_APPLICABLE_REASONS = /* @__PURE__ */ new Set(["out_of_scope", "inapplicable_condition", "superseded_requirement"]);
-function record15(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-function exactRecord(value, keys) {
-  return record15(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
-}
-function nonBlank(value) {
-  return typeof value === "string" && Boolean(value.trim());
-}
-function supportedClaim(claim) {
-  return claim.level !== "E1" || claim.claim_form === "decision-record";
-}
-function supportedBusinessClaim(claim) {
-  return claim.domain === "business" && supportedClaim(claim);
-}
-function comparisonContract(value) {
-  const candidate = record15(value) ? (
-    /** @type {any} */
-    value
-  ) : null;
-  if (exactRecord(candidate, ["kind", "exceptions"]) && candidate.kind === "all_observable_behavior_except" && Array.isArray(candidate.exceptions) && candidate.exceptions.every(nonBlank)) {
-    return { kind: candidate.kind, exceptions: unique(candidate.exceptions) };
-  }
-  if (exactRecord(candidate, ["kind", "dimensions", "allowed_differences"]) && candidate.kind === "selected_dimensions" && Array.isArray(candidate.dimensions) && candidate.dimensions.length > 0 && candidate.dimensions.every(nonBlank) && Array.isArray(candidate.allowed_differences) && candidate.allowed_differences.every(nonBlank)) {
-    return {
-      kind: candidate.kind,
-      dimensions: unique(candidate.dimensions),
-      allowed_differences: unique(candidate.allowed_differences)
-    };
-  }
-  return null;
-}
-function semanticContainer(claim) {
-  return record15(claim.semantic_value) ? claim.semantic_value : {};
-}
-function semanticArray(claim, field) {
-  const container = semanticContainer(claim);
-  return Array.isArray(container[field]) ? container[field] : [];
-}
-function unique(values) {
-  return [...new Set(values)].sort(compare5);
-}
-function compare5(left, right) {
-  const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
-  const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
-  for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
-    if (a[index] !== b[index]) return a[index] - b[index];
-  }
-  return a.length - b.length;
-}
-function sourceSystem(pack) {
-  const { provider_registry, expiry_registry } = createCompilerSourceRuntimeV4();
-  return { provider_registry, expiry_registry };
-}
-function reconstructibleAcquisitions(pack, registries4, verifiedReceipts = []) {
-  const verified = new Set(verifiedReceipts.map((receipt) => receipt.source_id));
-  return pack.sources.filter((source) => !verified.has(source.source_id)).map((source) => {
-    if (!record15(source.semantic_projection) || typeof source.semantic_projection.content !== "string" || source.semantic_projection.assets.length !== 0 || source.capture_audit?.semantic_exclusions?.length !== 0) {
-      throw new TypeError("V4_SOURCE_ACQUISITION_CONTEXT_REQUIRED");
-    }
-    const generated = compileCanonicalSourceStructure(source.source_id, source.semantic_projection.content);
-    const textual = source.semantic_projection.structure.filter(
-      (unit) => !["image_region", "user_statement"].includes(unit.type)
-    );
-    if (canonicalStringify(generated) !== canonicalStringify(textual)) {
-      throw new TypeError("V4_SOURCE_STRUCTURE_RECOMPUTATION_MISMATCH");
-    }
-    return {
-      source_id: source.source_id,
-      input: {
-        stable_source_id: source.source_id,
-        source_type: source.kind,
-        capture_bytes: new TextEncoder().encode(source.semantic_projection.content),
-        assets: []
-      },
-      acquisition: {},
-      additional_units: source.semantic_projection.structure.filter(
-        (unit) => ["image_region", "user_statement"].includes(unit.type)
-      )
-    };
-  });
-}
-function subjectRegistry(pack, evidence) {
-  const descriptors = evidence.claims.filter((claim) => claim.kind === "requirement" && claim.domain === "business").map((claim) => claim.subject_descriptor);
-  if (!descriptors.length || descriptors.some((item) => !record15(item))) {
-    throw new TypeError("V4_SOURCE_SUBJECTS_REQUIRED");
-  }
-  return createSourceSubjectRegistry({
-    scope_refs: unique(descriptors.map((item) => item.scope_ref)),
-    module_ids: unique(descriptors.map((item) => item.module_id)),
-    entity_types: unique(descriptors.map((item) => item.entity_type))
-  });
-}
-function canonicalTopologyStructure(pack) {
-  return {
-    sources: [...pack.sources].sort((a, b) => compare5(a.source_id, b.source_id)).map((source) => {
-      const review = pack.source_reviews.find((item) => item.source_id === source.source_id);
-      const classification = (unit) => review?.units.find(
-        (item) => item.unit_id === unit.unit_id
-      )?.classification ?? "uncertain";
-      const locators = (unit) => pack.locators.filter(
-        (locator) => locator.source_id === source.source_id && locator.unit_id === unit.unit_id
-      );
-      const units2 = [];
-      const tableGroups = /* @__PURE__ */ new Map();
-      for (const unit of source.semantic_projection.structure) {
-        if (unit.type === "user_statement") continue;
-        const locator = locators(unit)[0];
-        if (unit.type === "table_cell") {
-          const key = unit.table_id;
-          const group = tableGroups.get(key) ?? {
-            kind: "table",
-            unit_id: key,
-            review_class: classification(unit),
-            locator_id: locator?.locator_id,
-            cells: []
-          };
-          group.cells.push({ cell_id: unit.unit_id, locator_id: locator?.locator_id, text: unit.text });
-          tableGroups.set(key, group);
-        } else if (unit.type === "image_region") {
-          units2.push({
-            kind: "image",
-            unit_id: unit.unit_id,
-            review_class: classification(unit),
-            locator_id: locator?.locator_id,
-            asset_digest: unit.asset_digest,
-            ocr_nodes: [{ node_id: unit.unit_id, locator_id: locator?.locator_id, label: unit.text }],
-            ocr_arrows: []
-          });
-        } else {
-          units2.push({
-            kind: "text_block",
-            unit_id: unit.unit_id,
-            review_class: classification(unit),
-            locator_id: locator?.locator_id,
-            text: unit.text
-          });
-        }
-      }
-      units2.push(...tableGroups.values());
-      return { source_id: source.source_id, units: units2 };
-    })
-  };
-}
-function topologySystem(evidence, canonicalSourceStructure) {
-  const authorizations = evidence.claims.filter(supportedBusinessClaim).flatMap((claim2) => {
-    const value = claim2.semantic_value?.topology_authorization;
-    if (!record15(value) || Object.keys(value).sort().join(",") !== "candidates,reviewable_interaction_cells" || !Array.isArray(value.candidates) || !Array.isArray(value.reviewable_interaction_cells)) return [];
-    return [{ claim_id: claim2.claim_id, value }];
-  });
-  const semantic_topology_candidates = authorizations.flatMap(
-    ({ value }) => value.candidates.flatMap((candidate) => {
-      if (!record15(candidate) || !["module_mention", "boundary_signal"].includes(candidate.kind) || typeof candidate.label !== "string" || !candidate.label.trim() || !Array.isArray(candidate.locator_ids) || candidate.locator_ids.length === 0) return [];
-      return [{
-        kind: candidate.kind,
-        label: candidate.label,
-        locator_ids: unique(candidate.locator_ids.filter((id2) => typeof id2 === "string"))
-      }];
-    })
-  );
-  const deterministic = discoverTopologyV4(canonicalSourceStructure, {
-    semantic_candidates: semantic_topology_candidates
-  });
-  const candidateFor = (declared) => deterministic.topology_candidates.find(
-    (item) => item.kind === declared.kind && item.label === declared.label && canonicalStringify(item.locator_ids) === canonicalStringify(unique(declared.locator_ids))
-  );
-  const claims = /* @__PURE__ */ new Map();
-  const claim = (claimId) => {
-    const current = claims.get(claimId) ?? {
-      claim_id: claimId,
-      candidate_ids: /* @__PURE__ */ new Set(),
-      authorized_topology_roles: /* @__PURE__ */ new Set(),
-      authorized_boundaries: /* @__PURE__ */ new Map(),
-      reviewable_interaction_cells: /* @__PURE__ */ new Map()
-    };
-    claims.set(claimId, current);
-    return current;
-  };
-  for (const authorization of authorizations) {
-    const current = claim(authorization.claim_id);
-    for (const declared of authorization.value.candidates) {
-      const candidate = candidateFor(declared);
-      if (!candidate) continue;
-      current.candidate_ids.add(candidate.candidate_id);
-      if (declared.disposition === "module" && ["primary", "upstream", "downstream", "external"].includes(declared.role)) {
-        current.authorized_topology_roles.add(declared.role);
-      }
-      if (declared.disposition === "boundary") {
-        const boundary = {
-          from_module_ref: declared.from_module_ref,
-          to_module_ref: declared.to_module_ref,
-          channel: declared.channel,
-          acceptance_scope: declared.acceptance_scope
-        };
-        if (Object.values(boundary).every((value) => typeof value === "string" && value.trim())) {
-          current.authorized_boundaries.set(canonicalStringify(boundary), boundary);
-        }
-      }
-    }
-    for (const declared of authorization.value.reviewable_interaction_cells) {
-      if (!record15(declared) || !Array.isArray(declared.module_ids) || !DIMENSIONS2.has(declared.dimension)) continue;
-      const cell = { module_ids: unique(declared.module_ids), dimension: declared.dimension };
-      current.reviewable_interaction_cells.set(canonicalStringify(cell), cell);
-    }
-  }
-  const verified_claims = [...claims.values()].map((item) => ({
-    claim_id: item.claim_id,
-    candidate_ids: unique([...item.candidate_ids]),
-    authorized_topology_roles: unique([...item.authorized_topology_roles]),
-    authorized_boundaries: [...item.authorized_boundaries.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b))),
-    reviewable_interaction_cells: [...item.reviewable_interaction_cells.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b)))
-  })).sort((a, b) => compare5(a.claim_id, b.claim_id));
-  const effective_scope_decisions = [];
-  return {
-    canonical_source_structure: canonicalSourceStructure,
-    verified_claims,
-    effective_scope_decisions,
-    ...semantic_topology_candidates.length ? { semantic_topology_candidates } : {}
-  };
-}
-function behaviorEvidence(evidence) {
-  const facts = evidence.fact_ledger.map((fact) => ({
-    fact_id: fact.fact_id,
-    module_id: fact.module_refs[0],
-    acceptance_role: fact.acceptance_role,
-    condition_field: fact.field_path.split("/").filter(Boolean).at(-1) ?? "value"
-  }));
-  const factById = new Map(evidence.fact_ledger.map((fact) => [fact.fact_id, fact]));
-  const claims = evidence.claims.filter(supportedBusinessClaim).map((claim) => {
-    const submitted = Array.isArray(claim.semantic_value?.behavior_assertions) ? claim.semantic_value.behavior_assertions : [];
-    const entries2 = submitted.filter((assertion) => {
-      if (!record15(assertion) || Object.keys(assertion).sort().join(",") !== "fact_id,field_path,value" || typeof assertion.fact_id !== "string" || typeof assertion.field_path !== "string" || !assertion.field_path.startsWith("/")) return false;
-      const fact = factById.get(assertion.fact_id);
-      return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
-    }).map((assertion) => [
-      canonicalStringify(assertion),
-      structuredClone(assertion)
-    ]);
-    return {
-      claim_id: claim.claim_id,
-      level: claim.level,
-      supported: claim.level !== "E1" || claim.claim_form === "decision-record",
-      assertions: [...new Map(entries2).values()]
-    };
-  }).filter((claim) => claim.assertions.length > 0);
-  return { facts, claims };
-}
-function orderingSystem(pack, evidence) {
-  const locatorById = new Map(pack.locators.map((locator) => [locator.locator_id, locator]));
-  const sourceIndex = new Map(pack.sources.map((source) => [source.source_id, source]));
-  const locators = pack.locators.map((locator) => {
-    const source = sourceIndex.get(locator.source_id);
-    const unitIndex = source?.semantic_projection.structure.findIndex((unit2) => unit2.unit_id === locator.unit_id) ?? -1;
-    const unit = source?.semantic_projection.structure[unitIndex];
-    const unitKind = unit?.type === "table_cell" ? "table" : unit?.type === "image_region" ? "image" : "text";
-    const structural = unit?.type === "table_cell" ? [unitIndex, unit.row, unit.column] : [Math.max(unitIndex, 0)];
-    const start = locator.range?.start ?? locator.answer_span?.start ?? 0;
-    return {
-      locator_id: locator.locator_id,
-      stable_source_id: locator.source_id,
-      unit_kind: unitKind,
-      structural_coordinates: structural,
-      start_scalar: start
-    };
-  });
-  const candidateById = new Map(evidence.topology_discovery.topology_candidates.map((item) => [item.candidate_id, item]));
-  const modules = evidence.scope_manifest.modules.map((module) => {
-    const ids3 = evidence.topology_dispositions.filter(
-      (disposition) => disposition.disposition === "module" && disposition.module_ref === module.module_id
-    ).flatMap((disposition) => candidateById.get(disposition.candidate_id)?.locator_ids ?? []);
-    if (!ids3.length || ids3.some((id2) => !locatorById.has(id2))) {
-      throw new TypeError("V4_ORDERING_MODULE_LOCATOR_REQUIRED");
-    }
-    return { module_id: module.module_id, role: module.role, locator_ids: unique(ids3) };
-  });
-  const flows = [];
-  const actions = [];
-  const dependencies = [];
-  const verifiedClaimMap = /* @__PURE__ */ new Map();
-  const verifiedDecisionMap = /* @__PURE__ */ new Map();
-  for (const claim of evidence.claims.filter(supportedBusinessClaim)) {
-    for (const assertion of semanticArray(claim, "ordering_assertions")) {
-      let subject2;
-      if (exactRecord(assertion, ["kind", "module_id", "subject_ref", "locator_id"]) && assertion.kind === "flow" && [assertion.module_id, assertion.subject_ref, assertion.locator_id].every(nonBlank) && claim.source_locator_ids.includes(assertion.locator_id)) {
-        subject2 = { kind: "flow", module_id: assertion.module_id, subject_ref: assertion.subject_ref };
-        flows.push({
-          module_id: assertion.module_id,
-          subject_ref: assertion.subject_ref,
-          locator_id: assertion.locator_id,
-          claim_ids: [claim.claim_id]
-        });
-      } else if (exactRecord(assertion, ["kind", "module_id", "flow_subject_ref", "subject_ref", "locator_id"]) && assertion.kind === "action" && [assertion.module_id, assertion.flow_subject_ref, assertion.subject_ref, assertion.locator_id].every(nonBlank) && claim.source_locator_ids.includes(assertion.locator_id)) {
-        subject2 = {
-          kind: "action",
-          module_id: assertion.module_id,
-          flow_subject_ref: assertion.flow_subject_ref,
-          subject_ref: assertion.subject_ref
-        };
-        actions.push({
-          module_id: assertion.module_id,
-          flow_subject_ref: assertion.flow_subject_ref,
-          subject_ref: assertion.subject_ref,
-          locator_id: assertion.locator_id,
-          claim_ids: [claim.claim_id]
-        });
-      } else if (exactRecord(assertion, ["kind", "predecessor_outcome_id", "successor_outcome_id"]) && assertion.kind === "outcome_dependency" && [assertion.predecessor_outcome_id, assertion.successor_outcome_id].every(nonBlank)) {
-        subject2 = {
-          kind: "outcome_dependency",
-          predecessor_outcome_id: assertion.predecessor_outcome_id,
-          successor_outcome_id: assertion.successor_outcome_id
-        };
-        const decision = claim.claim_form === "decision-record" && nonBlank(claim.decision_id);
-        dependencies.push({
-          predecessor_outcome_id: assertion.predecessor_outcome_id,
-          successor_outcome_id: assertion.successor_outcome_id,
-          basis: decision ? { kind: "decision", decision_ids: [claim.decision_id] } : { kind: "evidence", claim_ids: [claim.claim_id] }
-        });
-        if (decision) {
-          const current2 = verifiedDecisionMap.get(claim.decision_id) ?? {
-            decision_id: claim.decision_id,
-            subjects: /* @__PURE__ */ new Map()
-          };
-          current2.subjects.set(canonicalStringify(subject2), subject2);
-          verifiedDecisionMap.set(claim.decision_id, current2);
-        }
-      }
-      if (!subject2 || claim.claim_form === "decision-record" && subject2.kind === "outcome_dependency") continue;
-      const current = verifiedClaimMap.get(claim.claim_id) ?? {
-        claim_id: claim.claim_id,
-        locator_ids: /* @__PURE__ */ new Set(),
-        subjects: /* @__PURE__ */ new Map()
-      };
-      for (const locatorId of claim.source_locator_ids) current.locator_ids.add(locatorId);
-      current.subjects.set(canonicalStringify(subject2), subject2);
-      verifiedClaimMap.set(claim.claim_id, current);
-    }
-  }
-  return {
-    sources: pack.sources.map((source) => ({ stable_source_id: source.source_id })),
-    locators,
-    modules,
-    flows,
-    actions,
-    dependencies,
-    verified_claims: [...verifiedClaimMap.values()].map((item) => ({
-      claim_id: item.claim_id,
-      locator_ids: unique([...item.locator_ids]),
-      subjects: [...item.subjects.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b)))
-    })).sort((a, b) => compare5(a.claim_id, b.claim_id)),
-    verified_decisions: [...verifiedDecisionMap.values()].map((item) => ({
-      decision_id: item.decision_id,
-      subjects: [...item.subjects.values()].sort((a, b) => compare5(canonicalStringify(a), canonicalStringify(b)))
-    })).sort((a, b) => compare5(a.decision_id, b.decision_id))
-  };
-}
-function semanticEvidenceSystem(evidence) {
-  const baseline_assertions = [];
-  const value_claims = [];
-  const supported_claim_ids = [];
-  const derivations = [];
-  const risk_review_assertions = [];
-  const not_applicable_assertions = [];
-  const diagnostics2 = [];
-  const invalid = (claim, field) => diagnostics2.push({
-    category: "adapter_revision",
-    code: "CLAIM_SEMANTIC_ASSERTION_INVALID",
-    path: `/claims/${claim.claim_id}/semantic_value/${field}`,
-    message: "Structured semantic assertions in a Claim must use their closed production contract."
-  });
-  for (const claim of evidence.claims.filter(supportedBusinessClaim)) {
-    supported_claim_ids.push(claim.claim_id);
-    const container = semanticContainer(claim);
-    const descriptor = claim.subject_descriptor;
-    for (const field of [
-      "relative_baseline_assertions",
-      "test_value_assertions",
-      "test_value_derivations",
-      "risk_review_assertions",
-      "not_applicable_assertions",
-      "ordering_assertions"
-    ]) if (Object.hasOwn(container, field) && !Array.isArray(container[field])) invalid(claim, field);
-    const baselineInputs = semanticArray(claim, "relative_baseline_assertions");
-    const rawBaseline = record15(container.source_value) ? container.source_value : null;
-    if (!baselineInputs.length && record15(rawBaseline) && nonBlank(rawBaseline.reference)) {
-      if (Array.isArray(rawBaseline.exceptions)) baselineInputs.push({
-        reference: rawBaseline.reference,
-        comparison_contract: { kind: "all_observable_behavior_except", exceptions: rawBaseline.exceptions }
-      });
-      else if (Array.isArray(rawBaseline.dimensions) && Array.isArray(rawBaseline.allowed_differences)) baselineInputs.push({
-        reference: rawBaseline.reference,
-        comparison_contract: {
-          kind: "selected_dimensions",
-          dimensions: rawBaseline.dimensions,
-          allowed_differences: rawBaseline.allowed_differences
-        }
-      });
-    }
-    for (const assertion of baselineInputs) {
-      const contract2 = record15(assertion) ? comparisonContract(assertion.comparison_contract) : null;
-      if (!exactRecord(assertion, ["reference", "comparison_contract"]) || !nonBlank(assertion.reference) || !contract2 || !record15(descriptor) || !nonBlank(descriptor.module_id) || !nonBlank(descriptor.scope_ref)) {
-        invalid(claim, "relative_baseline_assertions");
-        continue;
-      }
-      baseline_assertions.push({
-        claim_id: claim.claim_id,
-        module_id: descriptor.module_id,
-        scope_ref: descriptor.scope_ref,
-        reference: assertion.reference,
-        comparison_contract: contract2
-      });
-    }
-    for (const assertion of semanticArray(claim, "test_value_assertions")) {
-      if (!exactRecord(assertion, ["subject_ref", "field_path", "value"]) || !nonBlank(assertion.subject_ref) || !nonBlank(assertion.field_path) || !assertion.field_path.startsWith("/") || !["requirement", "example"].includes(claim.kind)) {
-        invalid(claim, "test_value_assertions");
-        continue;
-      }
-      value_claims.push({
-        claim_id: claim.claim_id,
-        origin_kind: claim.kind,
-        subject_ref: assertion.subject_ref,
-        field_path: assertion.field_path,
-        value: structuredClone(assertion.value),
-        supported: true
-      });
-    }
-    for (const assertion of semanticArray(claim, "test_value_derivations")) {
-      if (claim.claim_form !== "derived" || !exactRecord(assertion, ["method_id", "method_version", "inputs_digest", "input_claim_ids", "subject_ref", "field_path", "value"]) || ![assertion.method_id, assertion.method_version, assertion.inputs_digest, assertion.subject_ref, assertion.field_path].every(nonBlank) || !/^sha256:[0-9a-f]{64}$/u.test(assertion.inputs_digest) || !Array.isArray(assertion.input_claim_ids) || assertion.input_claim_ids.length === 0 || assertion.input_claim_ids.some((id2) => !nonBlank(id2)) || canonicalStringify(unique(assertion.input_claim_ids)) !== canonicalStringify(unique(claim.parent_claim_ids ?? []))) {
-        invalid(claim, "test_value_derivations");
-        continue;
-      }
-      derivations.push({
-        method_id: assertion.method_id,
-        method_version: assertion.method_version,
-        inputs_digest: assertion.inputs_digest,
-        input_claim_ids: unique(assertion.input_claim_ids),
-        subject_ref: assertion.subject_ref,
-        field_path: assertion.field_path,
-        value: structuredClone(assertion.value)
-      });
-    }
-    for (const assertion of semanticArray(claim, "risk_review_assertions")) {
-      if (!exactRecord(assertion, ["module_id", "risk_kind", "status"]) || !nonBlank(assertion.module_id) || !RISK_KINDS2.has(assertion.risk_kind) || !["formal", "semantic_gap"].includes(assertion.status)) {
-        invalid(claim, "risk_review_assertions");
-        continue;
-      }
-      risk_review_assertions.push({ ...structuredClone(assertion), claim_id: claim.claim_id });
-    }
-    for (const assertion of semanticArray(claim, "not_applicable_assertions")) {
-      const subject2 = record15(assertion) ? assertion.subject : null;
-      const riskSubject = exactRecord(subject2, ["kind", "module_id", "risk_kind"]) && subject2.kind === "risk" && nonBlank(subject2.module_id) && RISK_KINDS2.has(subject2.risk_kind);
-      const outcomeSubject = exactRecord(subject2, ["kind", "fact_id", "condition"]) && subject2.kind === "formal_outcome" && nonBlank(subject2.fact_id) && record15(subject2.condition);
-      if (!exactRecord(assertion, ["subject", "acceptance_role", "reason_code", "reason"]) || !riskSubject && !outcomeSubject || !ACCEPTANCE_ROLES.has(assertion.acceptance_role) || !NOT_APPLICABLE_REASONS.has(assertion.reason_code) || !nonBlank(assertion.reason) || /(?:PRD|需求|文档).{0,8}(?:未提及|未说明|未定义)|not\s+(?:mentioned|documented)/iu.test(assertion.reason)) {
-        invalid(claim, "not_applicable_assertions");
-        continue;
-      }
-      const decision = claim.claim_form === "decision-record" && nonBlank(claim.decision_id);
-      not_applicable_assertions.push({
-        subject: structuredClone(subject2),
-        acceptance_role: assertion.acceptance_role,
-        reason_code: assertion.reason_code,
-        reason: assertion.reason,
-        basis: decision ? { kind: "scope_decision", decision_ids: [claim.decision_id] } : { kind: "evidence", claim_ids: [claim.claim_id] }
-      });
-    }
-    for (const assertion of semanticArray(claim, "ordering_assertions")) {
-      const flow = exactRecord(assertion, ["kind", "module_id", "subject_ref", "locator_id"]) && assertion.kind === "flow" && [assertion.module_id, assertion.subject_ref, assertion.locator_id].every(nonBlank);
-      const action = exactRecord(assertion, ["kind", "module_id", "flow_subject_ref", "subject_ref", "locator_id"]) && assertion.kind === "action" && [assertion.module_id, assertion.flow_subject_ref, assertion.subject_ref, assertion.locator_id].every(nonBlank);
-      const dependency = exactRecord(assertion, ["kind", "predecessor_outcome_id", "successor_outcome_id"]) && assertion.kind === "outcome_dependency" && [assertion.predecessor_outcome_id, assertion.successor_outcome_id].every(nonBlank);
-      if (!flow && !action && !dependency || (flow || action) && !claim.source_locator_ids.includes(assertion.locator_id)) {
-        invalid(claim, "ordering_assertions");
-      }
-    }
-  }
-  const byCanonical = (a, b) => compare5(canonicalStringify(a), canonicalStringify(b));
-  return {
-    baseline_assertions: baseline_assertions.sort(byCanonical),
-    value_claims: value_claims.sort(byCanonical),
-    supported_claim_ids: unique(supported_claim_ids),
-    derivations: derivations.sort(byCanonical),
-    risk_review_assertions: risk_review_assertions.sort(byCanonical),
-    not_applicable_assertions: not_applicable_assertions.sort(byCanonical),
-    diagnostics: diagnostics2
-  };
-}
-function deriveV4SystemContext(submittedArtifacts, sourceAcquisition = null) {
-  if (!record15(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4 || !["source_pack", "evidence_claims", "behavior_views", "case_drafts"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
-    throw new TypeError("V4_ARTIFACT_SET_INVALID");
-  }
-  const artifacts = (
-    /** @type {any} */
-    submittedArtifacts
-  );
-  const pack = artifacts.source_pack;
-  const evidence = artifacts.evidence_claims;
-  if (!isV4SchemaVersion(pack?.schema_version) || evidence?.schema_version !== pack.schema_version) {
-    throw new TypeError("V4_ARTIFACT_VERSION_INVALID");
-  }
-  const preCase = deriveV4PreCaseSystemContext(pack, evidence, sourceAcquisition);
-  return {
-    ...preCase,
-    behavior_evidence: behaviorEvidence(evidence),
-    ordering: orderingSystem(pack, evidence),
-    semantic_evidence: semanticEvidenceSystem(evidence)
-  };
-}
-function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, sourceAcquisition = null) {
-  if (!record15(submittedPack) || !record15(submittedEvidence) || !isV4SchemaVersion(submittedPack.schema_version) || submittedEvidence.schema_version !== submittedPack.schema_version) {
-    throw new TypeError("V4_PRE_CASE_ARTIFACT_INVALID");
-  }
-  const pack = (
-    /** @type {any} */
-    submittedPack
-  );
-  const evidence = (
-    /** @type {any} */
-    submittedEvidence
-  );
-  const registries4 = sourceSystem(pack);
-  if (sourceAcquisition !== null && (!record15(sourceAcquisition) || !Array.isArray(sourceAcquisition.verified_source_receipts) || !Array.isArray(sourceAcquisition.verified_acquisition_records) || Object.keys(sourceAcquisition).some((key) => ![
-    "verified_source_receipts",
-    "verified_acquisition_records",
-    "source_reading_summary"
-  ].includes(key)))) throw new TypeError("V4_SOURCE_ACQUISITION_CONTEXT_INVALID");
-  const receipts = sourceAcquisition?.verified_source_receipts ?? [];
-  const canonical_source_structure = canonicalTopologyStructure(pack);
-  const topology = topologySystem(evidence, canonical_source_structure);
-  const source = {
-    provider_registry: registries4.provider_registry,
-    expiry_registry: registries4.expiry_registry,
-    subject_registry: subjectRegistry(pack, evidence),
-    acquisitions: reconstructibleAcquisitions(pack, registries4, receipts),
-    ...sourceAcquisition ? {
-      verified_source_receipts: structuredClone(sourceAcquisition.verified_source_receipts),
-      verified_acquisition_records: structuredClone(sourceAcquisition.verified_acquisition_records)
-    } : {}
-  };
-  const claim_assessments = evidence.claims.filter((claim) => claim.domain === "business").map((claim) => ({
-    claim_id: claim.claim_id,
-    domain: "business_semantics",
-    level: claim.level,
-    support_review: claim.level === "E1" && claim.claim_form !== "decision-record" ? "uncertain" : "supported"
-  }));
-  return {
-    source,
-    topology,
-    interaction: { verified_claims: topology.verified_claims },
-    claim_assessments,
-    decisions: { delivery_requested: false, root_statuses: [] }
-  };
 }
 
 // src/source-acquisition-v4.mjs
@@ -53425,6 +55162,7 @@ init_canonical();
 init_source_canonicalization();
 init_schema_validator();
 await init_run_store();
+init_v4_contract();
 
 // src/prd-source-collection-v4.mjs
 init_canonical();
@@ -53438,11 +55176,11 @@ var ACQUISITION = /* @__PURE__ */ new Set(["acquired", "unavailable", "unread"])
 var REVIEW = /* @__PURE__ */ new Set(["reviewed", "unread", "unavailable"]);
 var CREDENTIAL_KEY = /(?:^|[?&;\s])(?:authorization|cookie|password|passwd|secret|api[_-]?key|access[_-]?key|token|signature|sig|credential|security-token|x-amz-[a-z0-9-]+|x-oss-[a-z0-9-]+)\s*[:=]/iu;
 var AUTH_VALUE = /(?:^|\s)(?:bearer|basic)\s+[a-z0-9+/=_-]+/iu;
-function record16(value) {
+function record19(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function only(value, keys) {
-  return record16(value) && Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
+  return record19(value) && Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
 }
 function bytesDigest(value) {
   return `sha256:${createHash13("sha256").update(value).digest("hex")}`;
@@ -53475,20 +55213,20 @@ function safeDurableValues(value) {
       }
     } else if (Array.isArray(item)) {
       for (const child of item) pending.push(child);
-    } else if (record16(item)) {
+    } else if (record19(item)) {
       for (const [key, child] of Object.entries(item)) pending.push(key, child);
     }
   }
   return true;
 }
 function validateReply(reply, identity2) {
-  if (!record16(reply) || reply.status !== "need_revision" || reply.stage !== "source_pack" || reply.run_id !== identity2.run_id || !record16(reply.scope) || reply.scope.run_instance_id !== identity2.run_id || !Number.isSafeInteger(reply.scope.source_revision) || reply.scope.source_revision < 0) {
+  if (!record19(reply) || reply.status !== "need_revision" || reply.stage !== "source_pack" || reply.run_id !== identity2.run_id || !record19(reply.scope) || reply.scope.run_instance_id !== identity2.run_id || !Number.isSafeInteger(reply.scope.source_revision) || reply.scope.source_revision < 0) {
     throw new TypeError("SOURCE_COLLECTION_REPLY_STALE");
   }
   return reply.scope.source_revision;
 }
 function validateObservation(input) {
-  if (!record16(input)) throw new TypeError("SOURCE_COLLECTION_OBSERVATION_INVALID");
+  if (!record19(input)) throw new TypeError("SOURCE_COLLECTION_OBSERVATION_INVALID");
   const observation = input;
   if (!only(observation, ["version", "scope", "channels", "items"]) || observation.version !== "1.0.0" || !only(observation.scope, ["mode", "root_ref", "collection_window", "source_version"]) || !["online_document", "provided_materials"].includes(observation.scope.mode) || typeof observation.scope.root_ref !== "string" || !observation.scope.root_ref.trim() || !only(observation.scope.collection_window, ["started_at", "ended_at"]) || typeof observation.scope.collection_window.started_at !== "string" || typeof observation.scope.collection_window.ended_at !== "string" || !(typeof observation.scope.source_version === "string" || observation.scope.source_version === null) || !Array.isArray(observation.channels) || !Array.isArray(observation.items) || !safeDurableValues(observation)) {
     throw new TypeError("SOURCE_COLLECTION_OBSERVATION_INVALID");
@@ -53634,8 +55372,8 @@ async function stageV4PrdCollectionObservation(runDirectory, submittedReply, sub
   const observation = validateObservation(submittedObservation);
   const session = materializeSession(observation, submittedMaterials);
   const body = {
-    schema_version: CANDIDATE_V4_CONTRACT.schema_version,
-    compiler_version: CANDIDATE_V4_CONTRACT.compiler_version,
+    schema_version: contract2.schema_version,
+    compiler_version: contract2.compiler_version,
     registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
     run_id: identity2.run_id,
     source_revision: revision,
@@ -53662,14 +55400,15 @@ async function bindV4PrdCollectionObservation(runDirectory, submittedSourcePack)
     /** @type {any} */
     structuredClone(submittedSourcePack)
   );
-  if (!staged || !record16(sourcePack) || staged.value.schema_version !== "4.2.0" || sourcePack.schema_version !== "4.2.0" || staged.value.run_id !== sourcePack.run_instance_id || staged.value.source_revision !== sourcePack.source_revision) {
+  const contract2 = staged ? v4ContractForIdentity(staged.value) : null;
+  if (!staged || !contract2?.candidate || !record19(sourcePack) || sourcePack.schema_version !== contract2.schema_version || staged.value.run_id !== sourcePack.run_instance_id || staged.value.source_revision !== sourcePack.source_revision) {
     throw new TypeError("SOURCE_COLLECTION_BINDING_INVALID");
   }
   const session = bindSession(staged.value.collection_session, sourcePack);
   const summary = summaryFor(session, sourcePack);
   const body = {
-    schema_version: CANDIDATE_V4_CONTRACT.schema_version,
-    compiler_version: CANDIDATE_V4_CONTRACT.compiler_version,
+    schema_version: contract2.schema_version,
+    compiler_version: contract2.compiler_version,
     registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
     run_id: sourcePack.run_instance_id,
     committed_revision: sourcePack.source_revision,
@@ -53700,11 +55439,11 @@ init_v4_contract();
 var EVENT_ID2 = /^EVENT-[0-9a-f]{64}$/u;
 var HASH = /^sha256:[0-9a-f]{64}$/u;
 var encoder = new TextEncoder();
-function record17(value) {
+function record20(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function only2(value, keys) {
-  return record17(value) && Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
+  return record20(value) && Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
 }
 var hash4 = (value) => `sha256:${digest(value)}`;
 var compare6 = (left, right) => left < right ? -1 : left > right ? 1 : 0;
@@ -53791,7 +55530,7 @@ function collectStrings(value, pointer, sourceId, output) {
     value.forEach((item, index) => collectStrings(item, `${pointer}/${index}`, sourceId, output));
     return;
   }
-  if (!record17(value)) return;
+  if (!record20(value)) return;
   const localSourceId = typeof value.source_id === "string" ? value.source_id : sourceId;
   for (const [key, item] of Object.entries(value)) {
     const escaped = key.replaceAll("~", "~0").replaceAll("/", "~1");
@@ -54009,7 +55748,7 @@ function verifyCandidateSources(sourcePack, bindings, events, material) {
   const affectedSourceIds = [...new Set(bindings.map((binding) => binding.source_id))].sort(compare6);
   return affectedSourceIds.map((sourceId) => {
     const source = sourcePack.sources.find((item) => item.source_id === sourceId);
-    if (!source || !record17(source.semantic_projection)) {
+    if (!source || !record20(source.semantic_projection)) {
       throw new TypeError("ARTIFACT_SOURCE_BINDING_INVALID");
     }
     const sourceBindings = bindings.filter((binding) => binding.source_id === sourceId);
@@ -54042,13 +55781,13 @@ function verifyCandidateSources(sourcePack, bindings, events, material) {
     const assets = [];
     for (const binding of sourceBindings.filter((item) => item.target === "asset")) {
       const bytes = material.get(binding.artifact_request_id);
-      const record20 = sourcePack.source_assets.find(
+      const record23 = sourcePack.source_assets.find(
         (item) => item.source_id === sourceId && item.asset_id === binding.asset_id
       );
-      if (!(bytes instanceof Uint8Array) || !record20 || record20.status !== "reviewed" || record20.asset_digest !== sourceByteDigest(bytes) || !source.semantic_projection.assets.some(
-        (asset) => asset.canonical_uri === record20.canonical_uri && asset.asset_digest === record20.asset_digest
+      if (!(bytes instanceof Uint8Array) || !record23 || record23.status !== "reviewed" || record23.asset_digest !== sourceByteDigest(bytes) || !source.semantic_projection.assets.some(
+        (asset) => asset.canonical_uri === record23.canonical_uri && asset.asset_digest === record23.asset_digest
       )) throw new TypeError("ARTIFACT_SOURCE_BINDING_INVALID");
-      assets.push({ retrieval_uri: record20.canonical_uri, bytes });
+      assets.push({ retrieval_uri: record23.canonical_uri, bytes });
     }
     if (source.semantic_projection.assets.length !== assets.length) {
       throw new TypeError("ARTIFACT_SOURCE_BINDING_INVALID");
@@ -54547,7 +56286,7 @@ async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
   return {
     verified_source_receipts: structuredClone(state.source_receipts),
     verified_acquisition_records: structuredClone(state.acquisitions),
-    ...state.schema_version === "4.2.0" ? { source_reading_summary: structuredClone(state.summary) } : {}
+    ...isCandidateV4SchemaVersion(state.schema_version) ? { source_reading_summary: structuredClone(state.summary) } : {}
   };
 }
 
@@ -54562,7 +56301,7 @@ var STAGES = (
   ["source_pack", "evidence_claims", "behavior_views", "case_drafts"]
 );
 var SHA2564 = /^sha256:[0-9a-f]{64}$/u;
-function record18(value) {
+function record21(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function stagePhase(stage) {
@@ -54595,7 +56334,7 @@ function artifactRequest(runDirectory, stage, sourceRevision, runInstanceId, non
     non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
-function revisionReply2(runDirectory, stage, sourceRevision, artifact, diagnostics2, runInstanceId, nonBlockingDiagnostics = []) {
+function revisionReply2(runDirectory, stage, sourceRevision, artifact, diagnostics2, runInstanceId, nonBlockingDiagnostics = [], reviewRequest = null) {
   const route = routeGapCategoryV4("adapter_revision", { delivery_intent: "case_document" });
   const stable = diagnostics2.map((item) => ({
     category: String(item.category ?? "adapter_revision"),
@@ -54623,6 +56362,7 @@ function revisionReply2(runDirectory, stage, sourceRevision, artifact, diagnosti
       mode: "retry_current_run",
       description: "\u4FDD\u7559\u5DF2\u63A5\u53D7 revision\uFF0C\u53EA\u66FF\u6362\u5C1A\u672A\u63A5\u53D7\u7684 staging \u5019\u9009\u5DE5\u4EF6\u3002"
     },
+    ...reviewRequest ? { review_request: structuredClone(reviewRequest) } : {},
     non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
@@ -54819,7 +56559,7 @@ function finalTransaction(runId, sourcePack, evidence, behaviorViews, obligation
     bundle: jsonArtifact2(JSON.parse(materialized.bundle_bytes)),
     markdown: textArtifact(materialized.markdown_bytes),
     worksheet: textArtifact(materialized.worksheet_bytes),
-    ...sourcePack.schema_version === "4.2.0" ? {
+    ...isCandidateV4SchemaVersion(sourcePack.schema_version) ? {
       html: textArtifact(materialized.html_bytes),
       table: textArtifact(materialized.table_bytes),
       source_reading: jsonArtifact2(JSON.parse(materialized.source_reading_bytes))
@@ -54914,7 +56654,7 @@ function sourceAcquisitionCancellation(source, runId, revision) {
 }
 function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false) {
   const output = [];
-  const problem2 = (code2, pathValue, message) => output.push({
+  const problem3 = (code2, pathValue, message) => output.push({
     category: "traceability",
     code: code2,
     path: pathValue,
@@ -54928,42 +56668,42 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
     "source_policy",
     "source_assets",
     "execution_events"
-  ]) if (!same2(prior[key], candidate[key])) problem2(
+  ]) if (!same2(prior[key], candidate[key])) problem3(
     "V4_SOURCE_APPEND_IMMUTABLE_CHANGED",
     `/${key}`,
     `Clarification revisions must preserve ${key}.`
   );
   if (!acquisitionVerified && !same2(prior.artifact_events, candidate.artifact_events)) {
-    problem2(
+    problem3(
       "V4_SOURCE_APPEND_IMMUTABLE_CHANGED",
       "/artifact_events",
       "Clarification revisions may change artifact_events only through verified source acquisition."
     );
   }
   if (!Array.isArray(candidate.decision_records) || candidate.decision_records.length > 0 && !same2(candidate.decision_records, prior.decision_records)) {
-    problem2(
+    problem3(
       "V4_DECISION_JOURNAL_COMPILER_OWNED",
       "/decision_records",
       "The Adapter must carry no Decision records or the exact committed compiler journal."
     );
   }
   if (!Array.isArray(prior.clarification_events) || !Array.isArray(candidate.clarification_events) || !exactPrefix(prior.clarification_events, candidate.clarification_events) || candidate.clarification_events.length === prior.clarification_events.length) {
-    problem2(
+    problem3(
       "V4_CLARIFICATION_APPEND_INVALID",
       "/clarification_events",
       "A higher clarification revision must append at least one event to the exact committed prefix."
     );
   }
   if (!Array.isArray(prior.sources) || !Array.isArray(candidate.sources) || prior.sources.length !== candidate.sources.length) {
-    problem2("V4_SOURCE_SET_CHANGED", "/sources", "Clarification cannot add, remove, or reorder original sources.");
+    problem3("V4_SOURCE_SET_CHANGED", "/sources", "Clarification cannot add, remove, or reorder original sources.");
     return output;
   }
   const appendedUnitIds = /* @__PURE__ */ new Set();
   for (let index = 0; index < prior.sources.length; index += 1) {
     const before = prior.sources[index];
     const after = candidate.sources[index];
-    if (!record18(before) || !record18(after) || before.source_id !== after.source_id || !record18(before.semantic_projection) || !record18(after.semantic_projection)) {
-      problem2("V4_SOURCE_SET_CHANGED", `/sources/${index}`, "Source identity and projection must remain bound.");
+    if (!record21(before) || !record21(after) || before.source_id !== after.source_id || !record21(before.semantic_projection) || !record21(after.semantic_projection)) {
+      problem3("V4_SOURCE_SET_CHANGED", `/sources/${index}`, "Source identity and projection must remain bound.");
       continue;
     }
     const beforeStable = structuredClone(before);
@@ -54975,7 +56715,7 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
     delete beforeStable.semantic_projection.structure;
     delete afterStable.semantic_projection.structure;
     if (!same2(beforeStable, afterStable) || !Array.isArray(beforeStructure) || !Array.isArray(afterStructure) || !exactPrefix(beforeStructure, afterStructure)) {
-      problem2(
+      problem3(
         "V4_SOURCE_BYTES_CHANGED",
         `/sources/${index}`,
         "Only appended canonical user-statement units may change a clarification source projection."
@@ -54983,8 +56723,8 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
       continue;
     }
     for (const unit of afterStructure.slice(beforeStructure.length)) {
-      if (!record18(unit) || unit.type !== "user_statement" || typeof unit.unit_id !== "string") {
-        problem2(
+      if (!record21(unit) || unit.type !== "user_statement" || typeof unit.unit_id !== "string") {
+        problem3(
           "V4_USER_STATEMENT_UNIT_INVALID",
           `/sources/${index}/semantic_projection/structure`,
           "Every appended source unit must be an exact user_statement."
@@ -54992,7 +56732,7 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
       } else appendedUnitIds.add(unit.unit_id);
     }
     if (after.semantic_digest !== `sha256:${digest(after.semantic_projection)}`) {
-      problem2(
+      problem3(
         "V4_SOURCE_SEMANTIC_DIGEST_MISMATCH",
         `/sources/${index}/semantic_digest`,
         "The changed semantic projection must carry its exact canonical digest."
@@ -55004,21 +56744,21 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
   for (const [locatorId, before] of priorLocators) {
     const after = candidateLocators.get(locatorId);
     if (!after) {
-      problem2("V4_LOCATOR_REMOVED", "/locators", `Committed locator ${locatorId} was removed.`);
+      problem3("V4_LOCATOR_REMOVED", "/locators", `Committed locator ${locatorId} was removed.`);
       continue;
     }
     const beforeStable = structuredClone(before);
     const afterStable = structuredClone(after);
     delete beforeStable.semantic_digest;
     delete afterStable.semantic_digest;
-    if (!same2(beforeStable, afterStable)) problem2(
+    if (!same2(beforeStable, afterStable)) problem3(
       "V4_LOCATOR_CHANGED",
       "/locators",
       `Committed locator ${locatorId} changed outside its source semantic digest.`
     );
   }
   for (const [locatorId, locator] of candidateLocators) if (!priorLocators.has(locatorId)) {
-    if (locator.type !== "user_statement" || !appendedUnitIds.has(locator.unit_id)) problem2(
+    if (locator.type !== "user_statement" || !appendedUnitIds.has(locator.unit_id)) problem3(
       "V4_USER_STATEMENT_LOCATOR_INVALID",
       "/locators",
       `New locator ${locatorId} must bind one newly appended user_statement unit.`
@@ -55026,7 +56766,7 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
   }
   const priorReviews = new Map(prior.source_reviews.map((item) => [item.source_id, item]));
   const candidateReviews = new Map(candidate.source_reviews.map((item) => [item.source_id, item]));
-  if (priorReviews.size !== candidateReviews.size) problem2(
+  if (priorReviews.size !== candidateReviews.size) problem3(
     "V4_SOURCE_REVIEW_SET_CHANGED",
     "/source_reviews",
     "Source review owners cannot change during clarification."
@@ -55034,7 +56774,7 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
   for (const [sourceId, before] of priorReviews) {
     const after = candidateReviews.get(sourceId);
     if (!after || !Array.isArray(before.units) || !Array.isArray(after.units) || !exactPrefix(before.units, after.units)) {
-      problem2(
+      problem3(
         "V4_SOURCE_REVIEW_CHANGED",
         "/source_reviews",
         `Review history for ${sourceId} must preserve the committed prefix.`
@@ -55049,7 +56789,7 @@ function semanticAppendDiagnostics(prior, candidate, acquisitionVerified = false
     stableAfter.units = [];
     if (!same2(stableBefore, stableAfter) || after.units.slice(before.units.length).some(
       (item) => !appendedUnitIds.has(item.unit_id) || item.classification !== "non_normative"
-    )) problem2(
+    )) problem3(
       "V4_SOURCE_REVIEW_CHANGED",
       "/source_reviews",
       `Review history for ${sourceId} may append only non-normative user statements.`
@@ -55118,7 +56858,7 @@ async function presentationHistory(runDirectory, revision) {
   }
   return history;
 }
-function withClarificationState(system, checkpoint2) {
+function withClarificationState(system, checkpoint2, decisionRecords = []) {
   const states = checkpoint2?.clarification_state?.root_states ?? [];
   return {
     ...system,
@@ -55126,8 +56866,10 @@ function withClarificationState(system, checkpoint2) {
       delivery_requested: states.length > 0 && states.every((item) => item.status !== "presented"),
       root_statuses: states.map((item) => ({
         root_issue_id: item.root_issue_id,
+        root_version_digest: item.root_version_digest,
         status: item.status
-      }))
+      })),
+      records: structuredClone(decisionRecords)
     }
   };
 }
@@ -55272,7 +57014,7 @@ async function consumeSemanticAppend(runDirectory, registry, artifacts, revision
       runId
     )
   };
-  if (!record18(candidate.value)) return { kind: "none" };
+  if (!record21(candidate.value)) return { kind: "none" };
   if (candidate.value.source_revision === revision) {
     const replayCandidate = structuredClone(candidate.value);
     replayCandidate.decision_records = structuredClone(artifacts.source_pack.decision_records);
@@ -55550,7 +57292,7 @@ async function postCaseArtifactCandidate(runDirectory, registry, stage, prior, n
     source_revision: nextRevision
   };
   const stageDiagnostics = snapshot2?.parse_diagnostics.length ? snapshot2.parse_diagnostics : diagnostics(value, registry.schemas.get(AGENT_STAGE_SCHEMA[stage]));
-  if (stageDiagnostics.length || !record18(value) || value.schema_version !== prior.schema_version || value.source_revision !== nextRevision) {
+  if (stageDiagnostics.length || !record21(value) || value.schema_version !== prior.schema_version || value.source_revision !== nextRevision) {
     return {
       kind: "reply",
       reply: revisionReply2(
@@ -55600,7 +57342,7 @@ async function consumePostCaseAppend(runDirectory, registry, artifacts, revision
       runId
     )
   };
-  if (!record18(candidate.value)) return { kind: "none" };
+  if (!record21(candidate.value)) return { kind: "none" };
   if (candidate.value.source_revision === revision) {
     const replayCandidate = structuredClone(candidate.value);
     replayCandidate.decision_records = structuredClone(artifacts.source_pack.decision_records);
@@ -55814,7 +57556,8 @@ async function consumePostCaseAppend(runDirectory, registry, artifacts, revision
   try {
     system = withClarificationState(
       await completeSystem(runDirectory, nextArtifacts),
-      applied.checkpoint
+      applied.checkpoint,
+      nextArtifacts.source_pack.decision_records
     );
     result = compileCaseDocumentRevisionV4(nextArtifacts, system);
   } catch (error) {
@@ -55837,11 +57580,13 @@ async function consumePostCaseAppend(runDirectory, registry, artifacts, revision
       /** @type {Record<string,any>} */
       nextArtifacts[resultStage(result)],
       result.diagnostics ?? [],
-      runId
+      runId,
+      [],
+      result.review_request ?? null
     )
   };
   if (result.status === "need_artifact") return { kind: "reply", reply: result };
-  if (result.status === "fatal" || !["need_user_answers", "compiled"].includes(result.status) || !record18(result.obligations)) return {
+  if (result.status === "fatal" || !["need_user_answers", "compiled"].includes(result.status) || !record21(result.obligations)) return {
     kind: "reply",
     reply: qualityFailure3(
       runId,
@@ -55972,7 +57717,11 @@ async function finalizeCaseDocumentRevision(runDirectory, runId, completedAt, ar
   try {
     if (!result || result.status !== "compiled") result = compileCaseDocumentRevisionV4(
       artifacts,
-      withClarificationState(await completeSystem(runDirectory, artifacts), checkpoint2)
+      withClarificationState(
+        await completeSystem(runDirectory, artifacts),
+        checkpoint2,
+        artifacts.source_pack.decision_records
+      )
     );
   } catch (error) {
     return qualityFailure3(
@@ -55990,7 +57739,8 @@ async function finalizeCaseDocumentRevision(runDirectory, runId, completedAt, ar
     artifacts[resultStage(result)],
     result.diagnostics ?? [],
     runId,
-    nonBlockingDiagnostics
+    nonBlockingDiagnostics,
+    result.review_request ?? null
   );
   if (result.status === "need_artifact") return {
     ...result,
@@ -55999,7 +57749,7 @@ async function finalizeCaseDocumentRevision(runDirectory, runId, completedAt, ar
       ...structuredClone(nonBlockingDiagnostics)
     ])
   };
-  if (result.status !== "compiled" || !record18(result.obligations)) return qualityFailure3(
+  if (result.status !== "compiled" || !record21(result.obligations)) return qualityFailure3(
     runId,
     "case_design",
     result.reason_code ?? "V4_CASE_DOCUMENT_QUALITY_FAILURE",
@@ -56017,7 +57767,7 @@ async function finalizeCaseDocumentRevision(runDirectory, runId, completedAt, ar
       run_id: runId,
       completed_at: completedAt,
       bundle: result.bundle,
-      ...artifacts.source_pack.schema_version === "4.2.0" ? {
+      ...isCandidateV4SchemaVersion(artifacts.source_pack.schema_version) ? {
         source_reading: await loadV4SourceReadingSummary(runDirectory, artifacts.source_pack)
       } : {},
       render_options: { include_audit_appendix: false },
@@ -56085,7 +57835,7 @@ async function acceptedPrefix(runDirectory, revision, registry, runInstance) {
       continue;
     }
     if (missing) throw new TypeError("V4_ACCEPTED_STAGE_PREFIX_INVALID");
-    if (!record18(stored.value) || stored.value.schema_version !== runInstance.schema_version || stored.value.source_revision !== revision || stage === "source_pack" && stored.value.run_instance_id !== runInstance.run_id || diagnostics(stored.value, registry.schemas.get(AGENT_STAGE_SCHEMA[stage])).length) {
+    if (!record21(stored.value) || stored.value.schema_version !== runInstance.schema_version || stored.value.source_revision !== revision || stage === "source_pack" && stored.value.run_instance_id !== runInstance.run_id || diagnostics(stored.value, registry.schemas.get(AGENT_STAGE_SCHEMA[stage])).length) {
       throw new TypeError("V4_ACCEPTED_ARTIFACT_INVALID");
     }
     artifacts[stage] = stored.value;
@@ -56279,7 +58029,7 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
     runId,
     advancedDiagnostics
   );
-  if (!record18(candidate.value) || (isV4SchemaVersion(runInstance.schema_version) ? candidate.value.schema_version !== runInstance.schema_version : !isV4SchemaVersion(candidate.value.schema_version)) || candidate.value.source_revision !== revision) {
+  if (!record21(candidate.value) || (isV4SchemaVersion(runInstance.schema_version) ? candidate.value.schema_version !== runInstance.schema_version : !isV4SchemaVersion(candidate.value.schema_version)) || candidate.value.source_revision !== revision) {
     return revisionReply2(runDirectory, nextStage, revision, candidate.value, [{
       category: "traceability",
       code: "SOURCE_REVISION_MISMATCH",
@@ -56406,7 +58156,8 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
       prospective[resultStage(result)],
       result.diagnostics ?? [],
       runId,
-      advancedDiagnostics
+      advancedDiagnostics,
+      result.review_request ?? null
     );
     if (result.status === "need_artifact") return result;
     if (result.status === "fatal") return qualityFailure3(
@@ -56456,7 +58207,8 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
     try {
       system = withClarificationState(
         await completeSystem(runDirectory, prospective),
-        semanticCheckpoint
+        semanticCheckpoint,
+        prospective.source_pack.decision_records
       );
     } catch (error) {
       return revisionReply2(runDirectory, "evidence_claims", revision, prospective.evidence_claims, [{
@@ -56474,10 +58226,11 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
       prospective[resultStage(result)],
       result.diagnostics ?? [],
       runId,
-      advancedDiagnostics
+      advancedDiagnostics,
+      result.review_request ?? null
     );
     if (result.status === "need_artifact") return result;
-    if (!["need_user_answers", "compiled"].includes(result.status) || !record18(result.obligations)) return qualityFailure3(
+    if (!["need_user_answers", "compiled"].includes(result.status) || !record21(result.obligations)) return qualityFailure3(
       runId,
       "case_design",
       result.reason_code ?? "V4_CASE_DOCUMENT_QUALITY_FAILURE",
@@ -56564,7 +58317,8 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
         probe,
         withClarificationState(
           await completeSystem(runDirectory, probe),
-          semanticCheckpoint
+          semanticCheckpoint,
+          prospective.source_pack.decision_records
         )
       );
       if (result.status === "need_revision" && result.stage !== "case_drafts") return revisionReply2(
@@ -56602,9 +58356,9 @@ var schemaDirectory = path12.resolve(
   moduleDirectory,
   true ? "schemas" : "../skill/generate-test-cases/scripts/schemas"
 );
-var embeddedManifestDigest = true ? "09992d955ae67dd3039a53d223cc688b8c6cd6814f61fc16af6071d74fcb256e" : void 0;
-var embeddedSchemaVersion = true ? "4.2.0" : void 0;
-var embeddedCompilerVersion = true ? "0.7.0" : void 0;
+var embeddedManifestDigest = true ? "f091b55165b642f52d171d4eecb9248921118a0ba4cab72fc7823590e12cd1ae" : void 0;
+var embeddedSchemaVersion = true ? "4.3.0" : void 0;
+var embeddedCompilerVersion = true ? "0.8.0" : void 0;
 var STAGE_SCHEMA = AGENT_STAGE_SCHEMA;
 var NATIVE_ARRAY3 = Array;
 var NATIVE_MAP3 = Map;
@@ -57366,29 +59120,29 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
         "RUN_INTEGRITY_ERROR",
         "Accepted artifacts must preserve the fixed stage prefix."
       );
-      const record20 = (
+      const record23 = (
         /** @type {Record<string, unknown>} */
         artifact.value
       );
-      if (record20.source_revision !== sourceRevision) return fatalReply(
+      if (record23.source_revision !== sourceRevision) return fatalReply(
         "RUN_INTEGRITY_ERROR",
         `Accepted ${typedStage} revision does not match its directory.`
       );
-      if (artifactDiagnostics(record20, registry.schemas.get(STAGE_SCHEMA[typedStage])).length > 0) {
+      if (artifactDiagnostics(record23, registry.schemas.get(STAGE_SCHEMA[typedStage])).length > 0) {
         return fatalReply(
           "RUN_INTEGRITY_ERROR",
           `Accepted ${typedStage} failed deterministic schema validation.`
         );
       }
       if (typedStage === "evidence_claims") {
-        evidenceClaims = record20;
+        evidenceClaims = record23;
         const acceptedEvidence = validateEvidenceGraph(sourcePack, evidenceClaims);
         if (acceptedEvidence.diagnostics.length > 0 || adapterEvidenceDiagnostics(evidenceClaims, acceptedEvidence.claimsById).length > 0) return fatalReply(
           "RUN_INTEGRITY_ERROR",
           "Accepted evidence_claims failed deterministic semantic validation."
         );
       } else if (typedStage === "behavior_views") {
-        behaviorViews = record20;
+        behaviorViews = record23;
         const derived = deriveObligations(
           sourcePack,
           /** @type {Record<string, unknown>} */
@@ -57401,7 +59155,7 @@ async function acceptedRunIntegrity(runDirectory, revisions, registry, runInstan
           "Accepted behavior_views failed deterministic semantic validation."
         );
         compiledObligations = derived.artifact.obligations;
-      } else caseDrafts = record20;
+      } else caseDrafts = record23;
     }
     const clarificationInput = sourceRevision === 0 ? {
       prior_state: initialClarificationState(0, maximumEventSequence2(sourcePack)),
@@ -58516,11 +60270,11 @@ init_decision_record();
 init_execution_events();
 init_schema_validator();
 init_source_canonicalization();
-function record19(value) {
+function record22(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function exactKeys(value, keys, code2) {
-  if (!record19(value)) throw new TypeError(code2);
+  if (!record22(value)) throw new TypeError(code2);
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
   if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) throw new TypeError(code2);
@@ -58570,7 +60324,7 @@ function semanticAction(presentation, request) {
       "origin_type",
       "answer_start_scalar"
     ];
-    if (!record19(request) || Object.keys(request).some((key) => !allowed.includes(key)) || allowed.slice(0, 6).some((key) => !Object.hasOwn(request, key))) {
+    if (!record22(request) || Object.keys(request).some((key) => !allowed.includes(key)) || allowed.slice(0, 6).some((key) => !Object.hasOwn(request, key))) {
       throw new TypeError("V4_ACTION_REQUEST_INVALID");
     }
     const part = presentation.question_parts.find(
@@ -58677,11 +60431,41 @@ function executionAction(presentation, request) {
   }).length) throw new TypeError("V4_ACTION_EVENT_INVALID");
   return event;
 }
+function constructIndependentReviewCompletionV4(submittedReply, submittedReviewBody) {
+  if (!record22(submittedReply) || !record22(submittedReply.review_request) || !record22(submittedReviewBody)) throw new TypeError("INDEPENDENT_REVIEW_ACTION_INVALID");
+  exactKeys(
+    submittedReviewBody,
+    ["target_assessments", "findings"],
+    "INDEPENDENT_REVIEW_ACTION_INVALID"
+  );
+  const request = submittedReply.review_request;
+  exactKeys(request, [
+    "protocol_version",
+    "review_mode",
+    "reviewer_identity",
+    "source_first_targets",
+    "review_target_digest",
+    "review_target_projection"
+  ], "INDEPENDENT_REVIEW_REQUEST_INVALID");
+  if (request.protocol_version !== "1.0.0" || request.review_mode !== "independent_source_first" || !Array.isArray(request.source_first_targets) || typeof request.review_target_digest !== "string" || !Array.isArray(submittedReviewBody.target_assessments) || !Array.isArray(submittedReviewBody.findings)) {
+    throw new TypeError("INDEPENDENT_REVIEW_ACTION_INVALID");
+  }
+  return {
+    protocol_version: request.protocol_version,
+    status: "completed",
+    review_mode: request.review_mode,
+    reviewer_identity: structuredClone(request.reviewer_identity),
+    source_first_targets: structuredClone(request.source_first_targets),
+    review_target_digest: request.review_target_digest,
+    target_assessments: structuredClone(submittedReviewBody.target_assessments),
+    findings: structuredClone(submittedReviewBody.findings)
+  };
+}
 function constructV4Action(submittedReply, submittedRequest) {
   const reply = validatedReply(submittedReply);
   const request = (
     /** @type {Record<string,any>} */
-    record19(submittedRequest) ? structuredClone(submittedRequest) : {}
+    record22(submittedRequest) ? structuredClone(submittedRequest) : {}
   );
   if (typeof request.action !== "string") throw new TypeError("V4_ACTION_REQUEST_INVALID");
   if (reply.semantic_presentation) {
@@ -58756,7 +60540,7 @@ async function createV4RunDirectory(submittedCatalogRoot, request, unexpected) {
   const bootstrap = {
     run_id: runId,
     delivery_intent: deliveryIntent,
-    contract: CANDIDATE_V4_CONTRACT
+    contract: GENERAL_QUALITY_V4_CONTRACT
   };
   const run = await ensureV4RunInstance(runDirectory, {
     ...bootstrap
@@ -58778,7 +60562,7 @@ function fatalReply2(code2, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split(".")[0], 10);
-    const compilerVersion = true ? "0.7.0" : "0.7.0";
+    const compilerVersion = true ? "0.8.0" : "0.8.0";
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1 ? fatalReply2(
       "RUNNER_ARGUMENTS_INVALID",
@@ -58816,6 +60600,7 @@ try {
 if (directExecution) await main();
 export {
   advanceStrict,
+  constructIndependentReviewCompletionV4,
   constructV4Action,
   createV4RunDirectory,
   sourceAcquisitionMaterialPathV4,

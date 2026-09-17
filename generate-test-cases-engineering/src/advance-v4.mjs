@@ -37,7 +37,9 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
-import { isV4SchemaVersion, v4ContractForSchema } from './v4-contract.mjs';
+import {
+  isCandidateV4SchemaVersion, isV4SchemaVersion, v4ContractForSchema
+} from './v4-contract.mjs';
 import { loadV4SourceReadingSummary } from './prd-source-collection-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
@@ -82,10 +84,10 @@ function artifactRequest(
 
 /** @param {string} runDirectory @param {typeof STAGES[number]} stage @param {number} sourceRevision
  * @param {unknown} artifact @param {any[]} diagnostics @param {string} runInstanceId
- * @param {any[]} [nonBlockingDiagnostics] */
+ * @param {any[]} [nonBlockingDiagnostics] @param {any|null} [reviewRequest] */
 function revisionReply(
   runDirectory, stage, sourceRevision, artifact, diagnostics, runInstanceId,
-  nonBlockingDiagnostics = []
+  nonBlockingDiagnostics = [], reviewRequest = null
 ) {
   const route = routeGapCategoryV4('adapter_revision', { delivery_intent: 'case_document' });
   const stable = diagnostics.map(item => ({
@@ -108,6 +110,7 @@ function revisionReply(
       mode: 'retry_current_run',
       description: '保留已接受 revision，只替换尚未接受的 staging 候选工件。'
     },
+    ...(reviewRequest ? { review_request: structuredClone(reviewRequest) } : {}),
     non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
@@ -321,7 +324,7 @@ function finalTransaction(
     bundle: jsonArtifact(JSON.parse(materialized.bundle_bytes)),
     markdown: textArtifact(materialized.markdown_bytes),
     worksheet: textArtifact(materialized.worksheet_bytes),
-    ...(sourcePack.schema_version === '4.2.0' ? {
+    ...(isCandidateV4SchemaVersion(sourcePack.schema_version) ? {
       html: textArtifact(materialized.html_bytes),
       table: textArtifact(materialized.table_bytes),
       source_reading: jsonArtifact(JSON.parse(materialized.source_reading_bytes))
@@ -621,16 +624,19 @@ async function presentationHistory(runDirectory, revision) {
   return history;
 }
 
-/** @param {any} system @param {any|null} checkpoint */
-function withClarificationState(system, checkpoint) {
+/** @param {any} system @param {any|null} checkpoint @param {any[]} decisionRecords */
+export function withClarificationState(system, checkpoint, decisionRecords = []) {
   const states = checkpoint?.clarification_state?.root_states ?? [];
   return {
     ...system,
     decisions: {
       delivery_requested: states.length > 0 && states.every((/** @type {any} */ item) => item.status !== 'presented'),
       root_statuses: states.map((/** @type {any} */ item) => ({
-        root_issue_id: item.root_issue_id, status: item.status
-      }))
+        root_issue_id: item.root_issue_id,
+        root_version_digest: item.root_version_digest,
+        status: item.status
+      })),
+      records: structuredClone(decisionRecords)
     }
   };
 }
@@ -1182,7 +1188,8 @@ async function consumePostCaseAppend(
   let system; let result;
   try {
     system = withClarificationState(
-      await completeSystem(runDirectory, nextArtifacts), applied.checkpoint
+      await completeSystem(runDirectory, nextArtifacts), applied.checkpoint,
+      nextArtifacts.source_pack.decision_records
     );
     result = compileCaseDocumentRevisionV4(nextArtifacts, system);
   } catch (error) {
@@ -1198,7 +1205,7 @@ async function consumePostCaseAppend(
     kind: 'reply', reply: revisionReply(
       runDirectory, resultStage(result), nextRevision,
       /** @type {Record<string,any>} */ (nextArtifacts)[resultStage(result)],
-      result.diagnostics ?? [], runId
+      result.diagnostics ?? [], runId, [], result.review_request ?? null
     )
   };
   if (result.status === 'need_artifact') return { kind: 'reply', reply: result };
@@ -1318,7 +1325,10 @@ async function finalizeCaseDocumentRevision(
   try {
     if (!result || result.status !== 'compiled') result = compileCaseDocumentRevisionV4(
       artifacts,
-      withClarificationState(await completeSystem(runDirectory, artifacts), checkpoint)
+      withClarificationState(
+        await completeSystem(runDirectory, artifacts), checkpoint,
+        artifacts.source_pack.decision_records
+      )
     );
   } catch (error) {
     return qualityFailure(runId, 'case_design',
@@ -1328,7 +1338,7 @@ async function finalizeCaseDocumentRevision(
   if (result.status === 'need_revision') return revisionReply(
     runDirectory, resultStage(result), artifacts.source_pack.source_revision,
     artifacts[resultStage(result)], result.diagnostics ?? [], runId,
-    nonBlockingDiagnostics
+    nonBlockingDiagnostics, result.review_request ?? null
   );
   if (result.status === 'need_artifact') return {
     ...result,
@@ -1353,7 +1363,7 @@ async function finalizeCaseDocumentRevision(
     }
     const materialized = materializeCaseDocumentDeliveryV4({
       run_id: runId, completed_at: completedAt, bundle: result.bundle,
-      ...(artifacts.source_pack.schema_version === '4.2.0' ? {
+      ...(isCandidateV4SchemaVersion(artifacts.source_pack.schema_version) ? {
         source_reading: await loadV4SourceReadingSummary(runDirectory, artifacts.source_pack)
       } : {}),
       render_options: { include_audit_appendix: false },
@@ -1667,7 +1677,7 @@ export async function advanceStrictV4Locked(
     }
     if (result.status === 'need_revision' && result.stage !== 'behavior_views') return revisionReply(
       runDirectory, resultStage(result), revision, prospective[resultStage(result)],
-      result.diagnostics ?? [], runId, advancedDiagnostics
+      result.diagnostics ?? [], runId, advancedDiagnostics, result.review_request ?? null
     );
     if (result.status === 'need_artifact') return result;
     if (result.status === 'fatal') return qualityFailure(
@@ -1706,7 +1716,8 @@ export async function advanceStrictV4Locked(
     let system;
     try {
       system = withClarificationState(
-        await completeSystem(runDirectory, prospective), semanticCheckpoint
+        await completeSystem(runDirectory, prospective), semanticCheckpoint,
+        prospective.source_pack.decision_records
       );
     } catch (error) {
       return revisionReply(runDirectory, 'evidence_claims', revision, prospective.evidence_claims, [{
@@ -1718,7 +1729,7 @@ export async function advanceStrictV4Locked(
     const result = compileCaseDocumentRevisionV4(prospective, system);
     if (result.status === 'need_revision') return revisionReply(
       runDirectory, resultStage(result), revision, prospective[resultStage(result)],
-      result.diagnostics ?? [], runId, advancedDiagnostics
+      result.diagnostics ?? [], runId, advancedDiagnostics, result.review_request ?? null
     );
     if (result.status === 'need_artifact') return result;
     if (!['need_user_answers', 'compiled'].includes(result.status)
@@ -1783,7 +1794,8 @@ export async function advanceStrictV4Locked(
     try {
       const result = compileCaseDocumentRevisionV4(
         probe, withClarificationState(
-          await completeSystem(runDirectory, probe), semanticCheckpoint
+          await completeSystem(runDirectory, probe), semanticCheckpoint,
+          prospective.source_pack.decision_records
         )
       );
       if (result.status === 'need_revision' && result.stage !== 'case_drafts') return revisionReply(

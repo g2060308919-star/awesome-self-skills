@@ -4,7 +4,7 @@
       "name": "complete_sparse_behavior_root_reaches_all_v4_element_kinds",
       "reason": "A complete v4 root models only evidenced input, integration and declared-outcome elements while retaining the closed legacy interaction containers.",
       "value": {
-        "schema_version": "4.0.0",
+        "schema_version": "4.3.0",
         "source_revision": 4,
         "views": [
           {
@@ -93,6 +93,61 @@
           "terminal_fact_routes": [],
           "custom_responsibilities": [],
           "combination_requests": []
+        },
+        "design_assurance": {
+          "plan_revision": 2,
+          "batches": [
+            {
+              "batch_id": "BATCH-base",
+              "sequence": 1,
+              "status": "complete",
+              "source_claim_ids": ["CLM-star", "CLM-source"],
+              "rule_group_ids": ["GROUP-fields"]
+            },
+            {
+              "batch_id": "BATCH-flow",
+              "sequence": 2,
+              "status": "complete",
+              "source_claim_ids": ["CLM-flow"],
+              "rule_group_ids": ["GROUP-flow"]
+            }
+          ],
+          "rule_groups": [
+            {
+              "rule_group_id": "GROUP-fields",
+              "batch_id": "BATCH-base",
+              "source_claim_ids": ["CLM-star", "CLM-source"],
+              "objective": "验证字段分区和接口展示",
+              "method": "equivalence_partitioning",
+              "candidate_ids": ["CAND-star", "CAND-source"]
+            },
+            {
+              "rule_group_id": "GROUP-flow",
+              "batch_id": "BATCH-flow",
+              "source_claim_ids": ["CLM-flow"],
+              "objective": "验证保存业务流程",
+              "method": "scenario",
+              "candidate_ids": ["CAND-flow"]
+            }
+          ],
+          "candidate_responsibilities": [
+            { "candidate_id": "CAND-star", "rule_group_id": "GROUP-fields", "responsibility": "验证星级分区", "source_claim_ids": ["CLM-star"] },
+            { "candidate_id": "CAND-source", "rule_group_id": "GROUP-fields", "responsibility": "验证来源展示", "source_claim_ids": ["CLM-source"] },
+            { "candidate_id": "CAND-flow", "rule_group_id": "GROUP-flow", "responsibility": "验证保存结果", "source_claim_ids": ["CLM-flow"] }
+          ],
+          "candidate_dispositions": [
+            { "candidate_id": "CAND-star", "disposition": "retained", "retained_element_ids": ["EL-star"], "rationale": "独立分区验收目标" },
+            { "candidate_id": "CAND-source", "disposition": "retained", "retained_element_ids": ["EL-source"], "rationale": "独立展示验收目标" },
+            { "candidate_id": "CAND-flow", "disposition": "retained", "retained_element_ids": ["EL-flow"], "rationale": "独立流程验收目标" }
+          ],
+          "impacted_prior_batches": [
+            {
+              "batch_id": "BATCH-base",
+              "trigger_rule_group_ids": ["GROUP-flow"],
+              "source_claim_ids": ["CLM-flow"],
+              "rationale": "流程发现要求复核基础字段批次"
+            }
+          ]
         }
       }
     }

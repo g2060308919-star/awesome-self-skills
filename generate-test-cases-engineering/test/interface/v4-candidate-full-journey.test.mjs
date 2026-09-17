@@ -11,7 +11,7 @@ import { stageV4PrdCollectionObservation } from '../../src/prd-source-collection
 import { constructCancelRunEventV4 } from '../../src/run-cancellation-v4.mjs';
 import { createV4RunDirectory } from '../../src/run-bootstrap-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
-import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
+import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stage @param {any} value */
 async function stageArtifact(runDirectory, stage, value) {
@@ -22,12 +22,11 @@ async function stageArtifact(runDirectory, stage, value) {
   );
 }
 
-test('A22 candidate runner commits one complete deterministic Case Document transaction', async (/** @type {any} */ t) => {
-  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v42-journey-'));
+test('A22 latest runner commits one complete deterministic Case Document transaction', async (/** @type {any} */ t) => {
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v43-journey-'));
   t.after(() => rm(catalog, { recursive: true, force: true }));
   const run = await createV4RunDirectory(catalog, 'case_document');
-  const fixture = v4PipelineFixture();
-  for (const artifact of Object.values(fixture.artifacts)) artifact.schema_version = '4.2.0';
+  const fixture = v4GeneralQualityFixture();
   fixture.artifacts.source_pack.run_instance_id = run.run_id;
 
   let reply = /** @type {any} */ (await advanceStrict(run.run_directory));
@@ -79,8 +78,8 @@ test('A22 candidate runner commits one complete deterministic Case Document tran
     'business_html', 'case_table', 'source_reading_summary'
   ]);
   const manifest = JSON.parse(await readFile(path.join(run.run_directory, 'output/current.json'), 'utf8'));
-  assert.equal(manifest.schema_version, '4.2.0');
-  assert.equal(manifest.compiler_version, '0.7.0');
+  assert.equal(manifest.schema_version, '4.3.0');
+  assert.equal(manifest.compiler_version, '0.8.0');
   assert.equal(manifest.primary_readable, 'html');
   for (const key of ['bundle', 'markdown', 'execution_worksheet', 'html', 'chat_table', 'source_reading']) {
     assert.ok((await readFile(path.join(run.run_directory, manifest[key].path))).length > 0, key);
@@ -96,7 +95,7 @@ test('A22 candidate runner commits one complete deterministic Case Document tran
   };
   /** @type {any} */
   const executionSource = {
-    schema_version: '4.2.0', source_revision: 0, run_instance_id: execution.run_id,
+    schema_version: '4.3.0', source_revision: 0, run_instance_id: execution.run_id,
     run_scope: `execution:${run.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: documentRef, output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },
@@ -131,7 +130,7 @@ test('A22 candidate runner commits one complete deterministic Case Document tran
   const resumedIdentity = JSON.parse(await readFile(
     path.join(resumed.run_directory, 'run-instance.json'), 'utf8'
   ));
-  assert.equal(resumedIdentity.schema_version, '4.2.0');
-  assert.equal(resumedIdentity.compiler_version, '0.7.0');
+  assert.equal(resumedIdentity.schema_version, '4.3.0');
+  assert.equal(resumedIdentity.compiler_version, '0.8.0');
   assert.equal(resumedIdentity.lineage.parent_run_id, execution.run_id);
 });

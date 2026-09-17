@@ -15,8 +15,10 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { validateRevisionArtifactsV4 } from './revision-artifact-validation-v4.mjs';
+import { assertSemanticBundleDeliveryGateV4 } from './semantic-delivery-gate-v4.mjs';
 import {
-  LEGACY_V4_CONTRACT, isV4SchemaVersion, requireV4Contract, v4ContractForIdentity
+  LEGACY_V4_CONTRACT, isGeneralQualityV4Contract, isV4SchemaVersion,
+  requireV4Contract, v4ContractForIdentity
 } from './v4-contract.mjs';
 
 const VERSION = '4.0.0';
@@ -46,7 +48,7 @@ const LEGACY_PROFILE_ARTIFACTS = Object.freeze({
 
 /** @param {string} schemaVersion */
 function profileArtifacts(schemaVersion) {
-  return schemaVersion === '4.2.0' ? {
+  return ['4.2.0', '4.3.0'].includes(schemaVersion) ? {
     pre_case_pending: BASE_ARTIFACTS,
     post_case_pending: POST_CASE_ARTIFACTS,
     final: CANDIDATE_FINAL_ARTIFACTS
@@ -731,6 +733,50 @@ async function phaseHook(hooks, phase) {
 }
 
 /**
+ * Once a higher 4.3 semantic revision is ready to become the committed
+ * checkpoint, an older delivered manifest is historical, not current. The
+ * tombstone is itself canonical and survives retry; older contracts retain
+ * their frozen publication semantics.
+ * @param {string} runDirectory @param {Record<string,any>} run @param {Record<string,any>} pending
+ */
+async function revokeOlderGeneralQualityDelivery(runDirectory, run, pending) {
+  if (!isGeneralQualityV4Contract(run) || pending.commit_mode !== 'new_revision'
+    || pending.commit_profile === 'final') return;
+  const target = path.join(runDirectory, 'output', 'current.json');
+  const current = await readJsonIfPresent(runDirectory, target);
+  if (!current) return;
+  if (current.value.status === 'stale') {
+    if (current.value.schema_version !== run.schema_version
+      || current.value.compiler_version !== run.compiler_version
+      || current.value.run_id !== run.run_id
+      || !Number.isSafeInteger(current.value.active_revision)
+      || current.value.active_revision > pending.candidate_revision
+      || !Number.isSafeInteger(current.value.previous_ready_revision)
+      || !SHA256.test(current.value.previous_ready_manifest_digest)) {
+      throw new RunStoreIntegrityError('CURRENT_NON_READY_CONFLICT');
+    }
+    if (current.value.active_revision === pending.candidate_revision) return;
+    await atomicWriteJson(runDirectory, target, {
+      ...current.value, active_revision: pending.candidate_revision
+    });
+    return;
+  }
+  if (current.value.authority !== 'canonical' || current.value.run_id !== run.run_id
+    || current.value.schema_version !== run.schema_version
+    || current.value.compiler_version !== run.compiler_version
+    || current.value.revision !== pending.base_revision) {
+    throw new RunStoreIntegrityError('CURRENT_READY_BINDING_INVALID');
+  }
+  await atomicWriteJson(runDirectory, target, {
+    status: 'stale', schema_version: run.schema_version,
+    compiler_version: run.compiler_version, run_id: run.run_id,
+    active_revision: pending.candidate_revision,
+    reason: 'higher_revision_not_ready', previous_ready_revision: current.value.revision,
+    previous_ready_manifest_digest: exactDigest(current.text)
+  });
+}
+
+/**
  * Atomically publish a compiler-owned v4 revision while the caller already
  * owns the run lock. All candidate artifacts are written before the checkpoint
  * becomes visible; only final switches output/current.json.
@@ -852,6 +898,7 @@ export async function commitRevisionTransactionV4WithHeldLock(
     }
     if (pending.phase === 'artifacts_committed') {
       await materializeArtifacts(runDirectory, pending, request.artifacts);
+      await revokeOlderGeneralQualityDelivery(runDirectory, run, pending);
       await commitCheckpoint(runDirectory, pending, request.artifacts);
       pending = movePhase(pending, 'checkpoint_committed');
       await atomicWriteJson(runDirectory, pendingPath(runDirectory), pending);
@@ -860,6 +907,10 @@ export async function commitRevisionTransactionV4WithHeldLock(
     if (pending.phase === 'checkpoint_committed') {
       await storeCommittedRecord(runDirectory, pending);
       if (pending.commit_profile === 'final') {
+        // Recovery may resume immediately before authority publication. Recheck
+        // the canonical ledger here instead of trusting an earlier process's
+        // in-memory result or a staged manifest.
+        assertSemanticBundleDeliveryGateV4(request.artifact_values.bundle);
         await writeExactIfDifferent(
           runDirectory, path.join(runDirectory, 'output', 'current.json'), request.artifacts.manifest
         );

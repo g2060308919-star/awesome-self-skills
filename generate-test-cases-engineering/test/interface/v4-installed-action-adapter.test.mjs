@@ -19,6 +19,7 @@ import { createV4ExecutionPendingReply } from '../../src/execution-run-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
+import { bindGeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 const bundlePath = fileURLToPath(new URL(
   '../../skill/generate-test-cases/scripts/test-compiler.mjs', import.meta.url
@@ -72,15 +73,28 @@ function bindFixtureContract(fixture, schemaVersion) {
   for (const artifact of Object.values(fixture.artifacts)) {
     artifact.schema_version = schemaVersion;
   }
-  return fixture;
+  if (schemaVersion !== '4.3.0') return fixture;
+  const bound = bindGeneralQualityFixture(fixture);
+  const completed = bound.artifacts.case_drafts.independent_review;
+  bound.artifacts.case_drafts.independent_review = {
+    protocol_version: completed.protocol_version,
+    status: 'pending',
+    review_mode: completed.review_mode,
+    reviewer_identity: structuredClone(completed.reviewer_identity),
+    source_first_targets: completed.source_first_targets.map((/** @type {any} */ target) => {
+      const { target_id: _targetId, ...sourceTarget } = target;
+      return sourceTarget;
+    })
+  };
+  return bound;
 }
 
 /** @param {any} installed @param {string} directory @param {any} reply @param {any} fixture */
 async function stageCandidateCollection(installed, directory, reply, fixture) {
   const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
-  const schemaVersion = identity.schema_version === '4.2.0' ? '4.2.0' : '4.0.0';
+  const schemaVersion = identity.schema_version;
   bindFixtureContract(fixture, schemaVersion);
-  if (schemaVersion !== '4.2.0') return schemaVersion;
+  if (!['4.2.0', '4.3.0'].includes(schemaVersion)) return schemaVersion;
   const source = fixture.artifacts.source_pack.sources[0];
   const bytes = new TextEncoder().encode(source.content);
   await installed.stageV4PrdCollectionObservation(directory, reply, {
@@ -186,7 +200,7 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
 /** @param {string} runId @param {any} caseDocumentRef @param {any[]} events @param {number} revision */
 function executionSourcePack(runId, caseDocumentRef, events, revision) {
   return {
-    schema_version: '4.2.0', source_revision: revision, run_instance_id: runId,
+    schema_version: '4.3.0', source_revision: revision, run_instance_id: runId,
     run_scope: `execution:${caseDocumentRef.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: structuredClone(caseDocumentRef), output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },
@@ -207,6 +221,34 @@ async function deliverInstalledCaseDocument(installed, catalog) {
   let reply;
   for (const stageName of /** @type {Array<keyof typeof STAGE_FILES>} */ (Object.keys(STAGE_FILES))) {
     await stage(directory, stageName, fixture.artifacts[stageName]);
+    reply = await installed.advanceStrict(directory);
+  }
+  if (reply.status === 'need_revision' && reply.review_request) {
+    const projection = reply.review_request.review_target_projection;
+    const assessments = reply.review_request.source_first_targets.map((/** @type {any} */ target) => {
+      const reviewedCase = projection.cases.find((/** @type {any} */ candidate) =>
+        candidate.oracles.some((/** @type {any} */ oracle) =>
+          oracle.claim_ids.some((/** @type {string} */ claimId) =>
+            target.source_claim_ids.includes(claimId)))) ?? projection.cases[0];
+      return {
+        target_id: target.target_id, disposition: 'verified',
+        affected_items: [
+          { item_kind: 'formal_test_point', item_id: reviewedCase.primary_test_point_id },
+          { item_kind: 'case', item_id: reviewedCase.case_id }
+        ],
+        source_claim_ids: target.source_claim_ids,
+        decision_ids: target.decision_ids,
+        rationale: '当前 Case 的可判定 Oracle 验证该来源优先目标。',
+        required_recheck: {
+          status: 'passed', affected_items: [{ item_kind: 'case', item_id: reviewedCase.case_id }]
+        }
+      };
+    });
+    /** @type {any} */ (fixture.artifacts.case_drafts).independent_review =
+      installed.constructIndependentReviewCompletionV4(reply, {
+        target_assessments: assessments, findings: []
+      });
+    await stage(directory, 'case_drafts', fixture.artifacts.case_drafts);
     reply = await installed.advanceStrict(directory);
   }
   assert.equal(reply.status, 'finished', JSON.stringify(reply));
@@ -261,10 +303,12 @@ test('installed private action seam constructs a semantic answer and the install
 
 test('installed private action seam submits every advertised semantic control through the installed runner', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
-  for (const action of ['defer_question_part', 'mark_question_unknown', 'request_delivery', 'cancel_run']) {
-    const directory = await mkdtemp(path.join(os.tmpdir(), `gtc-v4-installed-${action}-`));
+  for (const action of ['defer_question_part', 'mark_question_unknown', 'cancel_run']) {
+    const catalog = await mkdtemp(path.join(os.tmpdir(), `gtc-v4-installed-${action}-`));
+    const created = await installed.createV4RunDirectory(catalog, 'case_document');
+    const directory = created.run_directory;
     try {
-      const { runId, fixture, reply } = await pendingSemanticReply(installed, directory);
+      const { runId, fixture, reply, schemaVersion } = await pendingSemanticReply(installed, directory);
       const part = reply.semantic_presentation.question_parts[0];
       const event = installed.constructV4Action(
         reply, action === 'cancel_run'
@@ -274,7 +318,9 @@ test('installed private action seam submits every advertised semantic control th
       assert.deepEqual(validateAgainstSchema(event, {
         $defs: sourcePackSchema.$defs, $ref: '#/$defs/v4SemanticClarificationEvent'
       }), [], action);
-      const revision = await bendReviewJourneyFixture(runId, 1, [event]);
+      const revision = bindFixtureContract(
+        await bendReviewJourneyFixture(runId, 1, [event]), schemaVersion
+      );
       await stage(directory, 'source_pack', revision.artifacts.source_pack);
       const accepted = await installed.advanceStrict(directory);
       if (action === 'cancel_run') {
@@ -287,7 +333,7 @@ test('installed private action seam submits every advertised semantic control th
       }
       assert.equal(fixture.artifacts.source_pack.run_instance_id, runId);
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await rm(catalog, { recursive: true, force: true });
     }
   }
 });

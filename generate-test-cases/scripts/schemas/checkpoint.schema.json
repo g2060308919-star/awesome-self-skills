@@ -106,7 +106,7 @@
         "affected_facts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "answer_options": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "risk_level": { "enum": ["critical", "high", "medium", "low"] },
-        "available_actions": { "type": "array", "minItems": 4, "maxItems": 4, "prefixItems": [{ "const": "answer_question_part" }, { "const": "defer_question_part" }, { "const": "mark_question_unknown" }, { "const": "request_delivery" }], "items": false },
+        "available_actions": { "type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": { "enum": ["answer_question_part", "defer_question_part", "mark_question_unknown", "request_delivery"] } },
         "action_context": {
           "type": "object", "additionalProperties": false,
           "required": ["presentation_id", "question_part_id", "root_issue_id", "root_version_digest"],
@@ -126,7 +126,7 @@
           "type": "object", "additionalProperties": false,
           "required": ["schema_version", "presentation_id", "phase", "supersedes_presentation_id", "answered_part_ids", "remaining_part_ids", "cycle_digest", "run_actions", "recovery", "question_parts"],
           "properties": {
-            "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+            "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] },
             "presentation_id": { "type": "string", "pattern": "^PRES-[0-9a-f]{64}$" },
             "phase": { "enum": ["requirements_analysis", "case_design"] },
             "supersedes_presentation_id": { "type": ["string", "null"], "pattern": "^PRES-[0-9a-f]{64}$" },
@@ -144,7 +144,24 @@
               }
             },
             "question_parts": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/v4_question_part" } }
-          }
+          },
+          "allOf": [{
+            "oneOf": [
+              {
+                "properties": {
+                  "schema_version": { "enum": ["4.0.0", "4.2.0"] },
+                  "question_parts": { "items": { "properties": {
+                    "available_actions": {
+                      "type": "array", "minItems": 4, "maxItems": 4,
+                      "prefixItems": [{ "const": "answer_question_part" }, { "const": "defer_question_part" }, { "const": "mark_question_unknown" }, { "const": "request_delivery" }],
+                      "items": false
+                    }
+                  } } }
+                }
+              },
+              { "properties": { "schema_version": { "const": "4.3.0" } } }
+            ]
+          }]
         }
       ]
     },
@@ -166,8 +183,31 @@
         "source_claim_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
         "affected_test_point_ids": { "$ref": "#/$defs/v4_string_set" },
         "affected_facts": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "discovery_phase": { "enum": ["pre_case", "post_case"] }
+        "discovery_phase": { "enum": ["pre_case", "post_case"] },
+        "acceptance_impact": { "$ref": "#/$defs/v4_acceptance_impact" }
       }
+    },
+    "v4_acceptance_impact": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": { "const": "critical" },
+            "criteria": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"] } },
+            "rationale": { "type": "string", "minLength": 1, "pattern": "\\S" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": { "const": "noncritical" },
+            "criteria": { "type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{ "const": "does_not_change_required_acceptance" }], "items": false },
+            "rationale": { "type": "string", "minLength": 1, "pattern": "\\S" }
+          }
+        }
+      ]
     },
     "v4_root_state": {
       "type": "object", "additionalProperties": false,
@@ -246,7 +286,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["schema_version", "compiler_version", "run_id", "revision", "commit_profile", "source_review_witness", "fact_ledger_digest", "scope_manifest_digest", "behavior_views_digest", "case_drafts_digest", "base_checkpoint_digest", "semantic_gap_ledger", "clarification_state"],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0"] }, "compiler_version": { "enum": ["0.5.0", "0.7.0"] },
+        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] }, "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0"] },
         "run_id": { "type": "string", "minLength": 1 }, "revision": { "type": "integer", "minimum": 0 },
         "commit_profile": { "enum": ["pre_case_pending", "post_case_pending", "final"] },
         "source_review_witness": {
@@ -287,8 +327,9 @@
       "allOf": [
         {
           "oneOf": [
-            { "properties": { "schema_version": { "const": "4.0.0" }, "compiler_version": { "const": "0.5.0" } } },
-            { "properties": { "schema_version": { "const": "4.2.0" }, "compiler_version": { "const": "0.7.0" } } }
+            { "properties": { "schema_version": { "const": "4.0.0" }, "compiler_version": { "const": "0.5.0" }, "semantic_gap_ledger": { "items": { "not": { "required": ["acceptance_impact"] } } } } },
+            { "properties": { "schema_version": { "const": "4.2.0" }, "compiler_version": { "const": "0.7.0" }, "semantic_gap_ledger": { "items": { "not": { "required": ["acceptance_impact"] } } } } },
+            { "properties": { "schema_version": { "const": "4.3.0" }, "compiler_version": { "const": "0.8.0" }, "semantic_gap_ledger": { "items": { "required": ["acceptance_impact"] } } } }
           ]
         },
         {

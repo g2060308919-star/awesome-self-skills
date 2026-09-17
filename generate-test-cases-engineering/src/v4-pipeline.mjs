@@ -3,13 +3,17 @@ import caseDraftsSchema from '../skill/generate-test-cases/scripts/schemas/case-
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 
 import { canonicalStringify, digest } from './canonical.mjs';
+import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
 import {
-  compileRelativeBaselineCaseV4,
   compileSemanticCaseDocumentV4,
   validateRelativeBaselineEvidenceV4,
   validateTestValueOriginsV4
 } from './case-semantics-v4.mjs';
 import { classifyFinalOutcomeV4 } from './final-outcome-v4.mjs';
+import {
+  compileIndependentReviewTargetV4,
+  validateIndependentReviewV4
+} from './independent-review-v4.mjs';
 import { canonicalIds, compareScalar, compileNotApplicable, riskKinds } from './not-applicable.mjs';
 import {
   aggregateBusinessOutcomeCoverageV4,
@@ -19,13 +23,18 @@ import {
 import { compileCaseOrdering, compileOrderingRegistry } from './ordering-registry.mjs';
 import { compileSemanticGapRootsV4 } from './semantic-gaps-v4.mjs';
 import {
+  deriveSemanticDeliveryGateV4,
+  requiresRecoverableCriticalQuestionV4
+} from './semantic-delivery-gate-v4.mjs';
+import {
   compileScopeManifestV4,
   validateInteractionReviewV4
 } from './scope-manifest-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
+import { materializeRelativeBaselinesV4 } from './relative-baseline-materialization-v4.mjs';
 import { compileSourceEvidence } from './source-compiler-v4.mjs';
-import { v4ContractForSchema } from './v4-contract.mjs';
+import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
 
 const ALLOWED_SYSTEM_KEYS = new Set([
   'source', 'topology', 'interaction', 'behavior_evidence', 'ordering',
@@ -61,6 +70,57 @@ function qualityFailure(code, diagnostics = []) {
   };
 }
 
+/** @param {any} review @param {any} target @param {any[]} diagnostics */
+function independentReviewRevision(review, target, diagnostics) {
+  return {
+    status: 'need_revision', stage: 'case_drafts', diagnostics,
+    review_request: target ? {
+      protocol_version: '1.0.0', review_mode: 'independent_source_first',
+      reviewer_identity: structuredClone(review?.reviewer_identity),
+      source_first_targets: structuredClone(target.projection.source_first_targets),
+      review_target_digest: target.digest,
+      review_target_projection: structuredClone(target.projection)
+    } : null
+  };
+}
+
+const DESIGN_DISPOSITIONS = Object.freeze([
+  'retained', 'representative_value', 'equivalent_merge',
+  'evidence_exclusion', 'semantic_gap', 'exploratory'
+]);
+
+/** @param {Record<string,any>} assurance */
+function designAssuranceSummary(assurance) {
+  const counts = Object.fromEntries(DESIGN_DISPOSITIONS.map(kind => [kind, 0]));
+  for (const item of assurance.candidate_dispositions) counts[item.disposition] += 1;
+  return {
+    status: 'complete', plan_revision: assurance.plan_revision,
+    batch_count: assurance.batches.length,
+    rule_group_count: assurance.rule_groups.length,
+    candidate_responsibility_count: assurance.candidate_responsibilities.length,
+    candidate_disposition_counts: counts
+  };
+}
+
+/** @param {Record<string,any>} review */
+function independentReviewSummary(review) {
+  /** @type {Record<string,number>} */
+  const assessmentCounts = { verified: 0, semantic_gap: 0, evidence_excluded: 0 };
+  for (const item of review.target_assessments) assessmentCounts[item.disposition] += 1;
+  /** @type {Record<string,number>} */
+  const findingCounts = { confirmed: 0, rejected: 0 };
+  for (const item of review.findings) findingCounts[item.adjudication] += 1;
+  return {
+    status: 'completed', protocol_version: review.protocol_version,
+    review_mode: review.review_mode,
+    reviewer_identity_class: review.reviewer_identity.identity_class,
+    source_first_target_count: review.source_first_targets.length,
+    target_assessment_counts: assessmentCounts,
+    finding_counts: findingCounts,
+    review_target_digest: review.review_target_digest
+  };
+}
+
 /** @param {unknown} artifact @param {any} schema @param {string} stage */
 function validateArtifact(artifact, schema, stage) {
   const diagnostics = validateAgainstSchema(artifact, schema);
@@ -77,9 +137,10 @@ function pointsWithRoles(points, outcomes) {
   }));
 }
 
-/** @param {any} evidence @param {'pre_case'|'post_case'} phase */
-function semanticRoots(evidence, phase) {
+/** @param {any} evidence @param {'pre_case'|'post_case'} phase @param {any} contract */
+function semanticRoots(evidence, phase, contract) {
   return compileSemanticGapRootsV4({
+    contract,
     facts: evidence.fact_ledger,
     claims: evidence.claims,
     diagnostic_candidates: evidence.semantic_gaps.filter(
@@ -91,13 +152,21 @@ function semanticRoots(evidence, phase) {
 
 /** @param {any[]} roots @param {any[]} rootStatuses */
 function rootState(roots, rootStatuses) {
-  const statusById = new Map(rootStatuses.map(item => [item.root_issue_id, item.status]));
-  return roots.map(root => ({ ...root, status: statusById.get(root.root_issue_id) ?? 'presented' }));
+  const statusById = new Map(rootStatuses.map(item => [item.root_issue_id, item]));
+  return roots.map(root => {
+    const state = statusById.get(root.root_issue_id);
+    return {
+      ...root,
+      status: state?.status ?? 'presented',
+      state_root_version_digest: state?.root_version_digest ?? null
+    };
+  });
 }
 
-/** @param {any[]} roots */
-function openRoots(roots) {
-  return roots.filter(root => root.status === 'presented');
+/** @param {any[]} roots @param {any} [contract] */
+function openRoots(roots, contract) {
+  return roots.filter(root => root.status === 'presented'
+    || (isGeneralQualityV4Contract(contract) && requiresRecoverableCriticalQuestionV4(root, root)));
 }
 
 /** @param {any} behavior @param {any} scopeManifest @param {any} semanticEvidence */
@@ -276,55 +345,6 @@ function presentNotApplicable(records, behavior) {
   });
 }
 
-/** Materialize the four-step relative-baseline protocol from the verified
- * declaration while preserving the Adapter's business title and selectors.
- * @param {any[]} candidates @param {any} semanticEvidence @param {any[]} claimAssessments */
-function materializeRelativeBaselines(candidates, semanticEvidence, claimAssessments) {
-  const assessmentById = new Map((Array.isArray(claimAssessments) ? claimAssessments : [])
-    .map((/** @type {any} */ item) => [item.claim_id, item]));
-  /** @type {any[]} */ const diagnostics = [];
-  const cases = candidates.map(candidate => {
-    if (!candidate.baseline_spec) return candidate;
-    const assertion = semanticEvidence.baseline_assertions.find((/** @type {any} */ item) =>
-      candidate.baseline_spec.claim_ids.includes(item.claim_id));
-    if (!assertion) return candidate;
-    const support = candidate.baseline_spec.claim_ids.map((/** @type {string} */ claimId) => {
-      const assessment = assessmentById.get(claimId);
-      const source = semanticEvidence.baseline_assertions.find((/** @type {any} */ item) => item.claim_id === claimId);
-      return {
-        claim_id: claimId, level: assessment?.level, scope: source?.scope_ref,
-        support_review: assessment?.support_review
-      };
-    });
-    const result = compileRelativeBaselineCaseV4({
-      case_context: {
-        module_id: candidate.module_id, scope_ref: assertion.scope_ref,
-        business_scope: candidate.title,
-        operation: candidate.steps.map((/** @type {any} */ item) => item.action).join('；'),
-        priority: candidate.priority, ordering: candidate.ordering,
-        acceptance_role: candidate.acceptance_role, fact_ids: candidate.fact_ids,
-        primary_test_point_id: candidate.primary_test_point_id,
-        business_preconditions: candidate.business_preconditions,
-        data_conditions: candidate.data_conditions
-      },
-      baseline_spec: candidate.baseline_spec
-    }, { claim_assessments: support });
-    diagnostics.push(...result.diagnostics);
-    if (result.semantic_gaps.length || result.cases.length !== 1) {
-      diagnostics.push({
-        category: 'adapter_revision', code: 'BASELINE_DECLARATION_INCOMPLETE', path: '/baseline_spec',
-        message: 'A persisted relative baseline must already contain a complete source-declared comparison contract.'
-      });
-      return candidate;
-    }
-    return {
-      ...candidate, steps: result.cases[0].steps, oracles: result.cases[0].oracles,
-      baseline_spec: result.cases[0].baseline_spec
-    };
-  });
-  return { cases, diagnostics };
-}
-
 /** @param {any} coverage @param {any[]} exploratory @param {any[]} notApplicable @param {any[]} gaps */
 function coverageSummary(coverage, exploratory, notApplicable, gaps) {
   /** @param {string} acceptanceRole */
@@ -343,8 +363,8 @@ function coverageSummary(coverage, exploratory, notApplicable, gaps) {
   };
 }
 
-/** @param {any[]} roots @param {any} compiled */
-function presentRoots(roots, compiled) {
+/** @param {any[]} roots @param {any} compiled @param {any} contract @param {any} semanticDeliveryGate */
+function presentRoots(roots, compiled, contract, semanticDeliveryGate) {
   const outcomes = new Map(compiled.outcomes.map((/** @type {any} */ outcome) => [outcome.outcome_id, outcome]));
   return roots.map(root => {
     const affected = compiled.formal_test_points.filter((/** @type {any} */ point) => {
@@ -359,13 +379,25 @@ function presentRoots(roots, compiled) {
       item_kind: 'business_outcome', item_id: root.semantic_gap_id,
       display_name: root.unresolved_outcome
     });
+    const strict = isGeneralQualityV4Contract(contract);
+    const resolutionBasis = strict
+      ? semanticDeliveryGate?.resolved_critical_roots?.find(
+          (/** @type {any} */ item) => item.root_issue_id === root.root_issue_id
+        ) ?? null
+      : null;
     return {
       root_issue_id: root.root_issue_id,
-      status: root.status === 'resolved_final' || root.status === 'resolved_temporary' ? 'resolved' : root.status,
+      status: strict ? root.status
+        : root.status === 'resolved_final' || root.status === 'resolved_temporary' ? 'resolved' : root.status,
       title: root.missing_aspect, business_object: root.scope_ref,
       question: root.question, why_needed: root.why_needed,
       decision_impact: root.decision_impact, unresolved_outcome: root.unresolved_outcome,
-      affected_business_items: affected
+      affected_business_items: affected,
+      ...(strict ? {
+        root_version_digest: root.root_version_digest,
+        acceptance_impact: structuredClone(root.acceptance_impact),
+        critical_resolution_basis: resolutionBasis ? structuredClone(resolutionBasis) : null
+      } : {})
     };
   });
 }
@@ -438,13 +470,13 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   if (interactionDiagnostics.length) return needRevision('evidence_claims', interactionDiagnostics);
 
   let preCaseRoots;
-  try { preCaseRoots = rootState(semanticRoots(evidence, 'pre_case'), system.decisions?.root_statuses ?? []); } catch (error) {
+  try { preCaseRoots = rootState(semanticRoots(evidence, 'pre_case', contract), system.decisions?.root_statuses ?? []); } catch (error) {
     return needRevision('evidence_claims', [{
       code: error instanceof Error ? error.message : 'SEMANTIC_GAP_INVALID', path: '/semantic_gaps',
       message: 'Semantic-gap inputs must bind verified Facts and Claims.'
     }]);
   }
-  const pendingPreCase = openRoots(preCaseRoots);
+  const pendingPreCase = openRoots(preCaseRoots, contract);
   if (pendingPreCase.length) return {
     status: 'need_user_answers', phase: 'requirements_analysis', semantic_roots: pendingPreCase,
     non_blocking_diagnostics: []
@@ -463,6 +495,18 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
 
   const behaviorSchemaFailure = validateArtifact(artifacts.behavior_views, behaviorSchema, 'behavior_views');
   if (behaviorSchemaFailure) return behaviorSchemaFailure;
+  let currentDesignAssurance = null;
+  if (isGeneralQualityV4Contract(contract)) {
+    const assurance = validateDesignAssuranceV4(artifacts.behavior_views.design_assurance, {
+      source_claim_ids: evidence.claims.map((/** @type {any} */ item) => item.claim_id),
+      semantic_gap_ids: evidence.semantic_gaps.map((/** @type {any} */ item) => item.semantic_gap_id),
+      view_element_ids: artifacts.behavior_views.views.flatMap(
+        (/** @type {any} */ view) => view.elements.map((/** @type {any} */ item) => item.element_id)
+      )
+    });
+    if (assurance.diagnostics.length) return needRevision('behavior_views', assurance.diagnostics);
+    currentDesignAssurance = assurance.normalized;
+  }
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
   if (behavior.kind === 'need_revision') return needRevision('behavior_views', behavior.diagnostics);
   if (behavior.kind !== 'compiled') return qualityFailure('BUSINESS_OUTCOME_COMPILATION_FAILED', behavior.diagnostics);
@@ -472,7 +516,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     const diagnostics = validateRelativeBaselineEvidenceV4(candidate, semanticEvidence);
     if (diagnostics.length) return needRevision('case_drafts', diagnostics);
   }
-  const materializedDrafts = materializeRelativeBaselines(
+  const materializedDrafts = materializeRelativeBaselinesV4(
     artifacts.case_drafts.cases, semanticEvidence, system.claim_assessments
   );
   if (materializedDrafts.diagnostics.length) return needRevision('case_drafts', materializedDrafts.diagnostics);
@@ -492,7 +536,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   }
 
   let postCaseRoots;
-  try { postCaseRoots = rootState(semanticRoots(evidence, 'post_case'), system.decisions?.root_statuses ?? []); } catch (error) {
+  try { postCaseRoots = rootState(semanticRoots(evidence, 'post_case', contract), system.decisions?.root_statuses ?? []); } catch (error) {
     return needRevision('evidence_claims', [{
       code: error instanceof Error ? error.message : 'SEMANTIC_GAP_INVALID', path: '/semantic_gaps',
       message: 'Post-case semantic-gap inputs must bind verified Facts and Claims.'
@@ -526,7 +570,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   }));
   const ordered = compileCaseOrdering(orderingInputs, formalPoints, orderingRegistry, system.ordering);
   if (ordered.kind !== 'ordered') return qualityFailure('CASE_ORDERING_FAILED', ordered.diagnostics);
-  const pendingPostCase = openRoots(postCaseRoots);
+  const pendingPostCase = openRoots(postCaseRoots, contract);
 
   const activeGaps = allRoots.filter(root => !['resolved_final', 'resolved_temporary', 'obsolete'].includes(root.status));
   const mappedGaps = activeGaps.map(root => ({
@@ -583,6 +627,71 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     obligations: obligations.artifact, non_blocking_diagnostics: []
   };
 
+  let currentIndependentReview = null;
+  if (isGeneralQualityV4Contract(contract)) {
+    const review = artifacts.case_drafts.independent_review;
+    if (!record(review)) return independentReviewRevision(null, null, [{
+      category: 'quality', code: 'INDEPENDENT_REVIEW_REQUIRED', path: '/independent_review',
+      message: 'A 4.3 Case Draft requires a source-first independent review record.'
+    }]);
+    let reviewTarget;
+    try {
+      reviewTarget = compileIndependentReviewTargetV4({
+        source_revision: revision,
+        source_first_targets: review.source_first_targets,
+        facts: evidence.fact_ledger,
+        views: artifacts.behavior_views.views,
+        formal_test_points: behavior.formal_test_points,
+        candidate_responsibilities: artifacts.behavior_views.design_assurance.candidate_responsibilities,
+        cases: materializedDrafts.cases
+      });
+    } catch (error) {
+      return independentReviewRevision(review, null, [{
+        category: 'quality',
+        code: error instanceof Error ? error.message : 'INDEPENDENT_REVIEW_TARGET_INVALID',
+        path: '/independent_review/source_first_targets',
+        message: 'The source-first inventory could not form a compiler-owned review target.'
+      }]);
+    }
+    const reviewResult = validateIndependentReviewV4(review, reviewTarget, {
+      source_claim_ids: evidence.claims.map((/** @type {any} */ item) => item.claim_id),
+      decision_ids: (sourcePack.decision_records ?? []).map((/** @type {any} */ item) => item.decision_id),
+      semantic_gap_ids: allRoots.map(root => root.semantic_gap_id)
+    });
+    if (reviewResult.diagnostics.length) {
+      const pending = review.status === 'pending';
+      return independentReviewRevision(review, reviewTarget, pending ? [{
+        category: 'quality', code: 'INDEPENDENT_REVIEW_REQUIRED', path: '/independent_review',
+        message: 'Complete the source-first review against the compiler-issued target.'
+      }] : reviewResult.diagnostics);
+    }
+    currentIndependentReview = reviewResult.normalized;
+  }
+
+  let semanticDeliveryGate;
+  try {
+    semanticDeliveryGate = deriveSemanticDeliveryGateV4({
+      contract,
+      roots: allRoots,
+      rootStates: allRoots.map(root => ({
+        root_issue_id: root.root_issue_id,
+        root_version_digest: isGeneralQualityV4Contract(contract)
+          ? root.state_root_version_digest : root.root_version_digest,
+        status: root.status
+      })),
+      decisions: system.decisions?.records ?? []
+    });
+  } catch (error) {
+    return qualityFailure(error instanceof Error ? error.message : 'SEMANTIC_DELIVERY_GATE_INVALID');
+  }
+  if (!semanticDeliveryGate.can_materialize_formal_case_document) return {
+    status: 'need_user_answers', phase: 'case_design', result_kind: null,
+    reason_code: 'CRITICAL_SEMANTIC_GAPS_REMAIN',
+    semantic_roots: allRoots.filter(root =>
+      semanticDeliveryGate.unresolved_critical_root_ids.includes(root.root_issue_id)),
+    obligations: obligations.artifact, non_blocking_diagnostics: []
+  };
+
   const closedForDelivery = activeGaps.filter(root => root.status === 'closed_for_delivery').length;
   const outcome = classifyFinalOutcomeV4({
     delivery_intent: 'case_document', cancelled: false, case_count: ordered.cases.length,
@@ -593,10 +702,19 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     not_applicable_count: notApplicable.length,
     all_reviewed_formal_points_not_applicable: coverage.ledger.length > 0
       && coverage.ledger.every((/** @type {any} */ item) => item.classification === 'NotApplicable'),
-    delivery_requested: Boolean(system.decisions?.delivery_requested)
+    delivery_requested: Boolean(system.decisions?.delivery_requested),
+    ...(isGeneralQualityV4Contract(contract) ? {
+      strict_semantic_delivery: true,
+      unresolved_critical_semantic_gap_count:
+        semanticDeliveryGate.unresolved_critical_root_ids.length
+    } : {})
   });
   if (outcome.status !== 'finished') return outcome.status === 'fatal'
     ? qualityFailure(outcome.reason_code) : { ...outcome, semantic_roots: openRoots(activeGaps) };
+  if (isGeneralQualityV4Contract(contract)
+    && (!currentDesignAssurance || !currentIndependentReview)) {
+    return qualityFailure('GENERAL_QUALITY_SUMMARY_INPUT_MISSING');
+  }
   const bundle = {
     schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     delivery_intent: 'case_document',
@@ -607,12 +725,20 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     // Canonical JSON is the audit authority: resolved/obsolete roots stay in
     // the ledger even though only active roots contribute to delivery gaps and
     // user-facing unresolved sections.
-    semantic_root_groups: presentRoots(allRoots, behavior),
+    semantic_root_groups: presentRoots(allRoots, behavior, contract, semanticDeliveryGate),
     exploratory: risk.exploratory.map((/** @type {any} */ item) => ({
       exploratory_id: item.exploratory_id, module_id: item.module_id,
       title: `探索 ${item.risk_kind}`, reason: `依据 ${item.policy_id}@${item.policy_version} 审阅通用风险。`
     })),
-    not_applicable: presentNotApplicable(notApplicable, behavior), risk_review_ledger: risk.ledger
+    not_applicable: presentNotApplicable(notApplicable, behavior), risk_review_ledger: risk.ledger,
+    ...(isGeneralQualityV4Contract(contract) ? {
+      design_assurance_summary: designAssuranceSummary(
+        /** @type {Record<string,any>} */ (currentDesignAssurance)
+      ),
+      independent_review_summary: independentReviewSummary(
+        /** @type {Record<string,any>} */ (currentIndependentReview)
+      )
+    } : {})
   };
   const bundleDiagnostics = validateAgainstSchema(bundle, testBundleSchema);
   if (bundleDiagnostics.length) return qualityFailure('CANONICAL_BUNDLE_INVALID', bundleDiagnostics);

@@ -539,6 +539,32 @@ function semanticEvidenceSystem(evidence) {
   };
 }
 
+/** @param {any} evidence */
+function claimAssessmentSystem(evidence) {
+  return evidence.claims.filter((/** @type {any} */ claim) => claim.domain === 'business')
+    .map((/** @type {any} */ claim) => ({
+      claim_id: claim.claim_id, domain: 'business_semantics', level: claim.level,
+      support_review: claim.level === 'E1' && claim.claim_form !== 'decision-record'
+        ? 'uncertain' : 'supported'
+    }));
+}
+
+/** Derive only the Case semantic context needed by deterministic materializers.
+ * This intentionally avoids source acquisition so recovery can validate a
+ * committed revision without replaying provider or binary reads.
+ * @param {unknown} submittedEvidence */
+export function deriveV4CaseSemanticContext(submittedEvidence) {
+  if (!record(submittedEvidence) || !isV4SchemaVersion(submittedEvidence.schema_version)
+    || !Array.isArray(submittedEvidence.claims)) {
+    throw new TypeError('V4_CASE_SEMANTIC_CONTEXT_INVALID');
+  }
+  const evidence = /** @type {any} */ (submittedEvidence);
+  return {
+    claim_assessments: claimAssessmentSystem(evidence),
+    semantic_evidence: semanticEvidenceSystem(evidence)
+  };
+}
+
 /**
  * Derive the ordinary production compiler context from the four persisted v4
  * Agent artifacts. The result contains no execution resources and accepts no
@@ -562,7 +588,7 @@ export function deriveV4SystemContext(submittedArtifacts, sourceAcquisition = nu
     ...preCase,
     behavior_evidence: behaviorEvidence(evidence),
     ordering: orderingSystem(pack, evidence),
-    semantic_evidence: semanticEvidenceSystem(evidence),
+    semantic_evidence: deriveV4CaseSemanticContext(evidence).semantic_evidence,
   };
 }
 
@@ -598,11 +624,7 @@ export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, s
       verified_acquisition_records: structuredClone(sourceAcquisition.verified_acquisition_records)
     } : {})
   };
-  const claim_assessments = evidence.claims.filter((/** @type {any} */ claim) => claim.domain === 'business')
-    .map((/** @type {any} */ claim) => ({
-    claim_id: claim.claim_id, domain: 'business_semantics', level: claim.level,
-    support_review: claim.level === 'E1' && claim.claim_form !== 'decision-record' ? 'uncertain' : 'supported'
-    }));
+  const claim_assessments = claimAssessmentSystem(evidence);
   return {
     source, topology,
     interaction: { verified_claims: topology.verified_claims },

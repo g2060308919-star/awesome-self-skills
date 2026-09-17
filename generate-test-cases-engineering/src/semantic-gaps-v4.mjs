@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { canonicalStringify } from './canonical.mjs';
+import { isGeneralQualityV4Contract } from './v4-contract.mjs';
 
 const RISK = new Set(['critical', 'high', 'medium', 'low']);
 const PHASE = new Set(['pre_case', 'post_case']);
@@ -57,7 +58,7 @@ function closed(value, allowed, code) {
  * Other diagnostic categories deliberately remain available to their own
  * recovery routes but can never become user business questions here.
  *
- * @param {{facts:unknown,claims?:unknown,diagnostic_candidates:unknown,discovery_phase:unknown}} input
+ * @param {{contract?:unknown,facts:unknown,claims?:unknown,diagnostic_candidates:unknown,discovery_phase:unknown}} input
  */
 export function compileSemanticGapRootsV4(input) {
   if (!record(input) || typeof input.discovery_phase !== 'string' || !PHASE.has(input.discovery_phase)) {
@@ -116,7 +117,7 @@ export function compileSemanticGapRootsV4(input) {
     closed(candidate, [
       'category', 'code', 'subject_fact_ids', 'missing_aspect', 'scope_ref', 'question', 'why_needed',
       'decision_impact', 'unresolved_outcome', 'answer_options', 'risk_level', 'source_claim_ids',
-      'discovery_phase', 'affected_test_point_ids'
+      'discovery_phase', 'affected_test_point_ids', 'acceptance_impact'
     ], 'SEMANTIC_GAP_CANDIDATE_INVALID');
     if (candidate.discovery_phase !== input.discovery_phase) throw new TypeError('SEMANTIC_GAP_PHASE_INVALID');
     const subjectFactIds = canonicalStringSetV4(candidate.subject_fact_ids, 'SEMANTIC_GAP_FACT_REFS_INVALID');
@@ -125,6 +126,7 @@ export function compileSemanticGapRootsV4(input) {
     const scopeRef = canonicalTextV4(candidate.scope_ref, 'SEMANTIC_GAP_SCOPE_INVALID');
     const rootIdentity = { subject_fact_ids: subjectFactIds, missing_aspect: missingAspect, scope_ref: scopeRef };
     const rootIssueId = contentId('ROOT', rootIdentity);
+    /** @type {Record<string, any>} */
     const semantic = {
       code: canonicalTextV4(candidate.code, 'SEMANTIC_GAP_CODE_INVALID'),
       question: canonicalTextV4(candidate.question, 'SEMANTIC_GAP_QUESTION_INVALID'),
@@ -134,6 +136,27 @@ export function compileSemanticGapRootsV4(input) {
       risk_level: canonicalTextV4(candidate.risk_level, 'SEMANTIC_GAP_RISK_INVALID')
     };
     if (!RISK.has(semantic.risk_level)) throw new TypeError('SEMANTIC_GAP_RISK_INVALID');
+    let acceptanceImpact;
+    if (isGeneralQualityV4Contract(input.contract)) {
+      const impact = record(candidate.acceptance_impact);
+      if (!impact || Object.keys(impact).some(key => !['classification', 'criteria', 'rationale'].includes(key))
+        || !['critical', 'noncritical'].includes(String(impact.classification))) {
+        throw new TypeError('SEMANTIC_IMPACT_REQUIRED');
+      }
+      const criteria = canonicalStringSetV4(impact.criteria, 'SEMANTIC_IMPACT_INVALID');
+      const allowed = impact.classification === 'critical'
+        ? new Set(['changes_core_acceptance', 'changes_required_branch', 'makes_required_result_undecidable'])
+        : new Set(['does_not_change_required_acceptance']);
+      if (criteria.some(item => !allowed.has(item))) throw new TypeError('SEMANTIC_IMPACT_INVALID');
+      acceptanceImpact = {
+        classification: impact.classification,
+        criteria,
+        rationale: canonicalTextV4(impact.rationale, 'SEMANTIC_IMPACT_INVALID')
+      };
+      semantic.acceptance_impact = acceptanceImpact;
+    } else if (candidate.acceptance_impact !== undefined) {
+      throw new TypeError('SEMANTIC_IMPACT_UNSUPPORTED');
+    }
     const answerOptions = canonicalStringSetV4(candidate.answer_options, 'SEMANTIC_GAP_OPTIONS_INVALID');
     const sourceClaimIds = canonicalStringSetV4(candidate.source_claim_ids, 'SEMANTIC_GAP_CLAIMS_INVALID');
     if (claimById.size > 0) {

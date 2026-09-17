@@ -11,8 +11,9 @@ import {
   constructSemanticClarificationEventV4
 } from '../../src/clarification-v4.mjs';
 import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
+import { bindGeneralQualityFixture } from './v4-general-quality-fixture.mjs';
 import { v4PipelineFixture } from './v4-pipeline-fixture.mjs';
-import { LEGACY_V4_CONTRACT } from '../../src/v4-contract.mjs';
+import { LEGACY_V4_CONTRACT, isGeneralQualityV4Contract } from '../../src/v4-contract.mjs';
 
 /** @param {unknown} value */
 export const sha = (value) => `sha256:${createHash('sha256').update(String(value)).digest('hex')}`;
@@ -137,6 +138,13 @@ export function revisionArtifacts(profile, revision, options = {}) {
     artifact.source_revision = revision;
   }
   sourcePack.run_instance_id = runId;
+  if (isGeneralQualityV4Contract(contract)) bindGeneralQualityFixture({
+    artifacts: {
+      source_pack: sourcePack, evidence_claims: evidence,
+      behavior_views: behaviorViews, case_drafts: caseDrafts
+    },
+    system: fixture.system
+  });
 
   // Compile the Case Document before the optional semantic-root audit fixture
   // is added. The latter is resolved before final delivery and exists only to

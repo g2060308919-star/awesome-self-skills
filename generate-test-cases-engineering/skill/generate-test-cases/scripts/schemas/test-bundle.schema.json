@@ -5776,16 +5776,54 @@
       "required": ["root_issue_id", "status", "title", "business_object", "question", "why_needed", "decision_impact", "unresolved_outcome", "affected_business_items"],
       "properties": {
         "root_issue_id": {"$ref": "#/$defs/v4Text"},
-        "status": {"enum": ["presented", "resolved", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]},
+        "status": {"enum": ["presented", "resolved", "resolved_final", "resolved_temporary", "deferred_by_user", "unknown_by_user", "closed_for_delivery", "obsolete"]},
         "title": {"$ref": "#/$defs/v4Text"},
         "business_object": {"$ref": "#/$defs/v4Text"},
         "question": {"$ref": "#/$defs/v4Text"},
         "why_needed": {"$ref": "#/$defs/v4Text"},
         "decision_impact": {"$ref": "#/$defs/v4Text"},
         "unresolved_outcome": {"$ref": "#/$defs/v4Text"},
-        "affected_business_items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/v4AffectedBusinessItem"}}
+        "affected_business_items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/v4AffectedBusinessItem"}},
+        "root_version_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "acceptance_impact": {"$ref": "#/$defs/v4AcceptanceImpact"},
+        "critical_resolution_basis": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["root_issue_id", "root_version_digest", "basis_kind"],
+              "properties": {
+                "root_issue_id": {"$ref": "#/$defs/v4Text"},
+                "root_version_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                "basis_kind": {"enum": ["final_e3_decision", "replayable_e2_derivation", "evidence_not_applicable", "evidence_obsolete"]}
+              }
+            }
+          ]
+        }
       },
       "additionalProperties": false
+    },
+    "v4AcceptanceImpact": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": {"const": "critical"},
+            "criteria": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["changes_core_acceptance", "changes_required_branch", "makes_required_result_undecidable"]}},
+            "rationale": {"$ref": "#/$defs/v4Text"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["classification", "criteria", "rationale"],
+          "properties": {
+            "classification": {"const": "noncritical"},
+            "criteria": {"type": "array", "minItems": 1, "maxItems": 1, "prefixItems": [{"const": "does_not_change_required_acceptance"}], "items": false},
+            "rationale": {"$ref": "#/$defs/v4Text"}
+          }
+        }
+      ]
     },
     "v4ExploratoryPresentation": {
       "type": "object",
@@ -5878,6 +5916,64 @@
         }
       ]
     },
+    "v4DispositionCounts": {
+      "type": "object",
+      "required": ["retained", "representative_value", "equivalent_merge", "evidence_exclusion", "semantic_gap", "exploratory"],
+      "properties": {
+        "retained": {"type": "integer", "minimum": 0},
+        "representative_value": {"type": "integer", "minimum": 0},
+        "equivalent_merge": {"type": "integer", "minimum": 0},
+        "evidence_exclusion": {"type": "integer", "minimum": 0},
+        "semantic_gap": {"type": "integer", "minimum": 0},
+        "exploratory": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "v4DesignAssuranceSummary": {
+      "type": "object",
+      "required": ["status", "plan_revision", "batch_count", "rule_group_count", "candidate_responsibility_count", "candidate_disposition_counts"],
+      "properties": {
+        "status": {"const": "complete"},
+        "plan_revision": {"type": "integer", "minimum": 1},
+        "batch_count": {"type": "integer", "minimum": 1},
+        "rule_group_count": {"type": "integer", "minimum": 1},
+        "candidate_responsibility_count": {"type": "integer", "minimum": 1},
+        "candidate_disposition_counts": {"$ref": "#/$defs/v4DispositionCounts"}
+      },
+      "additionalProperties": false
+    },
+    "v4IndependentReviewSummary": {
+      "type": "object",
+      "required": ["status", "protocol_version", "review_mode", "reviewer_identity_class", "source_first_target_count", "target_assessment_counts", "finding_counts", "review_target_digest"],
+      "properties": {
+        "status": {"const": "completed"},
+        "protocol_version": {"const": "1.0.0"},
+        "review_mode": {"const": "independent_source_first"},
+        "reviewer_identity_class": {"enum": ["independent_context", "independent_agent", "qualified_external_reviewer"]},
+        "source_first_target_count": {"type": "integer", "minimum": 1},
+        "target_assessment_counts": {
+          "type": "object",
+          "required": ["verified", "semantic_gap", "evidence_excluded"],
+          "properties": {
+            "verified": {"type": "integer", "minimum": 0},
+            "semantic_gap": {"type": "integer", "minimum": 0},
+            "evidence_excluded": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "finding_counts": {
+          "type": "object",
+          "required": ["confirmed", "rejected"],
+          "properties": {
+            "confirmed": {"type": "integer", "minimum": 0},
+            "rejected": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "review_target_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
     "caseDocumentBundle": {
       "type": "object",
       "required": [
@@ -5897,10 +5993,10 @@
       ],
       "properties": {
         "schema_version": {
-          "enum": ["4.0.0", "4.2.0"]
+          "enum": ["4.0.0", "4.2.0", "4.3.0"]
         },
         "compiler_version": {
-          "enum": ["0.5.0", "0.7.0"]
+          "enum": ["0.5.0", "0.7.0", "0.8.0"]
         },
         "delivery_intent": {
           "const": "case_document"
@@ -5924,22 +6020,53 @@
         "semantic_root_groups": {"type": "array", "items": {"$ref": "#/$defs/v4SemanticRootGroup"}},
         "exploratory": {"type": "array", "items": {"$ref": "#/$defs/v4ExploratoryPresentation"}},
         "not_applicable": {"type": "array", "items": {"$ref": "#/$defs/v4NotApplicablePresentation"}},
-        "risk_review_ledger": {"type": "array", "items": {"$ref": "#/$defs/v4RiskReviewItem"}}
+        "risk_review_ledger": {"type": "array", "items": {"$ref": "#/$defs/v4RiskReviewItem"}},
+        "design_assurance_summary": {"$ref": "#/$defs/v4DesignAssuranceSummary"},
+        "independent_review_summary": {"$ref": "#/$defs/v4IndependentReviewSummary"}
       },
       "additionalProperties": false,
       "allOf": [
         {
           "oneOf": [
             {
+              "allOf": [
+                {"not": {"required": ["design_assurance_summary"]}},
+                {"not": {"required": ["independent_review_summary"]}}
+              ],
               "properties": {
                 "schema_version": { "const": "4.0.0" },
-                "compiler_version": { "const": "0.5.0" }
+                "compiler_version": { "const": "0.5.0" },
+                "semantic_root_groups": {"items": {"allOf": [
+                  {"not": {"required": ["root_version_digest"]}},
+                  {"not": {"required": ["acceptance_impact"]}},
+                  {"not": {"required": ["critical_resolution_basis"]}}
+                ]}}
               }
             },
             {
+              "allOf": [
+                {"not": {"required": ["design_assurance_summary"]}},
+                {"not": {"required": ["independent_review_summary"]}}
+              ],
               "properties": {
                 "schema_version": { "const": "4.2.0" },
-                "compiler_version": { "const": "0.7.0" }
+                "compiler_version": { "const": "0.7.0" },
+                "semantic_root_groups": {"items": {"allOf": [
+                  {"not": {"required": ["root_version_digest"]}},
+                  {"not": {"required": ["acceptance_impact"]}},
+                  {"not": {"required": ["critical_resolution_basis"]}}
+                ]}}
+              }
+            },
+            {
+              "required": ["design_assurance_summary", "independent_review_summary"],
+              "properties": {
+                "schema_version": { "const": "4.3.0" },
+                "compiler_version": { "const": "0.8.0" },
+                "semantic_root_groups": {"items": {
+                  "required": ["root_version_digest", "acceptance_impact", "critical_resolution_basis"],
+                  "properties": {"status": {"not": {"const": "resolved"}}}
+                }}
               }
             }
           ]

@@ -2466,7 +2466,8 @@
       "enum": [
         "3.0.0",
         "4.0.0",
-        "4.2.0"
+        "4.2.0",
+        "4.3.0"
       ]
     },
     "source_revision": {
@@ -3349,7 +3350,7 @@
       ],
       "properties": {
         "schema_version": {
-          "enum": ["4.0.0", "4.2.0"]
+          "enum": ["4.0.0", "4.2.0", "4.3.0"]
         },
         "execution_events": {
           "type": "array",

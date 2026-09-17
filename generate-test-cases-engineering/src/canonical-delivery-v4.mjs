@@ -18,11 +18,16 @@ import {
   atomicWriteJson, atomicWriteText, outputPaths, readText, revisionName
 } from './run-store.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
+import { isCandidateV4Contract, v4ContractForIdentity } from './v4-contract.mjs';
+import { assertSemanticBundleDeliveryGateV4 } from './semantic-delivery-gate-v4.mjs';
 
-const BUNDLE_KEYS = Object.freeze([
+const BASE_BUNDLE_KEYS = Object.freeze([
   'schema_version', 'compiler_version', 'delivery_intent', 'source_revision', 'result_kind',
   'ordered_case_ids', 'scope_manifest', 'cases', 'coverage', 'semantic_root_groups',
   'exploratory', 'not_applicable', 'risk_review_ledger'
+]);
+const GENERAL_QUALITY_BUNDLE_KEYS = Object.freeze([
+  ...BASE_BUNDLE_KEYS, 'design_assurance_summary', 'independent_review_summary'
 ]);
 const ACTIVE_ROOT_STATUSES = new Set(['presented', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery']);
 const RISK_KINDS = Object.freeze([
@@ -32,6 +37,12 @@ const RISK_KINDS = Object.freeze([
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function record(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
+
+/** @param {any} left @param {any} right */
+function sameContractIdentity(left, right) {
+  return left?.schema_version === right?.schema_version
+    && left?.compiler_version === right?.compiler_version;
+}
 
 /** @param {string} value */
 function byteDigest(value) {
@@ -74,11 +85,12 @@ function normalizeInput(input) {
     || !Array.isArray(input.non_blocking_diagnostics)) throw new TypeError('CANONICAL_DELIVERY_INPUT_INVALID');
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
-  const expectedKeys = [...BUNDLE_KEYS].sort();
-  const legacy = bundle.schema_version === '4.0.0' && bundle.compiler_version === '0.5.0';
-  const candidate = bundle.schema_version === '4.2.0' && bundle.compiler_version === '0.7.0';
+  const contract = v4ContractForIdentity(bundle);
+  const expectedKeys = [...(contract?.schema_version === '4.3.0'
+    ? GENERAL_QUALITY_BUNDLE_KEYS : BASE_BUNDLE_KEYS)].sort();
+  const candidate = contract?.candidate === true;
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])
-    || (!legacy && !candidate)
+    || !contract
     || bundle.delivery_intent !== 'case_document' || !Number.isSafeInteger(bundle.source_revision)
     || bundle.source_revision < 0 || !Array.isArray(bundle.risk_review_ledger)) {
     throw new TypeError('CANONICAL_BUNDLE_INVALID');
@@ -99,6 +111,12 @@ function normalizeInput(input) {
     'result_kind', 'ordered_case_ids', 'scope_manifest', 'cases', 'coverage',
     'semantic_root_groups', 'exploratory', 'not_applicable'
   ].map(key => [key, structuredClone(bundle[key])]));
+  if (contract.schema_version === '4.3.0') Object.assign(projection, {
+    schema_version: bundle.schema_version,
+    compiler_version: bundle.compiler_version,
+    design_assurance_summary: structuredClone(bundle.design_assurance_summary),
+    independent_review_summary: structuredClone(bundle.independent_review_summary)
+  });
   projection.render_options = structuredClone(input.render_options);
   return { value: structuredClone(input), bundle, projection, sourceReading, candidate };
 }
@@ -157,7 +175,7 @@ function validateManifest(manifest) {
 /** @param {Record<string,any>} manifest @param {Record<string,string>} artifacts @param {any[]} nonBlockingDiagnostics */
 function finishedReply(manifest, artifacts, nonBlockingDiagnostics) {
   const blockedOnly = manifest.result_kind === 'blocked_only';
-  const candidate = manifest.schema_version === '4.2.0';
+  const candidate = isCandidateV4Contract(manifest);
   const reply = {
     status: 'finished', phase: 'delivery', run_id: manifest.run_id,
     delivery_intent: 'case_document', result_kind: manifest.result_kind,
@@ -228,9 +246,15 @@ async function resolveCaseDocument(ref, services) {
     || manifest.run_id !== ref.run_id || manifest.revision !== ref.revision
     || manifest.bundle.digest !== ref.bundle_digest
     || bundle.delivery_intent !== 'case_document' || bundle.source_revision !== ref.revision
-    || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count) {
+    || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count
+    || (bundle.schema_version === '4.3.0'
+      && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest)) {
     throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
   }
+  if (!sameContractIdentity(manifest, bundle)) {
+    throw new TypeError('CASE_DOCUMENT_CONTRACT_MISMATCH');
+  }
+  assertSemanticBundleDeliveryGateV4(bundle);
   return { manifest, bundle, manifest_bytes: manifestBytes, bundle_bytes: bundleBytes };
 }
 
@@ -259,6 +283,10 @@ async function normalizeExecutionInput(input, services) {
     throw new TypeError('EXECUTION_PLAN_INVALID');
   }
   const referenced = await resolveCaseDocument(input.case_document_ref, services);
+  if (!sameContractIdentity(plan, referenced.manifest)
+    || !sameContractIdentity(plan, referenced.bundle)) {
+    throw new TypeError('EXECUTION_CONTRACT_MISMATCH');
+  }
   const cases = new Map(referenced.bundle.cases.map((/** @type {any} */ item) => [item.case_id, item]));
   const orderedCaseIds = referenced.bundle.ordered_case_ids;
   if (plan.items.length !== orderedCaseIds.length || new Set(plan.items.map((/** @type {any} */ item) => item?.case_id)).size !== plan.items.length) {
@@ -314,6 +342,7 @@ function executionFinishedReply(manifest, planBytes, diagnostics) {
  */
 export function materializeCaseDocumentDeliveryV4(input) {
   const { value, bundle, sourceReading, candidate } = normalizeInput(input);
+  assertSemanticBundleDeliveryGateV4(bundle);
   validateFinalRiskReview(bundle);
   const bundleBytes = `${canonicalStringify(bundle)}\n`;
   // Render both human surfaces from the exact canonical JSON bytes that will
@@ -347,7 +376,10 @@ export function materializeCaseDocumentDeliveryV4(input) {
       source_reading: {
         path: `${prefix}/source-reading.json`, digest: byteDigest(sourceReadingBytes ?? ''), format: 'json'
       },
-      primary_readable: 'html'
+      primary_readable: 'html',
+      ...(canonicalBundle.schema_version === '4.3.0' ? {
+        review_target_digest: canonicalBundle.independent_review_summary.review_target_digest
+      } : {})
     } : {}),
     render_options: structuredClone(value.render_options), ...derivedCounts(canonicalBundle),
     completed_at: value.completed_at
@@ -373,7 +405,7 @@ export function materializeCaseDocumentDeliveryV4(input) {
 export function validateCaseDocumentArtifactSetV4(input, texts) {
   if (!record(texts)) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
   const materialized = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
-  const candidate = materialized.manifest.schema_version === '4.2.0';
+  const candidate = isCandidateV4Contract(materialized.manifest);
   if (materialized.bundle_bytes !== texts.bundle
     || materialized.markdown_bytes !== texts.markdown
     || materialized.worksheet_bytes !== texts.worksheet
@@ -411,7 +443,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateManifest(manifest);
   if (manifest.delivery_intent !== 'case_document') throw new TypeError('CANONICAL_MANIFEST_INVALID');
   const prefix = `output/${revisionName(manifest.revision)}`;
-  const candidate = manifest.schema_version === '4.2.0';
+  const candidate = isCandidateV4Contract(manifest);
   if (manifest.bundle.path !== `${prefix}/test-bundle.json`
     || manifest.markdown.path !== `${prefix}/test-cases.md`
     || manifest.execution_worksheet.path !== `${prefix}/execution-worksheet.csv`
@@ -441,6 +473,10 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   let bundle;
   try { bundle = JSON.parse(artifacts.bundle); } catch { throw new TypeError('CANONICAL_ARTIFACT_INVALID'); }
   if (`${canonicalStringify(bundle)}\n` !== artifacts.bundle) throw new TypeError('CANONICAL_ARTIFACT_INVALID');
+  if (!sameContractIdentity(manifest, bundle)) {
+    throw new TypeError('CASE_DOCUMENT_CONTRACT_MISMATCH');
+  }
+  assertSemanticBundleDeliveryGateV4(bundle);
   let sourceReading;
   if (candidate) {
     try { sourceReading = JSON.parse(artifacts.source_reading); } catch { throw new TypeError('CANONICAL_ARTIFACT_INVALID'); }
@@ -454,6 +490,9 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateFinalRiskReview(normalized.bundle);
   if (normalized.bundle.source_revision !== manifest.revision
     || normalized.bundle.result_kind !== manifest.result_kind
+    || (normalized.bundle.schema_version === '4.3.0'
+      && manifest.review_target_digest
+        !== normalized.bundle.independent_review_summary.review_target_digest)
     || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
       case_count: manifest.case_count, blocked_root_count: manifest.blocked_root_count,
       closed_for_delivery_root_count: manifest.closed_for_delivery_root_count,
@@ -506,7 +545,7 @@ export async function publishCaseDocumentDeliveryV4(runDirectory, input) {
   await atomicWriteText(runDirectory, paths.bundle, materialized.bundle_bytes);
   await atomicWriteText(runDirectory, paths.markdown, materialized.markdown_bytes);
   await atomicWriteText(runDirectory, paths.worksheet, materialized.worksheet_bytes);
-  if (materialized.manifest.schema_version === '4.2.0') {
+  if (isCandidateV4Contract(materialized.manifest)) {
     await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.html.path), materialized.html_bytes);
     await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.chat_table.path), materialized.table_bytes);
     await atomicWriteText(runDirectory, path.join(runDirectory, materialized.manifest.source_reading.path), materialized.source_reading_bytes);
@@ -576,6 +615,9 @@ export async function verifyExecutionPlanDeliveryV4(runDirectory, services) {
     case_document_ref: manifest.case_document_ref, execution_plan: plan, non_blocking_diagnostics: []
   }, services);
   if (manifest.result_kind !== normalized.plan.result_kind
+    || !sameContractIdentity(manifest, normalized.plan)
+    || !sameContractIdentity(manifest, normalized.referenced.manifest)
+    || !sameContractIdentity(manifest, normalized.referenced.bundle)
     || manifest.runner_ready !== normalized.plan.runner_ready
     || !same(manifest.runner_projection, normalized.plan.runner_projection)) {
     throw new TypeError('EXECUTION_MANIFEST_INVALID');

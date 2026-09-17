@@ -1,7 +1,10 @@
 import { validateCaseSemanticsV4 } from './case-semantics-v4.mjs';
 
 const RESULT_KINDS = new Set(['delivered_cases', 'delivered_with_gaps', 'blocked_only', 'no_applicable_cases']);
-const ROOT_STATUSES = new Set(['presented', 'resolved', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery', 'obsolete']);
+const ROOT_STATUSES = new Set([
+  'presented', 'resolved', 'resolved_final', 'resolved_temporary',
+  'deferred_by_user', 'unknown_by_user', 'closed_for_delivery', 'obsolete'
+]);
 const ACTIVE_ROOT_STATUSES = new Set(['presented', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery']);
 const SURFACE_RANK = Object.freeze([
   'ui', 'request', 'response', 'persistence', 'event', 'callback',
@@ -13,6 +16,14 @@ const SURFACE_LABEL = Object.freeze({
 });
 const INTERNAL_ID = /(?:ROOT|FACT|CLM|CLAIM|OBL|OBLIGATION|TP|CASE|EXP|NA)-[A-Za-z0-9_.:/#-]+/u;
 const ROOT_KEYS = ['result_kind', 'ordered_case_ids', 'scope_manifest', 'cases', 'coverage', 'semantic_root_groups', 'exploratory', 'not_applicable', 'render_options'];
+const GENERAL_QUALITY_ROOT_KEYS = [
+  ...ROOT_KEYS, 'schema_version', 'compiler_version',
+  'design_assurance_summary', 'independent_review_summary'
+];
+const SEMANTIC_ROOT_KEYS = ['root_issue_id', 'status', 'title', 'business_object', 'question', 'why_needed', 'decision_impact', 'unresolved_outcome', 'affected_business_items'];
+const GENERAL_QUALITY_SEMANTIC_ROOT_KEYS = [
+  ...SEMANTIC_ROOT_KEYS, 'root_version_digest', 'acceptance_impact', 'critical_resolution_basis'
+];
 const CASE_KEYS = [
   'case_id', 'title', 'module_id', 'priority', 'ordering', 'acceptance_role', 'fact_ids', 'semantic_status',
   'primary_test_point_id', 'supporting_observation_ids', 'business_preconditions', 'data_conditions', 'steps',
@@ -101,7 +112,12 @@ function validateCanonicalCase(candidate) {
 /** @param {unknown} raw */
 function validateProjection(raw) {
   if (!record(raw)) throw new TypeError('MARKDOWN_PROJECTION_INVALID');
-  closed(raw, ROOT_KEYS);
+  const generalQuality = raw.schema_version === '4.3.0';
+  closed(raw, generalQuality ? GENERAL_QUALITY_ROOT_KEYS : ROOT_KEYS);
+  if (generalQuality && (raw.compiler_version !== '0.8.0'
+    || !record(raw.design_assurance_summary) || !record(raw.independent_review_summary))) {
+    throw new TypeError('MARKDOWN_PROJECTION_INVALID');
+  }
   if (!RESULT_KINDS.has(raw.result_kind) || !Array.isArray(raw.cases) || !record(raw.scope_manifest)
     || !Array.isArray(raw.semantic_root_groups) || !Array.isArray(raw.exploratory)
     || !Array.isArray(raw.not_applicable) || !record(raw.coverage) || !record(raw.render_options)) {
@@ -109,6 +125,47 @@ function validateProjection(raw) {
   }
   closed(raw.render_options, ['include_audit_appendix']);
   if (typeof raw.render_options.include_audit_appendix !== 'boolean') throw new TypeError('MARKDOWN_PROJECTION_INVALID');
+  if (generalQuality) {
+    const assurance = raw.design_assurance_summary;
+    closed(assurance, [
+      'status', 'plan_revision', 'batch_count', 'rule_group_count',
+      'candidate_responsibility_count', 'candidate_disposition_counts'
+    ]);
+    closed(assurance.candidate_disposition_counts, [
+      'retained', 'representative_value', 'equivalent_merge',
+      'evidence_exclusion', 'semantic_gap', 'exploratory'
+    ]);
+    const dispositionTotal = Object.values(assurance.candidate_disposition_counts)
+      .reduce((sum, value) => sum + nonNegativeInteger(value), 0);
+    const planRevision = nonNegativeInteger(assurance.plan_revision);
+    const batchCount = nonNegativeInteger(assurance.batch_count);
+    const ruleGroupCount = nonNegativeInteger(assurance.rule_group_count);
+    const responsibilityCount = nonNegativeInteger(assurance.candidate_responsibility_count);
+    if (assurance.status !== 'complete' || planRevision < 1 || batchCount < 1 || ruleGroupCount < 1
+      || dispositionTotal !== responsibilityCount) {
+      throw new TypeError('MARKDOWN_PROJECTION_INVALID');
+    }
+    const review = raw.independent_review_summary;
+    closed(review, [
+      'status', 'protocol_version', 'review_mode', 'reviewer_identity_class',
+      'source_first_target_count', 'target_assessment_counts', 'finding_counts',
+      'review_target_digest'
+    ]);
+    closed(review.target_assessment_counts, ['verified', 'semantic_gap', 'evidence_excluded']);
+    closed(review.finding_counts, ['confirmed', 'rejected']);
+    const assessmentTotal = Object.values(review.target_assessment_counts)
+      .reduce((sum, value) => sum + nonNegativeInteger(value), 0);
+    for (const value of Object.values(review.finding_counts)) nonNegativeInteger(value);
+    const sourceFirstTargetCount = nonNegativeInteger(review.source_first_target_count);
+    if (review.status !== 'completed' || review.protocol_version !== '1.0.0'
+      || review.review_mode !== 'independent_source_first'
+      || !['independent_context', 'independent_agent', 'qualified_external_reviewer']
+        .includes(review.reviewer_identity_class)
+      || sourceFirstTargetCount < 1 || assessmentTotal !== sourceFirstTargetCount
+      || !/^sha256:[0-9a-f]{64}$/u.test(review.review_target_digest)) {
+      throw new TypeError('MARKDOWN_PROJECTION_INVALID');
+    }
+  }
 
   closed(raw.scope_manifest, ['primary_surface', 'modules', 'boundaries']);
   if (!Array.isArray(raw.scope_manifest.modules) || !Array.isArray(raw.scope_manifest.boundaries)) {
@@ -171,7 +228,7 @@ function validateProjection(raw) {
   const rootIds = new Set();
   for (const root of raw.semantic_root_groups) {
     if (!record(root)) throw new TypeError('MARKDOWN_PROJECTION_INVALID');
-    closed(root, ['root_issue_id', 'status', 'title', 'business_object', 'question', 'why_needed', 'decision_impact', 'unresolved_outcome', 'affected_business_items']);
+    closed(root, generalQuality ? GENERAL_QUALITY_SEMANTIC_ROOT_KEYS : SEMANTIC_ROOT_KEYS);
     const rootId = traceId(root.root_issue_id);
     if (rootIds.has(rootId) || !ROOT_STATUSES.has(root.status)
       || !Array.isArray(root.affected_business_items) || root.affected_business_items.length === 0) {
@@ -271,6 +328,17 @@ function renderCaseSection(lines, title, cases, modules) {
 }
 
 /** @param {string[]} lines @param {ReturnType<typeof validateProjection>} view */
+function renderQualityAssurance(lines, view) {
+  if (view.raw.schema_version !== '4.3.0') return;
+  const design = view.raw.design_assurance_summary;
+  const review = view.raw.independent_review_summary;
+  lines.push('## 设计保障与独立审查', '');
+  lines.push(`- 设计保障：计划修订 ${design.plan_revision}；${design.batch_count} 个批次、${design.rule_group_count} 个规则组、${design.candidate_responsibility_count} 项候选验证责任均已处置。`);
+  lines.push(`- 独立审查：${review.source_first_target_count} 个来源优先目标均已评估；确认发现 ${review.finding_counts.confirmed} 项，驳回发现 ${review.finding_counts.rejected} 项。`);
+  lines.push('_上述记录用于过程审计，不提升业务证据等级。_', '');
+}
+
+/** @param {string[]} lines @param {ReturnType<typeof validateProjection>} view */
 function renderAudit(lines, view) {
   lines.push('## 审计附录');
   lines.push('');
@@ -293,6 +361,9 @@ function renderAudit(lines, view) {
   lines.push('### 排除与探索追踪');
   for (const item of view.raw.not_applicable) lines.push(`- NotApplicable：\`${item.not_applicable_record_id}\``);
   for (const item of view.raw.exploratory) lines.push(`- Exploratory：\`${item.exploratory_id}\``);
+  if (view.raw.schema_version === '4.3.0') {
+    lines.push(`- 当前独立审查目标：\`${view.raw.independent_review_summary.review_target_digest}\``);
+  }
   lines.push('');
 }
 
@@ -317,6 +388,8 @@ export function renderBusinessMarkdownV4(input) {
     for (const candidate of orderedCases) lines.push(`| ${tableCell(view.modules.get(candidate.module_id))} | ${candidate.priority} | ${tableCell(candidate.title)} | ${candidate.semantic_status === 'Grounded' ? '已确认' : '待确认'} |`);
   }
   lines.push('');
+
+  renderQualityAssurance(lines, view);
 
   renderCaseSection(lines, '主验收', orderedCases.filter(item => item.acceptance_role === 'primary_acceptance' && item.semantic_status === 'Grounded'), view.modules);
   renderCaseSection(lines, '边界契约', orderedCases.filter(item => item.acceptance_role === 'dependency_contract' && item.semantic_status === 'Grounded'), view.modules);

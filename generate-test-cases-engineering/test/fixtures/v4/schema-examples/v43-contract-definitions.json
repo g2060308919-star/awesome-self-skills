@@ -1,0 +1,222 @@
+{
+  "acceptance_impact": {
+    "valid": [
+      {
+        "name": "critical_required_result",
+        "reason": "A missing required result is critical because it leaves formal acceptance undecidable.",
+        "value": {
+          "classification": "critical",
+          "criteria": ["makes_required_result_undecidable"],
+          "rationale": "Different answers change whether the required result can be decided."
+        }
+      },
+      {
+        "name": "noncritical_representative_value",
+        "reason": "Changing an equivalent representative value does not change the required acceptance target.",
+        "value": {
+          "classification": "noncritical",
+          "criteria": ["does_not_change_required_acceptance"],
+          "rationale": "Only the equivalent test datum changes; the required result remains the same."
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "noncritical_with_critical_criterion",
+        "reason": "A noncritical record cannot cite a criterion that changes the required branch.",
+        "value": {
+          "classification": "noncritical",
+          "criteria": ["changes_required_branch"],
+          "rationale": "The branches differ."
+        }
+      }
+    ]
+  },
+  "current_non_ready": {
+    "valid": [
+      {
+        "name": "higher_revision_tombstone",
+        "reason": "A higher non-ready revision records the exact superseded ready authority without reviving it.",
+        "value": {
+          "status": "stale",
+          "schema_version": "4.3.0",
+          "compiler_version": "0.8.0",
+          "run_id": "RUN-v43",
+          "active_revision": 2,
+          "reason": "higher_revision_not_ready",
+          "previous_ready_revision": 1,
+          "previous_ready_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "tombstone_with_old_compiler",
+        "reason": "A 4.3 current tombstone cannot be mixed with an older compiler identity.",
+        "value": {
+          "status": "stale",
+          "schema_version": "4.3.0",
+          "compiler_version": "0.7.0",
+          "run_id": "RUN-v43",
+          "active_revision": 2,
+          "reason": "higher_revision_not_ready",
+          "previous_ready_revision": 1,
+          "previous_ready_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    ]
+  },
+  "review_request": {
+    "valid": [
+      {
+        "name": "bound_review_request",
+        "reason": "The compiler-issued request binds source targets and the complete generated-content projection digest.",
+        "value": {
+          "protocol_version": "1.0.0",
+          "review_mode": "independent_source_first",
+          "reviewer_identity": {
+            "identity_class": "independent_context",
+            "separation_basis": "Source targets were fixed before generated content was inspected."
+          },
+          "source_first_targets": [
+            {
+              "target_id": "IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "target_kind": "business_result",
+              "acceptance_role": "primary_acceptance",
+              "objective": "The accepted order reaches its terminal state.",
+              "source_claim_ids": ["CLM-order"],
+              "decision_ids": []
+            }
+          ],
+          "review_target_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_target_projection": {
+            "projection_version": "1.0.0",
+            "source_revision": 0,
+            "source_first_targets": [
+              {
+                "target_id": "IRT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "target_kind": "business_result",
+                "acceptance_role": "primary_acceptance",
+                "objective": "The accepted order reaches its terminal state.",
+                "source_claim_ids": ["CLM-order"],
+                "decision_ids": []
+              }
+            ],
+            "facts": [],
+            "views": [],
+            "formal_test_points": [],
+            "candidate_responsibilities": [],
+            "cases": []
+          }
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "review_request_without_projection",
+        "reason": "A digest without its compiler-issued generated-content projection is not a review request.",
+        "value": {
+          "protocol_version": "1.0.0",
+          "review_mode": "independent_source_first",
+          "reviewer_identity": {
+            "identity_class": "independent_context",
+            "separation_basis": "Source targets were fixed first."
+          },
+          "source_first_targets": [],
+          "review_target_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    ]
+  },
+  "design_summary": {
+    "valid": [
+      {
+        "name": "complete_design_summary",
+        "reason": "The compiler summary accounts for every closed disposition class and current plan count.",
+        "value": {
+          "status": "complete",
+          "plan_revision": 1,
+          "batch_count": 1,
+          "rule_group_count": 1,
+          "candidate_responsibility_count": 1,
+          "candidate_disposition_counts": {
+            "retained": 1,
+            "representative_value": 0,
+            "equivalent_merge": 0,
+            "evidence_exclusion": 0,
+            "semantic_gap": 0,
+            "exploratory": 0
+          }
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "design_summary_without_batch",
+        "reason": "A complete design summary cannot claim zero completed batches.",
+        "value": {
+          "status": "complete",
+          "plan_revision": 1,
+          "batch_count": 0,
+          "rule_group_count": 1,
+          "candidate_responsibility_count": 1,
+          "candidate_disposition_counts": {
+            "retained": 1,
+            "representative_value": 0,
+            "equivalent_merge": 0,
+            "evidence_exclusion": 0,
+            "semantic_gap": 0,
+            "exploratory": 0
+          }
+        }
+      }
+    ]
+  },
+  "review_summary": {
+    "valid": [
+      {
+        "name": "completed_review_summary",
+        "reason": "The canonical summary binds review identity, totals, findings, and the reviewed content digest.",
+        "value": {
+          "status": "completed",
+          "protocol_version": "1.0.0",
+          "review_mode": "independent_source_first",
+          "reviewer_identity_class": "independent_context",
+          "source_first_target_count": 1,
+          "target_assessment_counts": {
+            "verified": 1,
+            "semantic_gap": 0,
+            "evidence_excluded": 0
+          },
+          "finding_counts": {
+            "confirmed": 0,
+            "rejected": 0
+          },
+          "review_target_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "review_summary_without_digest",
+        "reason": "A canonical independent-review summary cannot omit the reviewed generated-content digest.",
+        "value": {
+          "status": "completed",
+          "protocol_version": "1.0.0",
+          "review_mode": "independent_source_first",
+          "reviewer_identity_class": "independent_context",
+          "source_first_target_count": 1,
+          "target_assessment_counts": {
+            "verified": 1,
+            "semantic_gap": 0,
+            "evidence_excluded": 0
+          },
+          "finding_counts": {
+            "confirmed": 0,
+            "rejected": 0
+          }
+        }
+      }
+    ]
+  }
+}

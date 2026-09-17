@@ -1,0 +1,13 @@
+{
+  "fixture_id": "GQ-RESERVED-PERMISSION-FLOW",
+  "required_targets": [
+    {"target_id": "TARGET-OWNER", "acceptance_role": "primary_acceptance", "objective": "创建者可将同一草稿提交为待审核", "baseline_covered": false},
+    {"target_id": "TARGET-REVIEWER", "acceptance_role": "dependency_contract", "objective": "审核者拒绝后同一对象回到已驳回", "baseline_covered": false}
+  ],
+  "cases": [
+    {"entry_id": "CASE-OWNER", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-OWNER"], "semantic_case_key": "owner-submit", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CASE-REVIEWER", "artifact_kind": "case", "acceptance_role": "dependency_contract", "target_ids": ["TARGET-REVIEWER"], "semantic_case_key": "reviewer-reject", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CASE-REVIEWER-DUP", "artifact_kind": "case", "acceptance_role": "dependency_contract", "target_ids": ["TARGET-REVIEWER"], "semantic_case_key": "reviewer-reject", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0}
+  ],
+  "expected": {"status": "pass", "covered": 2, "required": 2, "ratio": 1, "duplicate_case_count": 1}
+}

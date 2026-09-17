@@ -1,0 +1,17 @@
+{
+  "fixture_id": "GQ-PAIRED-COMPARISON",
+  "required_targets": [
+    {"target_id": "TARGET-AND", "acceptance_role": "primary_acceptance", "objective": "A 且 B 时允许", "baseline_covered": false},
+    {"target_id": "TARGET-EXCEPTION", "acceptance_role": "primary_acceptance", "objective": "C 成立时始终拒绝", "baseline_covered": false},
+    {"target_id": "TARGET-PERMISSION", "acceptance_role": "dependency_contract", "objective": "无权限角色收到拒绝且对象不变", "baseline_covered": false}
+  ],
+  "baseline_cases": [
+    {"entry_id": "BASE-AND", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-AND"], "semantic_case_key": "and-rule", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0}
+  ],
+  "candidate_cases": [
+    {"entry_id": "CAND-AND", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-AND"], "semantic_case_key": "and-rule", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CAND-EXCEPTION", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-EXCEPTION"], "semantic_case_key": "exception-rule", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CAND-PERMISSION", "artifact_kind": "case", "acceptance_role": "dependency_contract", "target_ids": ["TARGET-PERMISSION"], "semantic_case_key": "permission-result", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0}
+  ],
+  "expected": {"baseline_covered": 1, "candidate_covered": 3, "required": 3}
+}

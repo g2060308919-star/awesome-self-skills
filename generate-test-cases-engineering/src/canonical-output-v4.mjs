@@ -1,5 +1,6 @@
 import { canonicalStringify } from './canonical.mjs';
 import { validateCaseSemanticsV4 } from './case-semantics-v4.mjs';
+import { isV4SchemaVersion } from './v4-contract.mjs';
 
 export const EXECUTION_WORKSHEET_COLUMNS = Object.freeze([
   'case_id', 'acceptance_role', 'module', 'priority', 'title', 'preconditions',
@@ -51,7 +52,7 @@ function validateCanonicalCase(candidate) {
  * @param {unknown} input @param {unknown} orderedCaseIds
  */
 export function renderExecutionWorksheetCsvV4(input, orderedCaseIds) {
-  if (!record(input) || !['4.0.0', '4.2.0'].includes(input.schema_version) || input.delivery_intent !== 'case_document'
+  if (!record(input) || !isV4SchemaVersion(input.schema_version) || input.delivery_intent !== 'case_document'
     || !Array.isArray(input.cases) || !record(input.scope_manifest)
     || !Array.isArray(input.scope_manifest.modules) || !Array.isArray(orderedCaseIds)) {
     throw new TypeError('CASE_DOCUMENT_INVALID');

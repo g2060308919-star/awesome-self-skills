@@ -13,8 +13,15 @@ import { validateCaseDocumentArtifactSetV4 } from './canonical-delivery-v4.mjs';
 import { canonicalStringify } from './canonical.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
+import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
+import {
+  compileIndependentReviewTargetV4,
+  validateIndependentReviewV4
+} from './independent-review-v4.mjs';
+import { materializeRelativeBaselinesV4 } from './relative-baseline-materialization-v4.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
-import { v4ContractForSchema } from './v4-contract.mjs';
+import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
+import { deriveV4CaseSemanticContext } from './v4-system-context.mjs';
 
 /** @param {unknown} value */
 function canonicalDigest(value) {
@@ -128,6 +135,58 @@ export function validateRevisionArtifactsV4(input) {
     for (const key of ['behavior_views', 'test_obligations', 'case_drafts']) {
       if (values[key].schema_version !== contract.schema_version || values[key].source_revision !== input.revision) {
         throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
+      }
+    }
+    if (isGeneralQualityV4Contract(contract) && validateDesignAssuranceV4(
+      values.behavior_views.design_assurance,
+      {
+        source_claim_ids: values.evidence_claims.claims.map((/** @type {any} */ item) => item.claim_id),
+        semantic_gap_ids: values.evidence_claims.semantic_gaps.map((/** @type {any} */ item) => item.semantic_gap_id),
+        view_element_ids: values.behavior_views.views.flatMap(
+          (/** @type {any} */ view) => view.elements.map((/** @type {any} */ item) => item.element_id)
+        )
+      }
+    ).diagnostics.length) {
+      throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
+    }
+    if (isGeneralQualityV4Contract(contract)) {
+      let reviewTarget;
+      try {
+        const semanticContext = deriveV4CaseSemanticContext(values.evidence_claims);
+        const materialized = materializeRelativeBaselinesV4(
+          values.case_drafts.cases,
+          semanticContext.semantic_evidence,
+          semanticContext.claim_assessments
+        );
+        if (materialized.diagnostics.length) {
+          throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');
+        }
+        reviewTarget = compileIndependentReviewTargetV4({
+          source_revision: input.revision,
+          source_first_targets: values.case_drafts.independent_review?.source_first_targets,
+          facts: values.evidence_claims.fact_ledger,
+          views: values.behavior_views.views,
+          formal_test_points: values.test_obligations.formal_test_points,
+          candidate_responsibilities:
+            values.behavior_views.design_assurance.candidate_responsibilities,
+          cases: materialized.cases
+        });
+      } catch {
+        throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');
+      }
+      const reviewResult = validateIndependentReviewV4(
+        values.case_drafts.independent_review,
+        reviewTarget,
+        {
+          source_claim_ids: values.evidence_claims.claims.map((/** @type {any} */ item) => item.claim_id),
+          decision_ids: values.decision_journal.decisions.map((/** @type {any} */ item) => item.decision_id),
+          semantic_gap_ids: values.checkpoint.semantic_gap_ledger.map(
+            (/** @type {any} */ item) => item.semantic_gap_id
+          )
+        }
+      );
+      if (reviewResult.diagnostics.length) {
+        throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');
       }
     }
     if (values.checkpoint.behavior_views_digest !== canonicalDigest(values.behavior_views)

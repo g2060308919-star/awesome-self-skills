@@ -1,0 +1,10 @@
+{
+  "fixture_id": "GQ-ZERO-DENOMINATOR",
+  "required_targets": [
+    {"target_id": "TARGET-CONTEXT", "acceptance_role": "context_only", "objective": "仅记录业务背景", "baseline_covered": false}
+  ],
+  "cases": [
+    {"entry_id": "CASE-CONTEXT", "artifact_kind": "case", "acceptance_role": "context_only", "target_ids": ["TARGET-CONTEXT"], "semantic_case_key": "context-only", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0}
+  ],
+  "expected": {"status": "not_applicable", "covered": 0, "required": 0, "ratio": null}
+}

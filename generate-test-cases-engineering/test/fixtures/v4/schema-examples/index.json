@@ -18,9 +18,22 @@
       "semantic_validator": "case_semantics_v4"
     },
     {
+      "name": "pending and completed independent review branches",
+      "schema": "case-drafts.schema.json",
+      "definition": "independentReview",
+      "fixture": "independent-review.json"
+    },
+    {
       "name": "complete v3 and v4 checkpoint roots",
       "schema": "checkpoint.schema.json",
       "fixture": "checkpoint-roots.json"
+    },
+    {
+      "name": "checkpoint acceptance-impact branches",
+      "schema": "checkpoint.schema.json",
+      "definition": "v4_acceptance_impact",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "acceptance_impact"
     },
     {
       "name": "complete legacy and v4 current-pointer roots",
@@ -28,9 +41,23 @@
       "fixture": "current-pointer-roots.json"
     },
     {
+      "name": "v4.3 non-ready current tombstone",
+      "schema": "current-pointer.schema.json",
+      "definition": "v4NonReady",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "current_non_ready"
+    },
+    {
       "name": "complete v3 and v4 Evidence roots",
       "schema": "evidence-claims.schema.json",
       "fixture": "evidence-roots.json"
+    },
+    {
+      "name": "Evidence acceptance-impact branches",
+      "schema": "evidence-claims.schema.json",
+      "definition": "v4AcceptanceImpact",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "acceptance_impact"
     },
     {
       "name": "complete v4 Execution Plan artifact roots",
@@ -101,6 +128,13 @@
       "fixture": "reply-roots.json"
     },
     {
+      "name": "compiler-issued independent-review request",
+      "schema": "reply.schema.json",
+      "definition": "v4IndependentReviewRequest",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "review_request"
+    },
+    {
       "name": "complete v3 and v4 Source Pack roots",
       "schema": "source-pack.schema.json",
       "fixture": "source-pack-roots.json"
@@ -153,6 +187,27 @@
       "fixture": "test-bundle-root.json"
     },
     {
+      "name": "canonical semantic-root acceptance-impact branches",
+      "schema": "test-bundle.schema.json",
+      "definition": "v4AcceptanceImpact",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "acceptance_impact"
+    },
+    {
+      "name": "canonical design-assurance summary",
+      "schema": "test-bundle.schema.json",
+      "definition": "v4DesignAssuranceSummary",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "design_summary"
+    },
+    {
+      "name": "canonical independent-review summary",
+      "schema": "test-bundle.schema.json",
+      "definition": "v4IndependentReviewSummary",
+      "fixture": "v43-contract-definitions.json",
+      "fixture_key": "review_summary"
+    },
+    {
       "name": "four closed risk-review-item branches",
       "schema": "test-obligations.schema.json",
       "definition": "riskReviewItem",
@@ -179,24 +234,28 @@
   "new_definitions": {
     "behavior-views.schema.json": [
       "v3Artifact", "text", "idArray", "jsonValue", "condition", "evidenceBinding", "surface", "semanticEffect",
-      "partition", "v4ElementBase", "v4InputDomain", "v4Integration", "v4DeclaredOutcome", "v4Element", "v4View", "v4Artifact"
+      "partition", "v4ElementBase", "v4InputDomain", "v4Integration", "v4DeclaredOutcome", "v4Element", "v4View",
+      "v4DesignBatch", "v4DesignRuleGroup", "v4CandidateResponsibility", "v4CandidateDisposition",
+      "v4ImpactedPriorBatch", "v4DesignAssurance", "v4Artifact"
     ],
     "case-drafts.schema.json": [
       "nonBlank", "idArray", "stringSet", "caseCondition", "casePrecondition", "caseOracle", "semanticEffect",
-      "testValueOrigin", "testValue", "comparisonContract", "baselineSpec"
+      "testValueOrigin", "testValue", "comparisonContract", "baselineSpec", "reviewerIdentity",
+      "sourceFirstTargetInput", "sourceFirstTargetIssued", "reviewItemRef", "passedReviewRecheck", "reviewRecheck",
+      "reviewTargetAssessment", "reviewFinding", "independentReview"
     ],
     "checkpoint.schema.json": [
       "v4_sha256", "v4_string_set", "v4_question_part", "v4_semantic_presentation", "v4_semantic_gap", "v4_root_state",
       "v4_decision_id_set", "v4_decision_suspension", "v4_reopened_target", "v4_decision_suspension_entry",
-      "v3_checkpoint", "v4_checkpoint"
+      "v4_acceptance_impact", "v3_checkpoint", "v4_checkpoint"
     ],
     "current-pointer.schema.json": [
-      "text", "count", "sha256", "artifact", "legacyV3", "v4ContractVersion", "caseDocumentManifest", "executionManifest"
+      "text", "count", "sha256", "artifact", "legacyV3", "v4NonReady", "v4ContractVersion", "caseDocumentManifest", "executionManifest"
     ],
     "evidence-claims.schema.json": [
       "v4Text", "v4IdSet", "v4OptionalIdSet", "v3Fact", "v4Fact", "topologyCandidate", "topologyDiscovery", "topologyReview",
       "topologyDisposition", "scopeModule", "scopeBoundary", "scopeManifest", "interactionCellBase", "interactionReviewItem",
-      "acceptanceRoleAssignmentBase", "acceptanceRoleAssignment", "v4SemanticGapInput", "v4SourceSha256", "v4SourceJsonValue",
+      "acceptanceRoleAssignmentBase", "acceptanceRoleAssignment", "v4SemanticGapInput", "v4AcceptanceImpact", "v4SourceSha256", "v4SourceJsonValue",
       "v4SourceSubjectDescriptor", "v4SourceLocatorRole", "v4SourceReview", "v4SourceLocator", "v4SourceUnit",
       "v4SourceCanonicalProjection", "v4SourceCanonicalRecord", "v4SourceConflictReview", "v3EvidenceClaim", "v4EvidenceClaim"
     ],
@@ -211,6 +270,7 @@
     "reply.schema.json": [
       "v4SemanticActionContext", "v4SemanticQuestionPart", "v4SemanticRecovery", "v4SemanticPresentation",
       "v4ExecutionClosurePresentation", "v4CancelContext", "v4FinalConfirmationPresentation", "v4ExecutionPresentation",
+      "v4IndependentReviewSourceTarget", "v4IndependentReviewRequest",
       "sourceAcquisitionNeedArtifactReply", "v4StageArtifactReply", "v4InvalidArtifactRevisionReply"
     ],
     "source-pack.schema.json": [
@@ -225,8 +285,9 @@
       "v4Text", "v4IdSet", "v4StringSet", "v4CasePrecondition", "v4CaseCondition", "v4CaseStep", "v4CaseOracle",
       "v4SemanticEffect", "v4TestValueOrigin", "v4TestValue", "v4ComparisonContract", "v4BaselineSpec", "v4CanonicalCase",
       "v4ScopeModule", "v4ScopeBoundary", "v4ScopeManifest", "v4CoverageLane", "v4CoverageSummary", "v4AffectedBusinessItem",
-      "v4SemanticRootGroup", "v4ExploratoryPresentation", "v4NotApplicablePresentation", "v4EvidenceBasis", "v4SemanticGapBasis",
-      "v4RiskCatalogBasis", "v4ScopeDecisionBasis", "v4RiskReviewItem"
+      "v4SemanticRootGroup", "v4AcceptanceImpact", "v4ExploratoryPresentation", "v4NotApplicablePresentation", "v4EvidenceBasis", "v4SemanticGapBasis",
+      "v4RiskCatalogBasis", "v4ScopeDecisionBasis", "v4RiskReviewItem", "v4DispositionCounts",
+      "v4DesignAssuranceSummary", "v4IndependentReviewSummary"
     ],
     "test-obligations.schema.json": [
       "v3Artifact", "text", "idArray", "refs", "acceptanceRole", "jsonValue", "condition", "evidenceBasis", "scopeDecisionBasis",

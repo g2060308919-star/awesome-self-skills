@@ -7,6 +7,7 @@ import test from 'node:test';
 import executionPlanSchema from '../../skill/generate-test-cases/scripts/schemas/execution-plan.schema.json' with { type: 'json' };
 import { canonicalStringify, digest } from '../../src/canonical.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
+import { candidateDeliveryInput } from '../helpers/v4-candidate-delivery-fixture.mjs';
 
 const delivery = /** @type {any} */ (await import('../../src/canonical-delivery-v4.mjs').catch(error => {
   if (error.code === 'ERR_MODULE_NOT_FOUND') return {}; throw error;
@@ -116,6 +117,52 @@ test('T03/T12 final execution-plan artifact is closed and version-correct', asyn
       /EXECUTION_PLAN_SCHEMA_INVALID/u
     );
   }
+});
+
+test('4.3 execution delivery rejects a manifest and bundle with mixed contract identities', async () => {
+  const currentInput = candidateDeliveryInput();
+  currentInput.bundle.schema_version = '4.3.0';
+  currentInput.bundle.compiler_version = '0.8.0';
+  currentInput.bundle.design_assurance_summary = {
+    status: 'complete', plan_revision: 1, batch_count: 1, rule_group_count: 1,
+    candidate_responsibility_count: 1,
+    candidate_disposition_counts: {
+      retained: 1, representative_value: 0, equivalent_merge: 0,
+      evidence_exclusion: 0, semantic_gap: 0, exploratory: 0
+    }
+  };
+  currentInput.bundle.independent_review_summary = {
+    status: 'completed', protocol_version: '1.0.0',
+    review_mode: 'independent_source_first', reviewer_identity_class: 'independent_context',
+    source_first_target_count: 1,
+    target_assessment_counts: { verified: 1, semantic_gap: 0, evidence_excluded: 0 },
+    finding_counts: { confirmed: 0, rejected: 0 },
+    review_target_digest: `sha256:${'9'.repeat(64)}`
+  };
+  const current = delivery.materializeCaseDocumentDeliveryV4(currentInput);
+  const legacyInput = fixture();
+  legacyInput.bundle.source_revision = current.manifest.revision;
+  const legacy = delivery.materializeCaseDocumentDeliveryV4(legacyInput);
+  const manifest = structuredClone(current.manifest);
+  manifest.bundle.digest = legacy.manifest.bundle.digest;
+  const manifestBytes = `${canonicalStringify(manifest)}\n`;
+  const mixed = executionFixture();
+  mixed.input.case_document_ref = {
+    run_id: manifest.run_id, revision: manifest.revision,
+    manifest_digest: byteDigest(manifestBytes), bundle_digest: legacy.manifest.bundle.digest
+  };
+  mixed.input.execution_plan.schema_version = '4.3.0';
+  mixed.input.execution_plan.compiler_version = '0.8.0';
+  mixed.input.execution_plan.case_document_ref = structuredClone(mixed.input.case_document_ref);
+  await assert.rejects(
+    () => delivery.materializeExecutionPlanDeliveryV4(mixed.input, {
+      resolve_case_document: async () => ({
+        manifest_bytes: manifestBytes,
+        bundle_bytes: legacy.bundle_bytes
+      })
+    }),
+    /CASE_DOCUMENT_CONTRACT_MISMATCH/u
+  );
 });
 
 test('T12 materializes JSON, Markdown and CSV from one canonical bundle and binds exact bytes', () => {

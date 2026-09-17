@@ -164,6 +164,45 @@ function executionAction(presentation, request) {
 }
 
 /**
+ * Bind an Agent-authored assessment/finding body to the exact compiler-issued
+ * source-first inventory and generated-content digest. The Adapter copies all
+ * identities so the Agent never guesses target IDs or hashes.
+ * @param {unknown} submittedReply
+ * @param {unknown} submittedReviewBody
+ */
+export function constructIndependentReviewCompletionV4(submittedReply, submittedReviewBody) {
+  if (!record(submittedReply) || !record(submittedReply.review_request)
+    || !record(submittedReviewBody)) throw new TypeError('INDEPENDENT_REVIEW_ACTION_INVALID');
+  exactKeys(
+    submittedReviewBody, ['target_assessments', 'findings'],
+    'INDEPENDENT_REVIEW_ACTION_INVALID'
+  );
+  const request = submittedReply.review_request;
+  exactKeys(request, [
+    'protocol_version', 'review_mode', 'reviewer_identity', 'source_first_targets',
+    'review_target_digest', 'review_target_projection'
+  ], 'INDEPENDENT_REVIEW_REQUEST_INVALID');
+  if (request.protocol_version !== '1.0.0'
+    || request.review_mode !== 'independent_source_first'
+    || !Array.isArray(request.source_first_targets)
+    || typeof request.review_target_digest !== 'string'
+    || !Array.isArray(submittedReviewBody.target_assessments)
+    || !Array.isArray(submittedReviewBody.findings)) {
+    throw new TypeError('INDEPENDENT_REVIEW_ACTION_INVALID');
+  }
+  return {
+    protocol_version: request.protocol_version,
+    status: 'completed',
+    review_mode: request.review_mode,
+    reviewer_identity: structuredClone(request.reviewer_identity),
+    source_first_targets: structuredClone(request.source_first_targets),
+    review_target_digest: request.review_target_digest,
+    target_assessments: structuredClone(submittedReviewBody.target_assessments),
+    findings: structuredClone(submittedReviewBody.findings)
+  };
+}
+
+/**
  * Construct the exact private event for one action advertised by a validated
  * runner reply. Protocol IDs and digests are copied or compiler-derived; the
  * Adapter supplies only the user's semantic answer, safe artifact input, or

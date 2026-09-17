@@ -16,7 +16,14 @@ import {
   sha256CanonicalV4
 } from './semantic-gaps-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
-import { LEGACY_V4_CONTRACT, isV4SchemaVersion, requireV4Contract } from './v4-contract.mjs';
+import {
+  availableSemanticActionsV4,
+  requiresRecoverableCriticalQuestionV4
+} from './semantic-delivery-gate-v4.mjs';
+import {
+  LEGACY_V4_CONTRACT, isGeneralQualityV4Contract, isV4SchemaVersion, requireV4Contract,
+  v4ContractForSchema
+} from './v4-contract.mjs';
 
 const ACTIONS = Object.freeze([
   'answer_question_part',
@@ -85,12 +92,17 @@ function publicRoot(root) {
     source_claim_ids: [...root.source_claim_ids],
     affected_test_point_ids: [...root.affected_test_point_ids],
     affected_facts: [...root.affected_facts],
-    discovery_phase: root.discovery_phase
+    discovery_phase: root.discovery_phase,
+    ...(root.acceptance_impact ? { acceptance_impact: structuredClone(root.acceptance_impact) } : {})
   };
 }
 
 /** @param {any} root @param {string} presentationId */
 function questionPart(root, presentationId) {
+  const contract = v4ContractForSchema(root.schema_version);
+  const actions = isGeneralQualityV4Contract(contract)
+    ? availableSemanticActionsV4(root, { status: root.clarification_status ?? 'presented' })
+    : [...ACTIONS];
   return {
     question_part_id: root.question_part_id,
     root_issue_id: root.root_issue_id,
@@ -102,7 +114,7 @@ function questionPart(root, presentationId) {
     affected_facts: [...root.affected_facts],
     answer_options: [...root.answer_options],
     risk_level: root.risk_level,
-    available_actions: [...ACTIONS],
+    available_actions: actions,
     action_context: {
       presentation_id: presentationId,
       question_part_id: root.question_part_id,
@@ -148,8 +160,23 @@ function buildPresentation(input) {
       committed_checkpoint_digest: input.committed_checkpoint_digest,
       after_partial_answer: 'issue_successor_for_remaining_parts'
     },
-    question_parts: input.roots.map((root) => questionPart(root, presentationId))
+    question_parts: input.roots.map((root) => questionPart({ ...root, schema_version: input.schema_version }, presentationId))
   };
+}
+
+/** @param {string} schemaVersion @param {any} root @param {any} state */
+function requiresPresentation(schemaVersion, root, state) {
+  const contract = v4ContractForSchema(schemaVersion);
+  return state.status === 'presented'
+    || (isGeneralQualityV4Contract(contract) && requiresRecoverableCriticalQuestionV4(root, state));
+}
+
+/** @param {string} schemaVersion @param {any} root @param {any} state */
+function countsAsAnswered(schemaVersion, root, state) {
+  const contract = v4ContractForSchema(schemaVersion);
+  return state.status === 'resolved_final'
+    || (state.status === 'resolved_temporary'
+      && !(isGeneralQualityV4Contract(contract) && requiresRecoverableCriticalQuestionV4(root, state)));
 }
 
 /** @param {Record<string, unknown>} event */
@@ -172,12 +199,18 @@ function hasCanonicalEventIdentity(event) {
 function refreshCheckpointPresentation(checkpoint, supersedesPresentationId) {
   const ledger = new Map(checkpoint.semantic_gap_ledger.map((/** @type {any} */ root) => [root.root_issue_id, root]));
   const remainingRoots = checkpoint.clarification_state.root_states
-    .filter((/** @type {any} */ state) => state.status === 'presented')
-    .map((/** @type {any} */ state) => ledger.get(state.root_issue_id))
+    .filter((/** @type {any} */ state) => requiresPresentation(
+      checkpoint.schema_version, ledger.get(state.root_issue_id), state
+    ))
+    .map((/** @type {any} */ state) => ({
+      ...ledger.get(state.root_issue_id), clarification_status: state.status
+    }))
     .filter(Boolean)
     .sort(compareSemanticRoots);
   const answered = checkpoint.clarification_state.root_states
-    .filter((/** @type {any} */ state) => RESOLVED_ROOT_STATES.has(state.status))
+    .filter((/** @type {any} */ state) => countsAsAnswered(
+      checkpoint.schema_version, ledger.get(state.root_issue_id), state
+    ))
     .map((/** @type {any} */ state) => state.question_part_id).sort(compareUnicodeScalar);
   const closed = checkpoint.clarification_state.root_states
     .filter((/** @type {any} */ state) => state.status === 'closed_for_delivery')
@@ -245,6 +278,7 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
   }
   const committedCheckpointDigest = exactByteDigest(submitted.committed_checkpoint_bytes);
   const currentRoots = compileSemanticGapRootsV4({
+    contract,
     facts: submitted.facts,
     claims: submitted.claims,
     diagnostic_candidates: submitted.diagnostic_candidates,
@@ -293,7 +327,9 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
   for (const state of prior?.clarification_state.root_states ?? []) stateByRoot.set(state.root_issue_id, structuredClone(state));
   for (const root of currentRoots) {
     const state = stateByRoot.get(root.root_issue_id);
-    if (state && TERMINAL_ROOT_STATES.has(state.status)) continue;
+    if (state && TERMINAL_ROOT_STATES.has(state.status)
+      && (!isGeneralQualityV4Contract(contract)
+        || state.root_version_digest === root.root_version_digest)) continue;
     const nextRoot = publicRoot(root);
     ledger.set(root.root_issue_id, nextRoot);
     stateByRoot.set(root.root_issue_id, {
@@ -305,12 +341,12 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
   }
 
   const pendingRoots = [...stateByRoot.values()]
-    .filter((state) => state.status === 'presented')
-    .map((state) => ledger.get(state.root_issue_id))
+    .filter((state) => requiresPresentation(contract.schema_version, ledger.get(state.root_issue_id), state))
+    .map((state) => ({ ...ledger.get(state.root_issue_id), clarification_status: state.status }))
     .filter(Boolean)
     .sort(compareSemanticRoots);
   const answered = [...stateByRoot.values()]
-    .filter((state) => RESOLVED_ROOT_STATES.has(state.status))
+    .filter((state) => countsAsAnswered(contract.schema_version, ledger.get(state.root_issue_id), state))
     .map((state) => state.question_part_id).sort(compareUnicodeScalar);
   const previousPresentationId = prior?.clarification_state.latest_presentation_id ?? null;
   const phase = discoveryPhase === 'pre_case' ? 'requirements_analysis' : 'case_design';
@@ -523,8 +559,12 @@ export function validateSemanticClarificationCheckpointV4(submitted) {
     else if (state.root_version_digest !== root.root_version_digest || state.question_part_id !== root.question_part_id) diagnostics.push({
       code: 'CHECKPOINT_ROOT_BINDING_MISMATCH', path: '/clarification_state/root_states', message: 'root state version and part must equal the ledger root'
     });
-    if (state.status === 'presented') remaining.push(state.question_part_id);
-    if (RESOLVED_ROOT_STATES.has(state.status)) answered.push(state.question_part_id);
+    if (root && requiresPresentation(checkpoint.schema_version, root, state)) {
+      remaining.push(state.question_part_id);
+    }
+    if (root && countsAsAnswered(checkpoint.schema_version, root, state)) {
+      answered.push(state.question_part_id);
+    }
     if (state.status === 'closed_for_delivery') closed.push(state.question_part_id);
   }
   if (stateIds.size !== ledger.size) diagnostics.push({
@@ -542,8 +582,12 @@ export function validateSemanticClarificationCheckpointV4(submitted) {
   const presentation = checkpoint.clarification_state?.presentation;
   const expectedPhase = checkpoint.commit_profile === 'pre_case_pending' ? 'requirements_analysis' : 'case_design';
   const remainingRoots = stateEntries
-    .filter((/** @type {any} */ state) => state.status === 'presented')
-    .map((/** @type {any} */ state) => ledger.get(state.root_issue_id))
+    .filter((/** @type {any} */ state) => requiresPresentation(
+      checkpoint.schema_version, ledger.get(state.root_issue_id), state
+    ))
+    .map((/** @type {any} */ state) => ({
+      ...ledger.get(state.root_issue_id), clarification_status: state.status
+    }))
     .filter(Boolean)
     .sort(compareSemanticRoots);
   if ((remainingRoots.length > 0) !== Boolean(presentation)) diagnostics.push({
@@ -636,6 +680,7 @@ function applyRequestDeliverySelectionV4(checkpoint, submittedEvent, presentatio
   const presentationParts = new Map(selectedPresentation.question_parts
     .map((/** @type {any} */ part) => [part.question_part_id, part]));
   const selected = new Set();
+  const selectedRoots = [];
   for (const raw of submittedEvent.question_part_refs) {
     if (!isRecord(raw)) throw new TypeError('REQUEST_DELIVERY_INVALID');
     const part = presentationParts.get(raw.question_part_id);
@@ -651,6 +696,14 @@ function applyRequestDeliverySelectionV4(checkpoint, submittedEvent, presentatio
       throw new TypeError('REQUEST_DELIVERY_STALE_OR_DUPLICATE');
     }
     selected.add(String(raw.question_part_id));
+    selectedRoots.push(checkpoint.semantic_gap_ledger.find(
+      (/** @type {any} */ root) => root.root_issue_id === part.root_issue_id
+    ));
+  }
+  const contract = v4ContractForSchema(checkpoint.schema_version);
+  if (isGeneralQualityV4Contract(contract) && selectedRoots.some((root) =>
+    root?.acceptance_impact?.classification === 'critical')) {
+    throw new TypeError('CRITICAL_SEMANTIC_DELIVERY_FORBIDDEN');
   }
   for (const state of checkpoint.clarification_state.root_states) {
     if (selected.has(state.question_part_id)) state.status = 'closed_for_delivery';
@@ -934,7 +987,10 @@ export function applySemanticClarificationEventsV4(submitted) {
     let compiled;
     try { compiled = acceptedFromSuperseded ? compileDecision(true) : replayCandidate; }
     catch { return noInformationGain(); }
-    if (state.status !== 'presented' || state.root_version_digest !== event.root_version_digest
+    const answerable = state.status === 'presented'
+      || (isGeneralQualityV4Contract(v4ContractForSchema(checkpoint.schema_version))
+        && requiresRecoverableCriticalQuestionV4(root, state));
+    if (!answerable || state.root_version_digest !== event.root_version_digest
       || state.question_part_id !== event.question_part_id || root.root_version_digest !== event.root_version_digest) return staleAnswer();
     decisions.push(compiled.decision);
     decisionClaimSummaries.push({
