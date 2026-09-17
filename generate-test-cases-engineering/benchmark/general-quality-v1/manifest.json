@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "corpus_id": "generate-test-cases-general-quality-v1",
+  "frozen_on": "2026-09-17",
+  "evaluation_protocol": {
+    "required_target_authority": "fixture_explicit_independent_adjudication",
+    "comparison_conditions": ["same_required_targets", "same_scope", "same_scoring_rules"],
+    "deterministic_repeats": 3,
+    "model_generation_mode": "not_run",
+    "release_eligible_without_model_generation": false
+  },
+  "fixtures": [
+    {"fixture_id": "GQ-AT25-COVERAGE", "path": "fixtures/at25-coverage.json", "membership": "known_regression", "sha256": "71d92e6fc7d24bc99e8e58f3b4ac236ab83c9d6892735edd115be2c36c3e500d"},
+    {"fixture_id": "GQ-HARD-FAILURES", "path": "fixtures/hard-failures.json", "membership": "known_regression", "sha256": "c15f1c9af162a1ba3220c000cf49070a92eb3ec65df205ffb18b629e86acd74e"},
+    {"fixture_id": "GQ-PAIRED-COMPARISON", "path": "fixtures/paired-comparison.json", "membership": "known_regression", "sha256": "e4a26dccc8c680485672c54112f0fc80e2d0de20c47bae576d0f18318f9f1c0b"},
+    {"fixture_id": "GQ-RESERVED-PERMISSION-FLOW", "path": "fixtures/reserved-permission-flow.json", "membership": "reserved_holdout", "sha256": "c15afd2c949fbf69e09438ce3932a50da4c46d779a4b9c05de714368a3ba25ac"},
+    {"fixture_id": "GQ-ZERO-DENOMINATOR", "path": "fixtures/zero-denominator.json", "membership": "edge_case", "sha256": "26b79d1b8955098a27c61367404e12825d743920d260842267885edbed450d74"}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "fixture_id": "GQ-HARD-FAILURES",
+  "required_targets": [
+    {"target_id": "TARGET-PRESERVE", "acceptance_role": "primary_acceptance", "objective": "保留原有必需拒绝场景", "baseline_covered": true},
+    {"target_id": "TARGET-CURRENT", "acceptance_role": "primary_acceptance", "objective": "当前核心结果规则正确且可判定", "baseline_covered": true}
+  ],
+  "cases": [
+    {"entry_id": "CASE-REGRESSED", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-CURRENT"], "semantic_case_key": "regressed-result", "source_supported": false, "rule_correct": false, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": true, "critical_gate_bypassed": true, "unsupported_assertion_count": 1}
+  ],
+  "expected_hard_failure_codes": ["CRITICAL_GATE_BYPASS", "REQUIRED_SCENARIO_DELETION", "RULE_CORRECTNESS_REGRESSION", "UNSUPPORTED_ASSERTION"]
+}

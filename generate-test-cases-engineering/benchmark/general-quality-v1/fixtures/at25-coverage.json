@@ -1,0 +1,19 @@
+{
+  "fixture_id": "GQ-AT25-COVERAGE",
+  "required_targets": [
+    {"target_id": "TARGET-A", "acceptance_role": "primary_acceptance", "objective": "有效提交后进入已接受状态", "baseline_covered": true},
+    {"target_id": "TARGET-B", "acceptance_role": "primary_acceptance", "objective": "无权限提交被拒绝且状态不变", "baseline_covered": true},
+    {"target_id": "TARGET-C", "acceptance_role": "dependency_contract", "objective": "下游收到一次已接受事件", "baseline_covered": false},
+    {"target_id": "TARGET-CONTEXT", "acceptance_role": "context_only", "objective": "记录页面布局背景", "baseline_covered": false}
+  ],
+  "cases": [
+    {"entry_id": "CASE-A", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-A"], "semantic_case_key": "submit-accepted", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CASE-A-DUP", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-A"], "semantic_case_key": "submit-accepted", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CASE-B", "artifact_kind": "case", "acceptance_role": "primary_acceptance", "target_ids": ["TARGET-B"], "semantic_case_key": "permission-denied", "source_supported": true, "rule_correct": true, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CASE-C-WRONG", "artifact_kind": "case", "acceptance_role": "dependency_contract", "target_ids": ["TARGET-C"], "semantic_case_key": "downstream-event", "source_supported": true, "rule_correct": false, "decidable": true, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "CASE-C-WEAK", "artifact_kind": "case", "acceptance_role": "dependency_contract", "target_ids": ["TARGET-C"], "semantic_case_key": "downstream-event-weak", "source_supported": true, "rule_correct": true, "decidable": false, "responsibility_fulfilled": true, "rule_correctness_regression": false, "critical_gate_bypassed": false, "unsupported_assertion_count": 0},
+    {"entry_id": "GAP-C", "artifact_kind": "semantic_gap", "target_ids": ["TARGET-C"]},
+    {"entry_id": "EXP-C", "artifact_kind": "exploratory", "target_ids": ["TARGET-C"]}
+  ],
+  "expected": {"status": "pass", "covered": 2, "required": 3, "ratio": 0.6666666666666666, "duplicate_case_count": 1}
+}
