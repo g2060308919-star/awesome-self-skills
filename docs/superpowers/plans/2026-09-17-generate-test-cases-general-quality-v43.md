@@ -191,16 +191,16 @@
 - Create: `generate-test-cases-engineering/test/interface/v4-independent-review-runner.test.mjs`
 - Create: `generate-test-cases-engineering/test/recovery/v4-independent-review-recovery.test.mjs`
 
-- [ ] Add failing AT23-AT24 tests for absent source-first targets, unsupported reviewer claims, target/reference mismatches, stale digests, generated-content changes, review-only prose changes, and crash/retry behavior.
-- [ ] Implement `compileIndependentReviewTargetV4(input) -> { projection, digest }` over relevant Facts, Views, formal test points, responsibilities, Case preconditions, data, steps, and Oracles.
-- [ ] Exclude the independent-review record and review-derived summaries from the target projection to avoid digest self-reference.
-- [ ] Implement `validateIndependentReviewV4(review, target, context)` with exact source/Decision references, closed findings, supported disposition, affected-item validation, and recheck rules.
-- [ ] Use the existing `case_drafts` stage twice: a schema-valid pending submission returns `need_revision.review_request`; a completed submission repeats current generated content and binds the compiler-issued digest.
-- [ ] Reject prior review when generated content changes; keep digest stable when only excluded review prose changes.
-- [ ] Ensure staging-only review attempts are never accepted during recovery.
-- [ ] Preserve the public stage list and four-artifact invariant.
-- [ ] Run focused tests plus existing case-draft, reply-contract, stage-progression, and idempotent-append suites green.
-- [ ] Commit atomically.
+- [x] Add failing AT23-AT24 tests for absent source-first targets, unsupported reviewer claims, target/reference mismatches, stale digests, generated-content changes, review-only prose changes, and crash/retry behavior.
+- [x] Implement `compileIndependentReviewTargetV4(input) -> { projection, digest }` over relevant Facts, Views, formal test points, responsibilities, Case preconditions, data, steps, and Oracles.
+- [x] Exclude the independent-review record and review-derived summaries from the target projection to avoid digest self-reference.
+- [x] Implement `validateIndependentReviewV4(review, target, context)` with exact source/Decision references, closed findings, supported disposition, affected-item validation, and recheck rules.
+- [x] Use the existing `case_drafts` stage twice: a schema-valid pending submission returns `need_revision.review_request`; a completed submission repeats current generated content and binds the compiler-issued digest.
+- [x] Reject prior review when generated content changes; keep digest stable when only excluded review prose changes.
+- [x] Ensure staging-only review attempts are never accepted during recovery.
+- [x] Preserve the public stage list and four-artifact invariant.
+- [x] Run focused tests plus existing case-draft, reply-contract, stage-progression, and idempotent-append suites green.
+- [x] Commit atomically.
 
 ---
 

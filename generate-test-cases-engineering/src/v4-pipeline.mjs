@@ -11,6 +11,10 @@ import {
   validateTestValueOriginsV4
 } from './case-semantics-v4.mjs';
 import { classifyFinalOutcomeV4 } from './final-outcome-v4.mjs';
+import {
+  compileIndependentReviewTargetV4,
+  validateIndependentReviewV4
+} from './independent-review-v4.mjs';
 import { canonicalIds, compareScalar, compileNotApplicable, riskKinds } from './not-applicable.mjs';
 import {
   aggregateBusinessOutcomeCoverageV4,
@@ -63,6 +67,20 @@ function qualityFailure(code, diagnostics = []) {
       category: 'quality_failure', code, path: '/',
       message: 'The canonical v4 Case Document quality gate did not close.'
     }]
+  };
+}
+
+/** @param {any} review @param {any} target @param {any[]} diagnostics */
+function independentReviewRevision(review, target, diagnostics) {
+  return {
+    status: 'need_revision', stage: 'case_drafts', diagnostics,
+    review_request: target ? {
+      protocol_version: '1.0.0', review_mode: 'independent_source_first',
+      reviewer_identity: structuredClone(review?.reviewer_identity),
+      source_first_targets: structuredClone(target.projection.source_first_targets),
+      review_target_digest: target.digest,
+      review_target_projection: structuredClone(target.projection)
+    } : null
   };
 }
 
@@ -618,6 +636,45 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     status: 'need_user_answers', phase: 'case_design', semantic_roots: pendingPostCase,
     obligations: obligations.artifact, non_blocking_diagnostics: []
   };
+
+  if (isGeneralQualityV4Contract(contract)) {
+    const review = artifacts.case_drafts.independent_review;
+    if (!record(review)) return independentReviewRevision(null, null, [{
+      category: 'quality', code: 'INDEPENDENT_REVIEW_REQUIRED', path: '/independent_review',
+      message: 'A 4.3 Case Draft requires a source-first independent review record.'
+    }]);
+    let reviewTarget;
+    try {
+      reviewTarget = compileIndependentReviewTargetV4({
+        source_revision: revision,
+        source_first_targets: review.source_first_targets,
+        facts: evidence.fact_ledger,
+        views: artifacts.behavior_views.views,
+        formal_test_points: behavior.formal_test_points,
+        candidate_responsibilities: artifacts.behavior_views.design_assurance.candidate_responsibilities,
+        cases: artifacts.case_drafts.cases
+      });
+    } catch (error) {
+      return independentReviewRevision(review, null, [{
+        category: 'quality',
+        code: error instanceof Error ? error.message : 'INDEPENDENT_REVIEW_TARGET_INVALID',
+        path: '/independent_review/source_first_targets',
+        message: 'The source-first inventory could not form a compiler-owned review target.'
+      }]);
+    }
+    const reviewResult = validateIndependentReviewV4(review, reviewTarget, {
+      source_claim_ids: evidence.claims.map((/** @type {any} */ item) => item.claim_id),
+      decision_ids: (sourcePack.decision_records ?? []).map((/** @type {any} */ item) => item.decision_id),
+      semantic_gap_ids: allRoots.map(root => root.semantic_gap_id)
+    });
+    if (reviewResult.diagnostics.length) {
+      const pending = review.status === 'pending';
+      return independentReviewRevision(review, reviewTarget, pending ? [{
+        category: 'quality', code: 'INDEPENDENT_REVIEW_REQUIRED', path: '/independent_review',
+        message: 'Complete the source-first review against the compiler-issued target.'
+      }] : reviewResult.diagnostics);
+    }
+  }
 
   let semanticDeliveryGate;
   try {

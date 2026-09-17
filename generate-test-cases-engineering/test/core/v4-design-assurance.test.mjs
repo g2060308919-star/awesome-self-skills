@@ -100,5 +100,6 @@ test('4.3 pipeline requires design assurance while 4.2 keeps its frozen artifact
   const legacy = v4GeneralQualityFixture();
   for (const artifact of Object.values(legacy.artifacts)) artifact.schema_version = '4.2.0';
   delete legacy.artifacts.behavior_views.design_assurance;
+  delete legacy.artifacts.case_drafts.independent_review;
   assert.equal(compileCaseDocumentRevisionV4(legacy.artifacts, legacy.system).status, 'compiled');
 });

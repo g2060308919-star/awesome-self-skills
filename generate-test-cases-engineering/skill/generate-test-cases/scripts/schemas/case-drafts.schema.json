@@ -335,6 +335,124 @@
         }
       },
       "additionalProperties": false
+    },
+    "reviewerIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity_class", "separation_basis"],
+      "properties": {
+        "identity_class": { "enum": ["independent_context", "independent_agent", "qualified_external_reviewer"] },
+        "separation_basis": { "$ref": "#/$defs/nonBlank" }
+      }
+    },
+    "sourceFirstTargetInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["target_kind", "acceptance_role", "objective", "source_claim_ids", "decision_ids"],
+      "properties": {
+        "target_kind": { "enum": ["business_result", "condition_distinction", "required_relation"] },
+        "acceptance_role": { "enum": ["primary_acceptance", "dependency_contract", "context_only"] },
+        "objective": { "$ref": "#/$defs/nonBlank" },
+        "source_claim_ids": { "$ref": "#/$defs/stringSet" },
+        "decision_ids": { "$ref": "#/$defs/stringSet" }
+      }
+    },
+    "sourceFirstTargetIssued": {
+      "type": "object", "additionalProperties": false,
+      "required": ["target_id", "target_kind", "acceptance_role", "objective", "source_claim_ids", "decision_ids"],
+      "properties": {
+        "target_id": { "type": "string", "pattern": "^IRT-[0-9a-f]{64}$" },
+        "target_kind": { "enum": ["business_result", "condition_distinction", "required_relation"] },
+        "acceptance_role": { "enum": ["primary_acceptance", "dependency_contract", "context_only"] },
+        "objective": { "$ref": "#/$defs/nonBlank" },
+        "source_claim_ids": { "$ref": "#/$defs/stringSet" },
+        "decision_ids": { "$ref": "#/$defs/stringSet" }
+      }
+    },
+    "reviewItemRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_kind", "item_id"],
+      "properties": {
+        "item_kind": { "enum": ["fact", "view", "formal_test_point", "candidate_responsibility", "case", "precondition", "data_condition", "step", "oracle"] },
+        "item_id": { "$ref": "#/$defs/nonBlank" }
+      }
+    },
+    "passedReviewRecheck": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "affected_items"],
+      "properties": {
+        "status": { "const": "passed" },
+        "affected_items": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/reviewItemRef" } }
+      }
+    },
+    "reviewRecheck": {
+      "oneOf": [
+        { "$ref": "#/$defs/passedReviewRecheck" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "affected_items"],
+          "properties": {
+            "status": { "const": "not_required" },
+            "affected_items": { "type": "array", "maxItems": 0 }
+          }
+        }
+      ]
+    },
+    "reviewTargetAssessment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["target_id", "disposition", "affected_items", "source_claim_ids", "decision_ids", "rationale", "required_recheck"],
+      "properties": {
+        "target_id": { "type": "string", "pattern": "^IRT-[0-9a-f]{64}$" },
+        "disposition": { "enum": ["verified", "semantic_gap", "evidence_excluded"] },
+        "affected_items": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/reviewItemRef" } },
+        "source_claim_ids": { "$ref": "#/$defs/stringSet" },
+        "decision_ids": { "$ref": "#/$defs/stringSet" },
+        "semantic_gap_ids": { "$ref": "#/$defs/idArray" },
+        "rationale": { "$ref": "#/$defs/nonBlank" },
+        "required_recheck": { "$ref": "#/$defs/passedReviewRecheck" }
+      }
+    },
+    "reviewFinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["finding_kind", "source_first_target_ids", "source_claim_ids", "decision_ids", "issue", "impact", "affected_items", "adjudication", "disposition", "rationale", "required_recheck"],
+      "properties": {
+        "finding_kind": { "enum": ["omission", "unsupported_assertion"] },
+        "source_first_target_ids": { "$ref": "#/$defs/stringSet" },
+        "source_claim_ids": { "$ref": "#/$defs/stringSet" },
+        "decision_ids": { "$ref": "#/$defs/stringSet" },
+        "issue": { "$ref": "#/$defs/nonBlank" },
+        "impact": { "$ref": "#/$defs/nonBlank" },
+        "affected_items": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/reviewItemRef" } },
+        "adjudication": { "enum": ["confirmed", "rejected"] },
+        "disposition": { "enum": ["fixed_and_rechecked", "rejected_with_evidence"] },
+        "rationale": { "$ref": "#/$defs/nonBlank" },
+        "required_recheck": { "$ref": "#/$defs/reviewRecheck" }
+      }
+    },
+    "independentReview": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["protocol_version", "status", "review_mode", "reviewer_identity", "source_first_targets"],
+          "properties": {
+            "protocol_version": { "const": "1.0.0" }, "status": { "const": "pending" },
+            "review_mode": { "const": "independent_source_first" },
+            "reviewer_identity": { "$ref": "#/$defs/reviewerIdentity" },
+            "source_first_targets": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/sourceFirstTargetInput" } }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["protocol_version", "status", "review_mode", "reviewer_identity", "source_first_targets", "review_target_digest", "target_assessments", "findings"],
+          "properties": {
+            "protocol_version": { "const": "1.0.0" }, "status": { "const": "completed" },
+            "review_mode": { "const": "independent_source_first" },
+            "reviewer_identity": { "$ref": "#/$defs/reviewerIdentity" },
+            "source_first_targets": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/sourceFirstTargetIssued" } },
+            "review_target_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "target_assessments": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/reviewTargetAssessment" } },
+            "findings": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/reviewFinding" } }
+          }
+        }
+      ]
     }
   },
   "type": "object",
@@ -2973,6 +3091,9 @@
           }
         ]
       }
+    },
+    "independent_review": {
+      "$ref": "#/$defs/independentReview"
     }
   },
   "oneOf": [
@@ -2989,10 +3110,17 @@
     },
     {
       "properties": {
-        "schema_version": {
-          "enum": ["4.0.0", "4.2.0", "4.3.0"]
-        }
+        "schema_version": { "enum": ["4.0.0", "4.2.0"] }
       },
+      "allOf": [
+        { "not": { "required": ["obligation_dispositions"] } },
+        { "not": { "required": ["exploratory_candidates"] } },
+        { "not": { "required": ["independent_review"] } }
+      ]
+    },
+    {
+      "required": ["independent_review"],
+      "properties": { "schema_version": { "const": "4.3.0" } },
       "allOf": [
         { "not": { "required": ["obligation_dispositions"] } },
         { "not": { "required": ["exploratory_candidates"] } }

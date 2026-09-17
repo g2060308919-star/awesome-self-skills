@@ -84,10 +84,10 @@ function artifactRequest(
 
 /** @param {string} runDirectory @param {typeof STAGES[number]} stage @param {number} sourceRevision
  * @param {unknown} artifact @param {any[]} diagnostics @param {string} runInstanceId
- * @param {any[]} [nonBlockingDiagnostics] */
+ * @param {any[]} [nonBlockingDiagnostics] @param {any|null} [reviewRequest] */
 function revisionReply(
   runDirectory, stage, sourceRevision, artifact, diagnostics, runInstanceId,
-  nonBlockingDiagnostics = []
+  nonBlockingDiagnostics = [], reviewRequest = null
 ) {
   const route = routeGapCategoryV4('adapter_revision', { delivery_intent: 'case_document' });
   const stable = diagnostics.map(item => ({
@@ -110,6 +110,7 @@ function revisionReply(
       mode: 'retry_current_run',
       description: '保留已接受 revision，只替换尚未接受的 staging 候选工件。'
     },
+    ...(reviewRequest ? { review_request: structuredClone(reviewRequest) } : {}),
     non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
   };
 }
@@ -1200,7 +1201,7 @@ async function consumePostCaseAppend(
     kind: 'reply', reply: revisionReply(
       runDirectory, resultStage(result), nextRevision,
       /** @type {Record<string,any>} */ (nextArtifacts)[resultStage(result)],
-      result.diagnostics ?? [], runId
+      result.diagnostics ?? [], runId, [], result.review_request ?? null
     )
   };
   if (result.status === 'need_artifact') return { kind: 'reply', reply: result };
@@ -1330,7 +1331,7 @@ async function finalizeCaseDocumentRevision(
   if (result.status === 'need_revision') return revisionReply(
     runDirectory, resultStage(result), artifacts.source_pack.source_revision,
     artifacts[resultStage(result)], result.diagnostics ?? [], runId,
-    nonBlockingDiagnostics
+    nonBlockingDiagnostics, result.review_request ?? null
   );
   if (result.status === 'need_artifact') return {
     ...result,
@@ -1669,7 +1670,7 @@ export async function advanceStrictV4Locked(
     }
     if (result.status === 'need_revision' && result.stage !== 'behavior_views') return revisionReply(
       runDirectory, resultStage(result), revision, prospective[resultStage(result)],
-      result.diagnostics ?? [], runId, advancedDiagnostics
+      result.diagnostics ?? [], runId, advancedDiagnostics, result.review_request ?? null
     );
     if (result.status === 'need_artifact') return result;
     if (result.status === 'fatal') return qualityFailure(
@@ -1720,7 +1721,7 @@ export async function advanceStrictV4Locked(
     const result = compileCaseDocumentRevisionV4(prospective, system);
     if (result.status === 'need_revision') return revisionReply(
       runDirectory, resultStage(result), revision, prospective[resultStage(result)],
-      result.diagnostics ?? [], runId, advancedDiagnostics
+      result.diagnostics ?? [], runId, advancedDiagnostics, result.review_request ?? null
     );
     if (result.status === 'need_artifact') return result;
     if (!['need_user_answers', 'compiled'].includes(result.status)

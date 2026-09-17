@@ -14,6 +14,10 @@ import { canonicalStringify } from './canonical.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
 import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
+import {
+  compileIndependentReviewTargetV4,
+  validateIndependentReviewV4
+} from './independent-review-v4.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { isGeneralQualityV4Contract, v4ContractForSchema } from './v4-contract.mjs';
 
@@ -142,6 +146,37 @@ export function validateRevisionArtifactsV4(input) {
       }
     ).diagnostics.length) {
       throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
+    }
+    if (isGeneralQualityV4Contract(contract)) {
+      let reviewTarget;
+      try {
+        reviewTarget = compileIndependentReviewTargetV4({
+          source_revision: input.revision,
+          source_first_targets: values.case_drafts.independent_review?.source_first_targets,
+          facts: values.evidence_claims.fact_ledger,
+          views: values.behavior_views.views,
+          formal_test_points: values.test_obligations.formal_test_points,
+          candidate_responsibilities:
+            values.behavior_views.design_assurance.candidate_responsibilities,
+          cases: values.case_drafts.cases
+        });
+      } catch {
+        throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');
+      }
+      const reviewResult = validateIndependentReviewV4(
+        values.case_drafts.independent_review,
+        reviewTarget,
+        {
+          source_claim_ids: values.evidence_claims.claims.map((/** @type {any} */ item) => item.claim_id),
+          decision_ids: values.decision_journal.decisions.map((/** @type {any} */ item) => item.decision_id),
+          semantic_gap_ids: values.checkpoint.semantic_gap_ledger.map(
+            (/** @type {any} */ item) => item.semantic_gap_id
+          )
+        }
+      );
+      if (reviewResult.diagnostics.length) {
+        throw new TypeError('REVISION_INDEPENDENT_REVIEW_INVALID');
+      }
     }
     if (values.checkpoint.behavior_views_digest !== canonicalDigest(values.behavior_views)
       || values.checkpoint.case_drafts_digest !== canonicalDigest(values.case_drafts)) {
