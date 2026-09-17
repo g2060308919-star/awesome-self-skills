@@ -238,8 +238,8 @@
 - Create: `generate-test-cases-engineering/test/benchmark/v4-general-quality-corpus.test.mjs`
 - Create: `generate-test-cases-engineering/docs/remediation/2026-09-17-general-quality-v43-evidence.md`
 
-- [ ] Freeze the evaluation manifest before implementation tuning: fixtures, holdout membership, target classes, run conditions, and comparison rules.
-- [ ] Implement `evaluateIndependentTargets({ requiredTargets, cases })` with:
+- [x] Freeze the evaluation manifest before implementation tuning: fixtures, holdout membership, target classes, run conditions, and comparison rules.
+- [x] Implement `evaluateIndependentTargets({ requiredTargets, cases })` with:
 
   ```text
   effective_required_target_coverage =
@@ -247,12 +247,12 @@
     / independently adjudicated required targets
   ```
 
-- [ ] Count duplicate Cases once, exclude context-only targets, report primary/boundary targets separately, and treat zero denominator as not applicable.
-- [ ] Make rule-correctness regression, unsupported assertions, critical bypass, and required-scenario deletion hard failures instead of averaged scores.
-- [ ] Add failing then passing metric tests for omission, duplication, unsupported claims, undecidable results, gaps, exploratory entries, and comparable before/after inputs.
-- [ ] Run the fixed corpus and record observed before/after results; do not substitute generated test points or self-reported coverage for independent targets.
-- [ ] Build an AT01-AT31 trace table with test name, fixture, command, observed result, and limitation. Mark anything not run as unverified.
-- [ ] Commit evaluator, frozen fixtures, tests, and evidence atomically.
+- [x] Count duplicate Cases once, exclude context-only targets, report primary/boundary targets separately, and treat zero denominator as not applicable.
+- [x] Make rule-correctness regression, unsupported assertions, critical bypass, and required-scenario deletion hard failures instead of averaged scores.
+- [x] Add failing then passing metric tests for omission, duplication, unsupported claims, undecidable results, gaps, exploratory entries, and comparable before/after inputs.
+- [x] Run the fixed corpus and record observed before/after results; do not substitute generated test points or self-reported coverage for independent targets.
+- [x] Build an AT01-AT31 trace table with test name, fixture, command, observed result, and limitation. Mark anything not run as unverified.
+- [x] Commit evaluator, frozen fixtures, tests, and evidence atomically.
 
 ---
 

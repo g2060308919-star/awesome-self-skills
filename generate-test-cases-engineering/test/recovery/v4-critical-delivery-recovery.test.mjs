@@ -64,6 +64,22 @@ function unresolvedCriticalDelivery() {
   const input = candidateDeliveryInput();
   input.bundle.schema_version = '4.3.0';
   input.bundle.compiler_version = '0.8.0';
+  input.bundle.design_assurance_summary = {
+    status: 'complete', plan_revision: 1, batch_count: 1, rule_group_count: 1,
+    candidate_responsibility_count: 1,
+    candidate_disposition_counts: {
+      retained: 1, representative_value: 0, equivalent_merge: 0,
+      evidence_exclusion: 0, semantic_gap: 0, exploratory: 0
+    }
+  };
+  input.bundle.independent_review_summary = {
+    status: 'completed', protocol_version: '1.0.0',
+    review_mode: 'independent_source_first', reviewer_identity_class: 'independent_context',
+    source_first_target_count: 1,
+    target_assessment_counts: { verified: 1, semantic_gap: 0, evidence_excluded: 0 },
+    finding_counts: { confirmed: 0, rejected: 0 },
+    review_target_digest: `sha256:${'9'.repeat(64)}`
+  };
   input.bundle.result_kind = 'delivered_with_gaps';
   input.bundle.coverage.semantic_gap_count = 1;
   input.bundle.semantic_root_groups = [{
