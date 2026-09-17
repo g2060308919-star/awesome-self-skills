@@ -122,14 +122,14 @@
 - Modify only if a protection test exposes a defect: `generate-test-cases-engineering/src/ordering-registry.mjs`
 - Modify only if a protection test exposes a defect: `generate-test-cases-engineering/src/obligations/business-outcomes-v4.mjs`
 
-- [ ] Encode AT10-AT15 protection fixtures proving one Case has one independently diagnosable primary result.
-- [ ] Prove complete flows keep one business object and preserve key prerequisite steps instead of pre-seeding the terminal state.
-- [ ] Prove complete-flow Cases supplement rather than replace required single-point Cases.
-- [ ] Prove explicit enum values and permission outcomes are retained and traceable.
-- [ ] Prove manual-only Cases remain generatable when account, URL, selector, or API-field execution resources are absent.
-- [ ] Run the new test first; if it is already green, record it as protection evidence and do not rewrite correct baseline logic.
-- [ ] If a defect is exposed, make the smallest compiler-side fix and re-run `v4-business-outcome-obligations`, `v4-generation-resource-independence`, ordering, and canonical delivery tests.
-- [ ] Commit protection evidence or the minimal fix atomically.
+- [x] Encode AT10-AT15 protection fixtures proving one Case has one independently diagnosable primary result.
+- [x] Prove complete flows keep one business object and preserve key prerequisite steps instead of pre-seeding the terminal state.
+- [x] Prove complete-flow Cases supplement rather than replace required single-point Cases.
+- [x] Prove explicit enum values and permission outcomes are retained and traceable.
+- [x] Prove manual-only Cases remain generatable when account, URL, selector, or API-field execution resources are absent.
+- [x] Run the new test first; if it is already green, record it as protection evidence and do not rewrite correct baseline logic.
+- [x] If a defect is exposed, make the smallest compiler-side fix and re-run `v4-business-outcome-obligations`, `v4-generation-resource-independence`, ordering, and canonical delivery tests.
+- [x] Commit protection evidence or the minimal fix atomically.
 
 ---
 
