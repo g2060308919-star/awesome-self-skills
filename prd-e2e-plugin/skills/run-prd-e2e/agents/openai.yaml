@@ -1,0 +1,7 @@
+interface:
+  display_name: "Run PRD E2E"
+  short_description: "Orchestrate traceable non-production B2B E2E runs"
+  default_prompt: "Use $run-prd-e2e to run traceable E2E acceptance from my PRD against a non-production B2B target."
+
+policy:
+  allow_implicit_invocation: true

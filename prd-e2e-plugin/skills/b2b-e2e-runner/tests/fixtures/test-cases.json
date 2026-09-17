@@ -1,0 +1,24 @@
+{
+  "schema_version": "2.0",
+  "suite": {
+    "name": "Runner fixture",
+    "target_urls": ["http://127.0.0.1:3000"]
+  },
+  "cases": [
+    {
+      "case_id": "CASE-原始-01",
+      "module": "订单",
+      "title": "查看订单",
+      "extra_case_field": "preserve-me",
+      "preconditions": ["已登录"],
+      "steps": [
+        {
+          "action": "打开订单详情",
+          "expected": [
+            {"text": "显示订单号 REQ-9002", "extra_oracle_field": 7}
+          ]
+        }
+      ]
+    }
+  ]
+}

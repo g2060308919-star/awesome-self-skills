@@ -1,0 +1,18 @@
+{
+  "name": "prd-e2e",
+  "version": "0.1.0",
+  "description": "Generate traceable PRD cases and execute them against non-production B2B web systems.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "PRD E2E",
+    "shortDescription": "Traceable PRD-to-browser E2E acceptance.",
+    "longDescription": "Generate traceable cases and a confirmed execution plan from a PRD, compile them without semantic rewriting, and execute them in a non-production B2B web system.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Run traceable E2E acceptance from my PRD against a non-production B2B web system."
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "source-reading.schema.json",
+  "type": "object",
+  "required": ["version", "source_binding_digest", "scope", "status", "items", "limitations"],
+  "properties": {
+    "version": { "const": "1.0.0" },
+    "source_binding_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "scope": {
+      "type": "object",
+      "required": ["mode", "root_ref", "collection_window", "source_version"],
+      "properties": {
+        "mode": { "enum": ["online_document", "provided_materials"] },
+        "root_ref": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "collection_window": {
+          "type": "object",
+          "required": ["started_at", "ended_at"],
+          "properties": {
+            "started_at": { "type": "string", "minLength": 1 },
+            "ended_at": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "source_version": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "status": { "enum": ["complete_within_scope", "incomplete", "legacy_unrecorded"] },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item_id", "parent_item_id", "channel", "acquisition_status", "review_status", "source_id", "asset_id"],
+        "properties": {
+          "item_id": { "type": "string", "minLength": 1, "pattern": "\\S" },
+          "parent_item_id": { "type": ["string", "null"], "minLength": 1 },
+          "channel": { "enum": ["body", "table", "image", "comment", "reply"] },
+          "acquisition_status": { "enum": ["acquired", "unavailable", "unread"] },
+          "review_status": { "enum": ["reviewed", "unread", "unavailable"] },
+          "source_id": { "type": ["string", "null"], "minLength": 1 },
+          "asset_id": { "type": ["string", "null"], "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "limitations": { "type": "array", "items": { "type": "string", "minLength": 1, "pattern": "\\S" } }
+  },
+  "additionalProperties": false
+}
