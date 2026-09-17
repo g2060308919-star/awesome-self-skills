@@ -66,10 +66,10 @@ test("AC-03/04: Chrome and the test page are prepared automatically", async () =
 
 test("PBH AC-01/03/04/05/30/32: role requirements are classified without fixed names, counts, or account mapping", async () => {
   const [, workflow, resultModel] = await sources();
-  assert.equal(workflow.includes("所需角色 | 对应权限 | 受影响用例 | 对应账号 | 密码状态 | 当前准备情况"), true);
+  assert.equal(workflow.includes("需要测试的操作 | 需要的权限或角色 | 涉及用例"), true);
   for (const phrase of [
-    "已就绪 / 待用户准备 / 无法提供 / 待说明",
-    "没有任何已就绪权限组时不得初始化正式 Run",
+    "现在能用 / 之后准备 / 本次提供不了",
+    "没有可执行工作或必要登录信息时不得初始化正式 Run",
     "只追问仍未明确的分类或当前批次实际缺失的登录字段",
     "全部权限均明确无法提供",
     "角色、权限组和账号不要求一一对应",

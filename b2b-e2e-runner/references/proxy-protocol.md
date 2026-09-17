@@ -2,7 +2,15 @@
 
 ## 适用边界
 
-仅在测试用例确认的非生产目标、Chrome DevTools MCP 正在操作的同一 Chrome CDP endpoint 上使用。endpoint 不可访问即报告阻塞；禁止用页面内 fetch/XHR monkeypatch、浏览器全局代理或其他浏览器工具降级。
+仅在测试用例确认的非生产目标、Chrome DevTools MCP 正在操作的同一 Chrome CDP endpoint 上使用。用户明确不需要代理时跳过所有代理 endpoint 检查，不因 MCP 使用 pipe 阻塞普通测试。需要代理时尽量在登录前发现连接不兼容；先做安全、可判断的自动诊断/恢复，再对真正需要用户处理的影响请求协助。禁止用页面内 fetch/XHR monkeypatch、浏览器全局代理或其他浏览器工具降级。
+
+### 连接准备与失败恢复
+
+1. 从当前 MCP 的已知启动配置、工具返回或本 Run 专用 Chrome 的启动输出取得连接方式；只检查有关配置，不扫描全机、私有会话或试探端口。`remote-debugging-pipe` 是进程管道，不是可供独立代理连接的 HTTP/WebSocket endpoint；不能把另一 Chrome 的可用端口当作同一个浏览器。
+2. 可访问 endpoint 必须具有当前 MCP 已登记的精确页面 Target；相同 URL 不足以证明身份。现有代理 start 使用 loopback HTTP `/json/version` 与 `/json/list` 获取浏览器 WebSocket。MCP 可用其当前版本支持的 `--browserUrl` 连接同一 endpoint；`--wsEndpoint` 是 MCP 可选连接方式，不代表本代理 CLI 已支持直接传 WebSocket URL。使用前核对本地版本能力，不能凭空承诺。
+3. 若只有 pipe，不能无损把在用浏览器改成端口模式。尚未登录、完全属于本 Run 且当前宿主支持安全重连时，可由 Runner 自动准备隔离测试 Chrome（独立临时 profile、只绑定 loopback、动态端口）并让 MCP 连接它；必须重新核验工具真实调用和 Target。若会重启宿主/浏览器、需重新登录或影响其他页面，先用中文说明影响请求授权；不得自行改全局配置、关闭用户浏览器或接管其他 Run。
+4. 不得要求用户查端口、提供 endpoint 或 targetId。用户只能被要求完成不可代办的动作（例如允许重启并重新登录）；Runner 负责配置定位、参数和重连复核。宿主不能在当前会话重载 MCP 时明确说明这是真实限制，不声称已修复，也不继续依赖代理的业务写操作。
+5. endpoint/Target 连接检查不是代理效果验证。代理真正启动后仍须下述完整运行期验证；原代理前提不能静默删除。恢复失败记录工具阻塞、继续独立工作并及时协作；只有符合原合法收尾条件才把影响检查点记为无法确定。已有可能提交的写操作不得因“重跑受影响检查点”而重复派发。
 
 一个代理实例只精确绑定一个 `targetId`，通过浏览器 WebSocket 建立该 Target 的扁平 Session，只处理该 Session 的 `Fetch.requestPaused`。Fetch 不得在 BrowserContext 或整个 Chrome 上启用。先用 CDP pattern 缩小范围，再按 protocol、完整 hostname、URL pathname prefix 和标准化 method 精确匹配；重定向重新匹配。不匹配流量立即原样继续。即使其他页面请求完全相同的接口，也不得受影响。
 
@@ -53,6 +61,8 @@ start 校验 endpoint→target 映射与 Runner 当前登记的测试页面一�
 正常结束、失败、中断、SIGINT/SIGTERM、Target 关闭或 CDP 断连都自动尽力 Fetch.disable、detach、停止本 Run 代理进程并释放本 Run 锁，无需用户确认；随后用真实请求验证原行为恢复。只操作与 state 中 Run ID、owner token、endpoint 和 targetId 全部匹配的资源，不得停止其他 Target 的代理，也不得释放其他 Run 的锁。
 
 进入 `awaiting_user` 前同样执行上述清理并记录真实恢复结果；保留测试页面和登录态。用户通知后恢复原 Run 时，根据原确认规则为当前已登记 Target 新建代理周期并重新验证，不能沿用上一周期的“已清理”状态，也不能触碰其他页面或 Run。
+
+CDP transport 断连后，客户端须先标记连接终止，再通知代理清理；后续命令立即拒绝，不能在死连接上等待超时而拖住 Target 锁。断连无法获得 `Fetch.disable`/detach 的成功回执时不得伪造；以旧连接终止、锁释放以及真实页面请求恢复原响应共同验证恢复。只有重新确认同一 endpoint 中的精确业务 Target，才可重新 attach 并启用 Fetch；重新验证改写、其他 Target 隔离和最终停止恢复。该过程只恢复代理，不自动重试业务写操作。
 
 ## 真实验证与恢复
 

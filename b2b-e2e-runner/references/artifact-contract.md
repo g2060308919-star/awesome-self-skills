@@ -54,9 +54,23 @@ node <SKILL_ROOT>/scripts/run-artifacts.mjs record --run <RUN_ROOT> --event <EVE
 node <SKILL_ROOT>/scripts/run-artifacts.mjs resume-check --run <RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs validate --run <RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs report --run <RUN_ROOT>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs deliver --run <RUN_ROOT>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs deliver --run <RUN_ROOT> --stage requested
+node <SKILL_ROOT>/scripts/run-artifacts.mjs archive-screenshot --run <RUN_ROOT> --event <CAPTURE_EVENT_JSON> --source <ACTUAL_TOOL_IMAGE> --source-root <AUTHORIZED_TOOL_OUTPUT_DIR>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs archive-screenshot --run <RUN_ROOT> --event <CAPTURE_EVENT_JSON> --image-stdin true
 ```
 
 stdout 恰好一个 JSON。退出码：0 成功、2 输入契约、3 一致性、4 秘密扫描、5 文件系统。错误信息必须脱敏。
+
+截图字节校验使用本 Skill 的锁定依赖。首次归档前，在 `<SKILL_ROOT>` 执行 `npm ci --ignore-scripts --omit=dev`（开发测试不加 `--omit=dev`）。只安装到已获准的 Skill 目录，不做全局安装，不自动覆盖个人安装副本；依赖不可用时拒绝归档，不降级为只检查文件头。普通 init/record/report 及无新归档标记的历史证据不因缺少解码器而改变原接口。
+
+`archive-screenshot` 接收一个现有成功 `evidence_capture` 事件，且恰好一份 `kind: screenshot` 证据。路径采用 `evidence/<安全单一文件名>.png|jpg|jpeg|webp`。文件模式必须来自本次 MCP 真实输出的明确可读授权目录；不得以此绕过工具访问限制。返回值模式从 stdin 接收 MCP 图片块的 `{data, mimeType}`，不把 Base64 写进账本。两模式互斥，上限 25 MiB；类型/截断/路径/符号链接/覆盖/元数据秘密检查失败则拒绝。原字节排他原子归档后复用 `record` 登记；登记失败撤回本次新文件，不修改产品结果。证据增加可选 `sha256` 和 `capture_source`，校验时检查摘要；旧证据无摘要保持兼容。摘要只能证明字节一致，不能证明来源真实或图片无秘密，必须由 Runner 核对工具来源、画面及检查点。
+
+新归档在写入前检查容器边界、PNG CRC、文本/压缩文本元数据与标准颜色配置，实际解码全部像素后才接受；解码结果仅在内存中丢弃，持久化仍为原字节。上限为 25 MiB 文件、8 MiB 元数据检查预算、64×1024×1024 像素及 5 秒解码处理。超过上限、损坏、未知/嵌套元数据均拒绝；不静默删除 EXIF/XMP、ICC 私有标签或重新编码图片。标准 sRGB 的可检查 ICC 标签允许且保留原值；这不表示支持所有相机或专业色彩配置。带 `capture_source: tool_file|tool_image_return` 的归档证据在 Run 校验/报告交付前再次使用同一图片检查；旧证据仍按原兼容分支处理，不修改历史 Run。
+
+ICC 支持本次已验证的矩阵/TRC 型标准颜色配置子集：受限名称对应的 `XYZ `、`sf32`、`para`、`curv`、`mluc` 标签，逐项检查长度、内部字符串区间和编码；不接受任意 ICC 标签。允许完全相同的共享数据区间和最多 3 字节的零对齐，不允许未引用数据、部分重叠或标签内尾随载荷。PNG `hIST` 与固定辅助字段纳入元数据扫描；压缩元数据必须完整消费输入，不忽略压缩流之后的字节。这些检查不扩展为像素隐写检测。
+
+`report` 保留旧接口和内部阶段产物；增加 `delivery`（`kind: stage|final|early_end`、`automaticallyPresent`、中文 `label`）。`deliver` 是外部交付门槛：非 completed 默认不返回路径、统计或表格；只有用户明确请求阶段结果才传 `--stage requested`。最终复用完整生成/校验流程；早结束由原 `assistance.stop_run` 用户决定识别，不引入第二套事实或终结事件。
 
 `resume-check` 检查哈希、日志和最后事件，列出派发未确认的副作用动作并禁止自动重放，同时要求复核页面、角色和代理。
 
