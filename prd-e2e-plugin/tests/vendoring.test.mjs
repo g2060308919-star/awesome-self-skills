@@ -14,8 +14,8 @@ async function makeSkill(root, name, files = {}) {
   if (name === "generate-test-cases") {
     await mkdir(path.join(skill, "scripts"), { recursive: true });
     await writeFile(path.join(skill, "scripts", "schema-manifest.json"), `${JSON.stringify({
-      schema_version: "4.2.0",
-      compiler_version: "0.7.0",
+      schema_version: "4.3.0",
+      compiler_version: "0.8.0",
       schemas: []
     })}\n`);
   }
@@ -90,6 +90,11 @@ test("vendoring replaces only the two named targets byte-for-byte and writes a c
   assert.equal(JSON.stringify(lock).includes(root), false);
   assert.equal(lock.skills["generate-test-cases"].tree_sha256, await computeTreeHash(generator));
   assert.equal(lock.skills["b2b-e2e-runner"].tree_sha256, await computeTreeHash(runner));
+  assert.equal(lock.skills["b2b-e2e-runner"].source, "validated-installed-snapshot");
+  const repositoryLock = await vendorChildSkills({ pluginRoot, generateTestCasesSource: generator, b2bRunnerSource: runner, sourceKind: "validated-repository-snapshot" });
+  assert.equal(repositoryLock.skills["generate-test-cases"].source, "validated-repository-snapshot");
+  assert.equal(repositoryLock.skills["b2b-e2e-runner"].source, "validated-repository-snapshot");
+  await assert.rejects(() => vendorChildSkills({ pluginRoot, generateTestCasesSource: generator, b2bRunnerSource: runner, sourceKind: "unverified" }), error => error.code === "BUNDLE_SHAPE");
 });
 
 test("vendoring rejects a child whose frontmatter name does not match the target", async () => {

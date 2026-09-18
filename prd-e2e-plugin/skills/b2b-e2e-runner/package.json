@@ -1,0 +1,9 @@
+{
+  "name": "b2b-e2e-runner",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "dependencies": { "sharp": "0.35.4" },
+  "devDependencies": { "jsdom": "26.1.0" }
+}

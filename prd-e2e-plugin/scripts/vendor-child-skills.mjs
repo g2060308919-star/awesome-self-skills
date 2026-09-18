@@ -6,11 +6,12 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { bundleFail, computeTreeHash, listTreeFiles } from "./tree-hash.mjs";
+export { exportRepositorySnapshot } from "./repository-snapshot.mjs";
 
 const CHILDREN = ["generate-test-cases", "b2b-e2e-runner"];
 const CONTRACTS = Object.freeze({
-  generate_test_cases_schema: "4.2.0",
-  generate_test_cases_compiler: "0.7.0",
+  generate_test_cases_schema: "4.3.0",
+  generate_test_cases_compiler: "0.8.0",
   b2b_runner_input_schema: "2.0"
 });
 
@@ -41,7 +42,7 @@ async function validateGeneratorContract(source) {
     bundleFail("BUNDLE_SHAPE", "Generator source has no valid schema manifest.");
   }
   if (manifest?.schema_version !== CONTRACTS.generate_test_cases_schema || manifest?.compiler_version !== CONTRACTS.generate_test_cases_compiler) {
-    bundleFail("BUNDLE_SHAPE", "Generator source contract differs from 4.2.0 / 0.7.0.");
+    bundleFail("BUNDLE_SHAPE", "Generator source contract differs from 4.3.0 / 0.8.0.");
   }
   if (!Array.isArray(manifest.schemas)) bundleFail("BUNDLE_SHAPE", "Generator schema manifest has an invalid schema registry.");
 }
@@ -123,7 +124,8 @@ async function replaceTarget(skillsRoot, name, source) {
   return { target, hash: sourceHash };
 }
 
-export async function vendorChildSkills({ pluginRoot, generateTestCasesSource, b2bRunnerSource }) {
+export async function vendorChildSkills({ pluginRoot, generateTestCasesSource, b2bRunnerSource, sourceKind = "validated-installed-snapshot" }) {
+  if (!["validated-installed-snapshot", "validated-repository-snapshot"].includes(sourceKind)) bundleFail("BUNDLE_SHAPE", "Unsupported child snapshot provenance.");
   const root = path.resolve(pluginRoot);
   const skillsRoot = path.join(root, "skills");
   await mkdir(skillsRoot, { recursive: true });
@@ -147,8 +149,8 @@ export async function vendorChildSkills({ pluginRoot, generateTestCasesSource, b
     contracts: { ...CONTRACTS },
     skills: {
       "run-prd-e2e": { path: "skills/run-prd-e2e", source: "workspace-build", tree_sha256: await computeTreeHash(runSkill) },
-      "generate-test-cases": { path: "skills/generate-test-cases", source: "validated-installed-snapshot", tree_sha256: results["generate-test-cases"].hash },
-      "b2b-e2e-runner": { path: "skills/b2b-e2e-runner", source: "validated-installed-snapshot", tree_sha256: results["b2b-e2e-runner"].hash }
+      "generate-test-cases": { path: "skills/generate-test-cases", source: sourceKind, tree_sha256: results["generate-test-cases"].hash },
+      "b2b-e2e-runner": { path: "skills/b2b-e2e-runner", source: sourceKind, tree_sha256: results["b2b-e2e-runner"].hash }
     }
   };
   await atomicWriteJson(path.join(root, "bundle-lock.json"), lock);
@@ -172,7 +174,8 @@ async function main() {
   const lock = await vendorChildSkills({
     pluginRoot: flags["plugin-root"],
     generateTestCasesSource: flags["generate-test-cases"],
-    b2bRunnerSource: flags["b2b-e2e-runner"]
+    b2bRunnerSource: flags["b2b-e2e-runner"],
+    sourceKind: flags["source-kind"]
   });
   process.stdout.write(`${JSON.stringify(lock)}\n`);
 }

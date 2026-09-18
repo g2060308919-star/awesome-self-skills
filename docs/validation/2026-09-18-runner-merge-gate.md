@@ -36,3 +36,7 @@ Generator 的当前仓库版本与插件锁定的旧契约不同，因此不能�
 - `plugin-integrated.log`、`plugin-upstream-baseline.log`：集成树与远程基线的 58 项插件测试。
 - `plugin-drift-isolation.log`：旧 Runner 与本次纯源码快照的独立摘要对照。
 - `upstream-baseline/`、`candidate-clean/`：只读验证所用的 Git 导出副本，不是工作分支、安装副本或发布产物。
+
+## 授权后的处理结果
+
+同日用户授权修复插件集成。插件已升至 0.2.0，按已提交的纯源码同步两个子 Skill，更新契约适配、锁和兼容测试；保留完整历史版本交接，不放宽摘要或文件安全规则。插件 65/65、根与打包 Runner 各 149/149、Sandbox 168/168、Generator 主回归 1519/1519 与稳定性 2/2 均通过，结构检查及独立审查通过。原集成门禁已解除，详见 [插件集成修复验证](2026-09-18-plugin-integration.md)。以上历史失败记录保留，个人安装未改动。

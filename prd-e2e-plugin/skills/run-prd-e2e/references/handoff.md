@@ -2,7 +2,7 @@
 
 ## Generator boundary
 
-Accept only a canonical Generator `4.2.0` / compiler `0.7.0` Case Document whose `output/current.json`, manifest digest, and bundle digest validate. Store references in `generation-ref.json`; do not copy or edit the canonical bundle.
+Accept a canonical Generator `4.3.0` / compiler `0.8.0` Case Document whose `output/current.json`, manifest digest, and bundle digest validate. Historical `4.2.0` / `0.7.0` handoffs remain supported without rewriting their artifacts. Every manifest, Case Document, and Execution Plan in one handoff must use the same supported pair; reject mixed or unknown versions. Store references in `generation-ref.json`; do not copy or edit the canonical bundle.
 
 Accept only a separate finished Execution Plan whose `case_document_ref` is identical, whose result is `execution_ready`, whose `runner_ready` is true, and whose nonempty projection contains only `Grounded + execute + ready` items. `no_execution_selected` is a terminal no-Runner path.
 

@@ -1,6 +1,6 @@
 {
   "name": "prd-e2e",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generate traceable PRD cases and execute them against non-production B2B web systems.",
   "author": {
     "name": "Local developer"

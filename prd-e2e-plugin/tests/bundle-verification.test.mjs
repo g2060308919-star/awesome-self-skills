@@ -24,8 +24,8 @@ async function fixture() {
     schema_version: "1.0",
     plugin: "prd-e2e",
     contracts: {
-      generate_test_cases_schema: "4.2.0",
-      generate_test_cases_compiler: "0.7.0",
+      generate_test_cases_schema: "4.3.0",
+      generate_test_cases_compiler: "0.8.0",
       b2b_runner_input_schema: "2.0"
     },
     skills
@@ -46,5 +46,19 @@ test("bundle verification rejects extra lock keys and absolute paths", async () 
   const { pluginRoot, lock } = await fixture();
   lock.skills.extra = { path: "/absolute/path", source: "workspace-build", tree_sha256: "a".repeat(64) };
   await writeFile(path.join(pluginRoot, "bundle-lock.json"), `${JSON.stringify(lock)}\n`);
+  await assert.rejects(() => verifyBundle({ pluginRoot }), error => error.code === "BUNDLE_SHAPE");
+});
+
+test("bundle accepts repository provenance but rejects unrecognized sources and contract pairs", async () => {
+  const { pluginRoot, lock } = await fixture();
+  for (const name of ["generate-test-cases", "b2b-e2e-runner"]) lock.skills[name].source = "validated-repository-snapshot";
+  await writeFile(path.join(pluginRoot, "bundle-lock.json"), JSON.stringify(lock));
+  await verifyBundle({ pluginRoot });
+  lock.skills["b2b-e2e-runner"].source = "unverified";
+  await writeFile(path.join(pluginRoot, "bundle-lock.json"), JSON.stringify(lock));
+  await assert.rejects(() => verifyBundle({ pluginRoot }), error => error.code === "BUNDLE_SHAPE");
+  lock.skills["b2b-e2e-runner"].source = "validated-repository-snapshot";
+  lock.contracts.generate_test_cases_compiler = "0.7.0";
+  await writeFile(path.join(pluginRoot, "bundle-lock.json"), JSON.stringify(lock));
   await assert.rejects(() => verifyBundle({ pluginRoot }), error => error.code === "BUNDLE_SHAPE");
 });

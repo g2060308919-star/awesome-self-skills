@@ -9,8 +9,8 @@ import { readSkillName } from "./vendor-child-skills.mjs";
 
 const NAMES = ["run-prd-e2e", "generate-test-cases", "b2b-e2e-runner"];
 const CONTRACTS = {
-  generate_test_cases_schema: "4.2.0",
-  generate_test_cases_compiler: "0.7.0",
+  generate_test_cases_schema: "4.3.0",
+  generate_test_cases_compiler: "0.8.0",
   b2b_runner_input_schema: "2.0"
 };
 
@@ -52,8 +52,8 @@ export async function verifyBundle({ pluginRoot, generateTestCasesSource, b2bRun
     const entry = lock.skills[name];
     exactKeys(entry, ["path", "source", "tree_sha256"], `lock entry ${name}`);
     if (entry.path !== `skills/${name}` || path.isAbsolute(entry.path) || entry.path.includes("..")) bundleFail("BUNDLE_SHAPE", `Lock path for ${name} is invalid.`);
-    const expectedSource = name === "run-prd-e2e" ? "workspace-build" : "validated-installed-snapshot";
-    if (entry.source !== expectedSource || !/^[a-f0-9]{64}$/.test(entry.tree_sha256)) bundleFail("BUNDLE_SHAPE", `Lock metadata for ${name} is invalid.`);
+    const allowedSources = name === "run-prd-e2e" ? ["workspace-build"] : ["validated-installed-snapshot", "validated-repository-snapshot"];
+    if (!allowedSources.includes(entry.source) || !/^[a-f0-9]{64}$/.test(entry.tree_sha256)) bundleFail("BUNDLE_SHAPE", `Lock metadata for ${name} is invalid.`);
     const skillRoot = path.join(root, ...entry.path.split("/"));
     if (await readSkillName(skillRoot) !== name) bundleFail("BUNDLE_SHAPE", `Skill name for ${name} is invalid.`);
     hashes[name] = await computeTreeHash(skillRoot);

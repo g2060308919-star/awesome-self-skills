@@ -2,25 +2,25 @@
   "schema_version": "1.0",
   "plugin": "prd-e2e",
   "contracts": {
-    "generate_test_cases_schema": "4.2.0",
-    "generate_test_cases_compiler": "0.7.0",
+    "generate_test_cases_schema": "4.3.0",
+    "generate_test_cases_compiler": "0.8.0",
     "b2b_runner_input_schema": "2.0"
   },
   "skills": {
     "run-prd-e2e": {
       "path": "skills/run-prd-e2e",
       "source": "workspace-build",
-      "tree_sha256": "cbb12a7f0946cd0c45460ad8482ebca2ad16d36de9b8a8ca0c8f37181639f460"
+      "tree_sha256": "5c59cceca6ada0895782bf7785a06d205b5357a507a9167b5c1b71b96399dc2a"
     },
     "generate-test-cases": {
       "path": "skills/generate-test-cases",
-      "source": "validated-installed-snapshot",
-      "tree_sha256": "101748a54f4d44acd60331015ec137263fb70c89f1db0fa0b7525059f9a81e21"
+      "source": "validated-repository-snapshot",
+      "tree_sha256": "59ed37d7f089cf322d4ffecfd684374dc1b02dbdcacd4976f3d34c1d33d9d5b6"
     },
     "b2b-e2e-runner": {
       "path": "skills/b2b-e2e-runner",
-      "source": "validated-installed-snapshot",
-      "tree_sha256": "085d3a0ff850d6ef8bdeb6d0cf38ec8f2815b8ec8a8a7c5332093d682eb65679"
+      "source": "validated-repository-snapshot",
+      "tree_sha256": "5ec00457c2fa01a5c70fc2fbf9d5f97cc7a3d456edf36ce2ab9aa28417b44696"
     }
   }
 }

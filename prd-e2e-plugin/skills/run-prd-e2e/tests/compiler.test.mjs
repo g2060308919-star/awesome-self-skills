@@ -429,3 +429,32 @@ function refreshCaseDigests(input) {
   input.executionPlanManifest.execution_plan_artifact.digest = digestText(input.executionPlanBytes);
   input.executionPlanManifestBytes = bytes(input.executionPlanManifest);
 }
+
+test("current 4.3 / 0.8 handoff preserves the same Runner projection as historical 4.2 / 0.7", () => {
+  const old = fixture();
+  const current = fixture();
+  for (const key of ["caseDocument", "caseDocumentManifest", "executionPlan", "executionPlanManifest"]) {
+    current[key].schema_version = "4.3.0";
+    current[key].compiler_version = "0.8.0";
+  }
+  refreshCaseDigests(current);
+  assert.deepEqual(compile(current).result.value.cases, compile(old).result.value.cases);
+  assert.deepEqual(compile(current).result.value.suite.lineage.case_document_ref, current.generationRef.case_document_ref);
+});
+
+test("handoff rejects mixed artifact versions and unknown schema/compiler pairs", () => {
+  for (const [schema, compiler] of [["4.3.0", "0.7.0"], ["4.2.0", "0.8.0"], ["4.4.0", "0.9.0"]]) {
+    const input = fixture();
+    for (const key of ["caseDocument", "caseDocumentManifest", "executionPlan", "executionPlanManifest"]) {
+      input[key].schema_version = schema; input[key].compiler_version = compiler;
+    }
+    refreshCaseDigests(input);
+    assert.throws(() => compile(input), { code: "HANDOFF_REF_MISMATCH" });
+  }
+  for (const keys of [["caseDocument"], ["caseDocumentManifest"], ["executionPlan", "executionPlanManifest"]]) {
+    const input = fixture();
+    for (const key of keys) { input[key].schema_version = "4.3.0"; input[key].compiler_version = "0.8.0"; }
+    refreshCaseDigests(input);
+    assert.throws(() => compile(input), { code: "HANDOFF_REF_MISMATCH" });
+  }
+});

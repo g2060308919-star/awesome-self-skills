@@ -21,6 +21,13 @@ For every recovery or resume, invoke the runner on the same absolute directory f
 
 Treat only compiler-accepted events in the recovered checkpoint as submitted. Preserve accepted answers whose exact root version and scope still apply, preserve every pending part, and leave staging-only attempts unaccepted. If the root version, affected scope, or current presentation changed, retain the older answer for audit but do not replay or silently rebind it. Never submit the same accepted answer again merely because conversation context was lost.
 
+Use the exact schema/compiler pair stored by the run. New runs use
+`4.3.0/0.8.0`; exact `4.0.0/0.5.0` and `4.2.0/0.7.0` recovery retains its
+original validation and delivery semantics. Never add 4.3 design/review fields
+to an accepted older artifact, mix versions, or infer capability from a `v4`
+filename. An unsupported pair stops with a supported recovery path rather than
+being migrated in place.
+
 ## Preserve append-only revisions
 
 Accepted Source Packs, Decisions, semantic controls, execution actions, lifecycle events, presentations, checkpoints, and preview history are append-only. One accepted user response advances the source revision once. Do not edit or delete an accepted revision, reorder events, reuse an event sequence, or combine unrelated user messages into a fabricated event.
@@ -28,6 +35,13 @@ Accepted Source Packs, Decisions, semantic controls, execution actions, lifecycl
 A candidate append stays in staging until all schema, presentation/version, digest, sequence, and semantic checks pass. Failure changes no committed revision. Checkpoints are written from validated state and use write-temp-then-rename; their exact canonical bytes are digest-bound recovery material.
 
 Before any revision that invalidates ready output, commit a current tombstone/stale state. A higher non-ready revision always dominates an older ready pointer. Crash recovery completes or rolls forward the journaled transition; it never restores old ready/current merely because those files still exist.
+
+For 4.3, a staging-only pending or completed independent review is not accepted
+recovery state. Reinvoke the runner: a pending review reproduces the same
+compiler-issued target/digest request, while a completed accepted review is
+valid only for the identical generated-content digest. A newer non-ready 4.3
+revision revokes current authority even when an older ready manifest remains on
+disk.
 
 `output/current.json` is the only authoritative delivery manifest. Finished recovery re-reads it and all referenced artifact digests. Stray Markdown/CSV/JSON files, older current files, or partially written output are never official delivery.
 

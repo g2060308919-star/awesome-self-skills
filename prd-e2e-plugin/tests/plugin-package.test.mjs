@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { listTreeFiles } from "../scripts/tree-hash.mjs";
-import { readSkillName } from "../scripts/vendor-child-skills.mjs";
+import { exportRepositorySnapshot, readSkillName } from "../scripts/vendor-child-skills.mjs";
 import { verifyBundle } from "../scripts/verify-bundle.mjs";
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -15,7 +16,7 @@ const expectedNames = ["run-prd-e2e", "generate-test-cases", "b2b-e2e-runner"];
 test("plugin manifest exposes one local install unit with no undeclared component types", async () => {
   const manifest = JSON.parse(await readFile(path.join(pluginRoot, ".codex-plugin", "plugin.json"), "utf8"));
   assert.equal(manifest.name, "prd-e2e");
-  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.version, "0.2.0");
   assert.equal(manifest.skills, "./skills/");
   assert.equal(typeof manifest.author?.name, "string");
   assert.equal(manifest.author.name.length > 0, true);
@@ -35,11 +36,16 @@ test("plugin discovers exactly the three expected independent Skill names", asyn
   assert.equal(new Set(declared).size, 3);
 });
 
-test("bundle lock matches every Skill and both repository source snapshots", async () => {
+test("bundle lock matches every Skill and both repository source snapshots", async t => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "prd-e2e-sources-"));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  for (const skillName of expectedNames.slice(1)) {
+    await exportRepositorySnapshot({ repositoryRoot, skillName, destination: path.join(temporary, skillName) });
+  }
   const verified = await verifyBundle({
     pluginRoot,
-    generateTestCasesSource: path.join(repositoryRoot, "generate-test-cases"),
-    b2bRunnerSource: path.join(repositoryRoot, "b2b-e2e-runner")
+    generateTestCasesSource: path.join(temporary, "generate-test-cases"),
+    b2bRunnerSource: path.join(temporary, "b2b-e2e-runner")
   });
   assert.deepEqual(verified.skill_names.sort(), [...expectedNames].sort());
 });

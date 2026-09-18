@@ -115,25 +115,53 @@ const V2_REPORT_SCRIPT = `(() => {
   const root = document.querySelector('[data-page-size]');
   const rows = Array.from(root.querySelectorAll('.case-row'));
   const pageSize = Number(root.dataset.pageSize);
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const pageText = root.querySelector('[data-page-indicator]');
   const previous = root.querySelector('[data-page-previous]');
   const next = root.querySelector('[data-page-next]');
+  const activeFilter = root.querySelector('[data-active-filter]');
+  const clearFilter = root.querySelector('[data-clear-filter]');
   const dialog = document.getElementById('case-dialog');
   const dialogTitle = dialog.querySelector('[data-dialog-title]');
   const dialogContent = dialog.querySelector('[data-dialog-content]');
   const close = dialog.querySelector('[data-dialog-close]');
+  const imageDialog = document.getElementById('image-dialog');
+  const image = imageDialog.querySelector('[data-enlarged-image]');
+  const imageTitle = imageDialog.querySelector('[data-image-title]');
+  const imageClose = imageDialog.querySelector('[data-image-close]');
   let page = 0;
+  let resultFilter = null;
   let lastTrigger = null;
+  let lastImageTrigger = null;
+  const visibleRows = () => rows.filter(row => !resultFilter || row.dataset.result === resultFilter);
   const showPage = value => {
+    const matchingRows = visibleRows();
+    const pageCount = Math.max(1, Math.ceil(matchingRows.length / pageSize));
     page = Math.min(pageCount - 1, Math.max(0, value));
-    rows.forEach((row, index) => { row.hidden = Math.floor(index / pageSize) !== page; });
-    pageText.textContent = '第 ' + (page + 1) + ' / ' + pageCount + ' 页';
+    rows.forEach(row => { row.hidden = true; });
+    matchingRows.forEach((row, index) => { row.hidden = Math.floor(index / pageSize) !== page; });
+    pageText.textContent = '第 ' + (page + 1) + ' / ' + pageCount + ' 页 · 共 ' + matchingRows.length + ' 条';
     previous.disabled = page === 0;
     next.disabled = page === pageCount - 1;
+    activeFilter.hidden = !resultFilter;
+    clearFilter.hidden = !resultFilter;
+    if (resultFilter) activeFilter.textContent = '当前仅显示：' + ({ failed: '未通过', undetermined: '无法确定', not_executed: '未执行' }[resultFilter] || resultFilter);
   };
   previous.addEventListener('click', () => showPage(page - 1));
   next.addEventListener('click', () => showPage(page + 1));
+  clearFilter.addEventListener('click', () => {
+    resultFilter = null;
+    showPage(0);
+    root.setAttribute('tabindex', '-1');
+    root.focus({ preventScroll: true });
+  });
+  document.addEventListener('click', event => {
+    const filter = event.target.closest('[data-filter-result]');
+    if (!filter) return;
+    resultFilter = filter.dataset.filterResult;
+    showPage(0);
+    root.scrollIntoView({ block: 'start' });
+    clearFilter.focus({ preventScroll: true });
+  });
   root.addEventListener('click', event => {
     const trigger = event.target.closest('[data-open-case]');
     if (!trigger) return;
@@ -148,7 +176,22 @@ const V2_REPORT_SCRIPT = `(() => {
   });
   close.addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
-  dialog.addEventListener('close', () => { if (lastTrigger) lastTrigger.focus(); });
+  dialog.addEventListener('close', () => { if (lastTrigger?.isConnected) lastTrigger.focus(); });
+  dialogContent.addEventListener('click', event => {
+    const trigger = event.target.closest('[data-enlarge-image]');
+    if (!trigger) return;
+    const source = trigger.querySelector('img');
+    if (!source) return;
+    lastImageTrigger = trigger;
+    image.src = source.src;
+    image.alt = source.alt;
+    imageTitle.textContent = source.alt || '关键证据截图';
+    imageDialog.showModal();
+    imageClose.focus();
+  });
+  imageClose.addEventListener('click', () => imageDialog.close());
+  imageDialog.addEventListener('click', event => { if (event.target === imageDialog) imageDialog.close(); });
+  imageDialog.addEventListener('close', () => { if (lastImageTrigger?.isConnected) lastImageTrigger.focus(); });
   showPage(0);
 })();`;
 
@@ -169,18 +212,47 @@ function linkOrText(link, label) {
     : escapeHtml(label ?? link ?? "未记录");
 }
 
-function v2PermissionSummary(detail) {
-  if (!detail.permissions.length) return "<p>本用例未关联权限组。</p>";
-  return `<ul>${detail.permissions.map(item => `<li><strong>${escapeHtml(item.role_text)}</strong>：${escapeHtml(item.permissions.join("、"))}；` +
-    `计划账号 ${escapeHtml(item.planned_account_ref ?? "未记录")}；实际账号 ${escapeHtml(item.observed_account_ref ?? "未记录")}</li>`).join("")}</ul>`;
+function v2EvidenceItem(entry) {
+  if (!entry.path) {
+    const facts = entry.inline_facts.map(fact => `<dt>${escapeHtml(fact.label)}</dt><dd>${escapeHtml(fact.value)}</dd>`).join("");
+    return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：${escapeHtml(entry.description)}<dl class="evidence-facts">${facts}</dl></li>`;
+  }
+  const href = safeEvidenceHref(entry.path);
+  if (!href) return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：证据路径被拒绝</li>`;
+  const extension = `.${entry.path.split(".").at(-1)?.toLowerCase()}`;
+  if (!IMAGE_EXTENSIONS.has(extension)) {
+    return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：<a href="${href}" download>${escapeHtml(entry.description)}</a></li>`;
+  }
+  return `<li><figure><button class="image-preview-button" type="button" data-enlarge-image aria-label="放大查看：${escapeHtml(entry.description)}">` +
+    `<img src="${href}" alt="${escapeHtml(entry.description)}"></button><figcaption><strong>${escapeHtml(entry.evidence_id)}</strong> · ${escapeHtml(entry.description)}<span>点击图片放大查看</span></figcaption></figure></li>`;
+}
+
+function v2PermissionChips(detail) {
+  if (!detail.permissions.length) return `<div class="context-chips"><span class="context-chip muted-chip">未关联权限组</span></div>`;
+  return `<div class="context-chips">${detail.permissions.map(item => {
+    const permissions = item.permissions.length ? item.permissions : ["未记录具体权限"];
+    const permissionChips = permissions.map(permission => `<span class="context-chip permission-chip">权限 · ${escapeHtml(permission)}</span>`).join("");
+    const plannedAccount = item.planned_account_ref ?? "未记录";
+    const observedAccount = item.observed_account_ref;
+    const accountChips = observedAccount && observedAccount === item.planned_account_ref
+      ? `<span class="context-chip account-chip">计划/实际账号 · ${escapeHtml(observedAccount)}</span>`
+      : `<span class="context-chip account-chip">计划账号 · ${escapeHtml(plannedAccount)}</span>` +
+        `<span class="context-chip account-chip">实际账号 · ${escapeHtml(observedAccount ?? "未核验/未记录")}</span>`;
+    const verificationLabel = { verified: "已核验", mismatch: "核验不匹配", unconfirmed: "未核验" }[item.verification] ?? "未记录";
+    return `<div class="permission-context"><span class="context-chip role-chip">角色 · ${escapeHtml(item.role_text)}</span>${permissionChips}${accountChips}` +
+      `<span class="context-chip verification-chip">核验状态 · ${escapeHtml(verificationLabel)}</span></div>`;
+  }).join("")}</div>`;
 }
 
 function v2CaseDetail(detail) {
-  const steps = detail.steps.map((step, stepIndex) => `<article class="step"><div class="step-number">步骤 ${stepIndex + 1}</div><h4>操作</h4><p>${escapeHtml(step.action)}</p>` +
-    `<h4>预期结果</h4><ol class="expectation-list">${step.expected.map(item => `<li><p class="expectation-text">${escapeHtml(item.text)}</p><dl>` +
-      `<dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
-      `<dt>实际观察</dt><dd>${list(item.observations)}</dd><dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd>` +
-      `</dl>${item.evidence.length ? `<ul class="evidence">${item.evidence.map(evidenceItem).join("")}</ul>` : "<p class=\"evidence-gap\">未关联可展示的关键图片。</p>"}</li>`).join("")}</ol></article>`).join("");
+  const steps = detail.steps.map((step, stepIndex) => `<li class="step-item"><span class="step-number" aria-hidden="true">${stepIndex + 1}</span><div class="step-content"><p class="step-source">原步骤 ${escapeHtml(step.step_id)}</p><h4>${escapeHtml(step.action)}</h4>` +
+    `<div class="expectation-list">${step.expected.map(item => `<article class="expectation"><p class="oracle-id">检查点 ${escapeHtml(item.oracle_id)}</p>` +
+      `<div class="comparison"><div class="comparison-row expected"><span>预期结果</span><p>${escapeHtml(item.text)}</p></div>` +
+      `<div class="comparison-row observed"><span>实际观察</span><div>${list(item.observations)}</div></div></div>` +
+      `<dl class="checkpoint-meta"><dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
+      `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd><dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
+      (item.evidence.length ? `<ul class="evidence">${item.evidence.map(v2EvidenceItem).join("")}</ul>` : "<p class=\"evidence-gap\">未关联可展示的关键图片。</p>") +
+      `</article>`).join("")}</div></div></li>`).join("");
   const actual = detail.actual_records.length
     ? `<ol>${detail.actual_records.map(item => `<li>${escapeHtml(item.description)}</li>`).join("")}</ol>`
     : "<p>未记录已执行动作；原步骤不会被写成已执行事实。</p>";
@@ -193,21 +265,48 @@ function v2CaseDetail(detail) {
       `<h4>已知事实</h4>${item.known_facts.length ? list(item.known_facts) : "<p>无可额外确认的事实。</p>"}` +
       `<h4>实际尝试及结果</h4>${item.attempts.length ? `<ol>${item.attempts.map(attempt => `<li><strong>${escapeHtml(attempt.action)}</strong><p>${escapeHtml(attempt.observation)}</p></li>`).join("")}</ol>` : `<p>${escapeHtml(item.not_attempted_reason ?? "未记录尝试原因")}</p>`}` +
       `<h4>当前不能继续的原因</h4><p>${escapeHtml(item.cannot_continue_reason)}</p></article>`).join("")
-    : "<p>本用例未记录终结性事实缺口摘要。</p>";
-  return `<div class="case-detail"><dl class="case-meta"><dt>展示编号</dt><dd>${escapeHtml(detail.display_id)}</dd>` +
-    `<dt>原始 ID</dt><dd class="long-id">${escapeHtml(detail.case_id)}</dd><dt>模块</dt><dd>${escapeHtml(detail.module)}</dd>` +
-    `<dt>测试场景</dt><dd>${escapeHtml(detail.title)}</dd><dt>测试结果</dt><dd>${escapeHtml(detail.result_label)}</dd>` +
-    `<dt>结果原因</dt><dd>${escapeHtml(detail.reason)}</dd></dl>` +
-    `<div class="detail-flow"><section class="detail-section"><h3>测试前提与权限</h3><h4>前置条件</h4>${list(detail.preconditions)}<h4>对应权限</h4>${v2PermissionSummary(detail)}</section>` +
-    `<section class="detail-section"><h3>操作步骤与预期结果</h3>${steps}</section>` +
-    `<section class="detail-section"><h3>测试结果与实际执行</h3>${actual}</section>` +
-    `<section class="detail-section"><h3>关键证据</h3>${captures}</section>` +
-    `<section class="detail-section"><h3>无法确定时的事实边界</h3>${exploration}</section></div></div>`;
+    : "";
+  return `<div class="case-detail"><section class="detail-outcome ${escapeHtml(detail.result)}"><div class="outcome-heading"><span class="status ${escapeHtml(detail.result)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(detail.result_label)}</span><strong>${escapeHtml(detail.title)}</strong></div><p>${escapeHtml(detail.reason)}</p></section>` +
+    `<div class="detail-context"><span class="context-chip neutral-chip">${escapeHtml(detail.display_id)}</span><span class="context-chip neutral-chip">模块 · ${escapeHtml(detail.module)}</span>${v2PermissionChips(detail)}</div>` +
+    `<details class="full-id"><summary>查看完整原始用例 ID</summary><p>${escapeHtml(detail.case_id)}</p></details>` +
+    `<div class="detail-flow"><section class="detail-section"><h3>测试前提</h3>${list(detail.preconditions)}</section>` +
+    `<section class="detail-section"><h3>操作步骤、预期与实际</h3><ol class="step-list">${steps}</ol></section>` +
+    `<details class="supplementary-details"><summary>实际执行记录</summary><div class="supplementary-content">${actual}</div></details>` +
+    `<details class="supplementary-details"><summary>截图采集记录</summary><div class="supplementary-content">${captures}</div></details>` +
+    (exploration ? `<details class="supplementary-details"><summary>无法确定时的事实边界</summary><div class="supplementary-content">${exploration}</div></details>` : "") +
+    `</div></div>`;
 }
 
-function v2ResultList(rows, emptyMessage) {
-  if (!rows.length) return `<p>${escapeHtml(emptyMessage)}</p>`;
-  return `<ul>${rows.map(row => `<li><strong>${escapeHtml(row.display_id)}</strong>：${escapeHtml(row.reason)}</li>`).join("")}</ul>`;
+function v2PermissionSection(permission) {
+  if (!permission.plan) return `<p>该 Run 没有权限批次工作流标记；按历史兼容模式展示。</p>`;
+  const rows = permission.groups.map(group => `<tr><td>${escapeHtml(group.role_text)}</td><td>${list(group.permissions)}</td>` +
+    `<td>${escapeHtml(group.account_ref ?? "未确定")}</td><td>${escapeHtml(group.availability_label)}</td><td>${escapeHtml(group.verification_label)}</td>` +
+    `<td class="permission-case-ids">${group.case_ids.map(caseId => `<span>${escapeHtml(caseId)}</span>`).join("")}</td>` +
+    `<td>${escapeHtml(group.wait_reason ?? group.batch_description ?? "无")}</td></tr>`).join("");
+  return `<div class="table-wrap permission-table-wrap"><table class="permission-table"><thead><tr><th>所需角色</th><th>具体权限</th><th>账号引用</th><th>准备状态</th><th>实际核验</th><th>受影响用例</th><th>当前说明</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function v2ActionGroup(result, label, rows, action) {
+  const count = rows.length;
+  const classes = result === "failed" ? "conclusion-block failure-summary" : result === "undetermined" ? "conclusion-block unknown-summary" : `action-group action-${result}`;
+  return `<article class="${escapeHtml(classes)}" data-action-group="${escapeHtml(result)}"><div><p class="summary-kicker">${escapeHtml(action)}</p><h3>${escapeHtml(label)}</h3><p>${count} 条用例；按原始输入顺序保留在完整用例表中。</p></div>` +
+    `<button type="button" data-filter-result="${escapeHtml(result)}"${count ? "" : " disabled"}>查看全部 ${count} 条</button></article>`;
+}
+
+function durationMarkup(value) {
+  const label = String(value ?? "");
+  const matches = [...label.matchAll(/(\d+)\s*(小时|分钟|秒)/g)];
+  if (matches.length < 2 && !matches.some(match => match[2] === "小时")) return `<strong>${escapeHtml(label)}</strong>`;
+  return `<div class="duration-parts" aria-label="${escapeHtml(label)}">${matches.map(match => `<span><strong>${escapeHtml(match[1])}</strong><small>${escapeHtml(match[2])}</small></span>`).join("")}</div>`;
+}
+
+function targetLabel(value) {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.hostname} 测试地址`;
+  } catch {
+    return value;
+  }
 }
 
 function v2Verdict(model) {
@@ -249,7 +348,7 @@ function v2Verdict(model) {
 function buildV2HtmlReport(model) {
   const pageCount = Math.max(1, Math.ceil(model.rows.length / V2_PAGE_SIZE));
   const cspHash = crypto.createHash("sha256").update(V2_REPORT_SCRIPT).digest("base64");
-  const rows = model.rows.map((row, index) => `<tr class="case-row"${index >= V2_PAGE_SIZE ? " hidden" : ""}><td>${escapeHtml(row.display_id)}</td>` +
+  const rows = model.rows.map((row, index) => `<tr class="case-row" data-result="${escapeHtml(row.result)}"${index >= V2_PAGE_SIZE ? " hidden" : ""}><td>${escapeHtml(row.display_id)}</td>` +
     `<td>${escapeHtml(row.module)}</td><td>${escapeHtml(row.title)}</td><td><span class="status ${row.result}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(row.result_label)}</span></td>` +
     `<td>${escapeHtml(row.reason)}</td><td><button class="view-button" type="button" aria-label="查看 ${escapeHtml(row.display_id)} 的用例详情" data-open-case="${index}" data-dialog-title="${escapeHtml(`${row.display_id} · ${row.title}`)}">查看</button></td></tr>`).join("");
   const templates = model.case_details.map((detail, index) => `<template data-case-detail="${index}">${v2CaseDetail(detail)}</template>`).join("");
@@ -257,12 +356,12 @@ function buildV2HtmlReport(model) {
     ["用例总数", model.overview.total, "total"], ["通过数量", model.counts.passed, "passed"], ["失败数量", model.counts.failed, "failed"],
     ["无法确定", model.counts.undetermined, "undetermined"], ["不执行", model.counts.not_executed, "not-executed"], ["通过率", model.overview.pass_rate, "passed"],
     ["失败率", model.overview.fail_rate, "failed"], ["执行耗时", model.overview.execution_duration, "duration"]
-  ].map(([label, value, tone]) => `<div class="metric metric-${tone}"><span class="metric-label">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+  ].map(([label, value, tone]) => `<div class="metric metric-${tone}"><span class="metric-label">${escapeHtml(label)}</span>${tone === "duration" ? durationMarkup(value) : `<strong>${escapeHtml(value)}</strong>`}</div>`).join("");
   const prd = model.report_context.prd_links.length
     ? `<ul>${model.report_context.prd_links.map(item => `<li>${linkOrText(item.url, item.title)}</li>`).join("")}</ul>`
     : "<p>未记录</p>";
   const targets = model.suite.target_urls.length
-    ? `<ul>${model.suite.target_urls.map(item => `<li>${linkOrText(item, item)}</li>`).join("")}</ul>`
+    ? `<ul>${model.suite.target_urls.map(item => `<li>${linkOrText(item, targetLabel(item))}</li>`).join("")}</ul>`
     : "<p>未记录</p>";
   const accounts = model.report_context.accounts.length ? list(model.report_context.accounts) : "<p>未记录</p>";
   const sampleFacts = model.timeline.filter(item => item.stage === "测试数据");
@@ -270,6 +369,11 @@ function buildV2HtmlReport(model) {
     ? `<aside class="waiting" role="status"><strong>本报告尚未完成</strong><p>记录截止时刻：${escapeHtml(model.run.boundary_at_label)}。当前等待用户协作，阶段聚合中的“无法确定”不是最终结论。</p></aside>`
     : "";
   const verdict = v2Verdict(model);
+  const actionGroups = [
+    v2ActionGroup("failed", "未通过", model.result_details.failed, "需要优先修复并复测"),
+    v2ActionGroup("undetermined", "无法确定", model.result_details.undetermined, "需要补齐事实或条件"),
+    v2ActionGroup("not_executed", "未执行", model.rows.filter(row => row.result === "not_executed"), "需要确认排除范围")
+  ].join("");
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'sha256-${cspHash}'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'; connect-src 'none'">
@@ -346,13 +450,26 @@ table:not(.case-table) th,table:not(.case-table) td{border-bottom:1px solid var(
 .quality-report .dialog-head button{color:#5548cc}
 .quality-report .case-meta dt{color:#626b80}
 @media(max-width:620px){.quality-report .metric-strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* A 阅读版：内容优先、单栏详情与可追溯的结果筛选。 */
+.quality-report{--accent:#365fba;--accent-soft:#eef3fc;background:#f4f6f9;color:#25334a}.quality-report .brand-mark{background:#253c60}.quality-report .eyebrow,.quality-report .view-button,.quality-report .pagination button,.quality-report .disclosure-index{color:var(--accent)}.quality-report .view-button,.quality-report .disclosure-index{background:var(--accent-soft)}
+.quality-report .duration-parts{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 9px;margin-top:7px;font-variant-numeric:tabular-nums}.quality-report .duration-parts span{display:inline-flex;align-items:baseline;white-space:nowrap}.quality-report .duration-parts strong{display:inline;margin:0;font-size:1.42rem}.quality-report .duration-parts small{margin-left:3px;color:var(--muted);font-size:.68rem;font-weight:650}
+.quality-report .active-filter{display:flex;min-height:34px;align-items:center;justify-content:space-between;gap:12px;margin:-8px 0 12px;color:var(--accent);font-size:.8rem}.quality-report .active-filter button{padding:4px 9px;border-color:#cad7ef;font-size:.75rem}.quality-report .active-filter:has([data-active-filter][hidden]){min-height:0;margin:0}
+.quality-report .detail-outcome{padding:16px 18px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;background:#f8faff}.quality-report .detail-outcome.failed{border-color:#f0d9de;border-left-color:var(--fail);background:#fff7f8}.quality-report .detail-outcome.undetermined{border-color:#eadfbd;border-left-color:var(--unknown);background:#fffaf0}.quality-report .detail-outcome.passed{border-color:#d7e9df;border-left-color:var(--pass);background:#f4faf6}.quality-report .detail-outcome.not_executed{border-left-color:var(--skip)}.quality-report .detail-outcome p{margin:.55rem 0 0;color:#4b566d}.quality-report .outcome-heading{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.quality-report .outcome-heading strong{font-size:.94rem}
+.quality-report .detail-context{display:flex;flex-wrap:wrap;gap:7px;margin:13px 0}.quality-report .context-chips{display:flex;width:100%;flex-direction:column;gap:7px}.quality-report .permission-context{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid #e4e8ef;border-radius:7px;background:#fbfcfe}.quality-report .context-chip{display:inline-flex;max-width:100%;align-items:center;padding:4px 9px;border:1px solid #dfe4ed;border-radius:5px;background:#f8f9fb;color:#536078;font-size:.74rem;overflow-wrap:anywhere}.quality-report .role-chip{font-weight:700}.quality-report .permission-chip{border-color:#d6e1f3;background:#f3f7fd;color:#355a9f}.quality-report .account-chip{border-color:#dce9e2;background:#f2f8f5;color:#28684f}.quality-report .verification-chip{border-color:#e6dfc8;background:#fffbef;color:#795d22}.quality-report .muted-chip,.quality-report .neutral-chip{color:#657087}
+.quality-report .full-id{margin:0 0 20px;border-bottom:1px solid var(--line);padding:0 0 14px}.quality-report .full-id summary{cursor:pointer;color:var(--muted);font-size:.76rem}.quality-report .full-id p{margin:9px 0 0;padding:10px;border-radius:5px;background:#f6f8fb;font-size:.78rem;overflow-wrap:anywhere}
+.quality-report .supplementary-details{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff}.quality-report .supplementary-details summary{position:relative;padding:12px 42px 12px 15px;cursor:pointer;color:#59657b;font-size:.8rem;font-weight:700;list-style:none}.quality-report .supplementary-details summary::-webkit-details-marker{display:none}.quality-report .supplementary-details summary::after{content:"＋";position:absolute;right:15px;top:50%;transform:translateY(-50%);color:var(--accent)}.quality-report .supplementary-details[open] summary::after{content:"−"}.quality-report .supplementary-details[open] summary{border-bottom:1px solid var(--line);background:#fafbfd}.quality-report .supplementary-content{padding:14px 16px;font-size:.82rem}.quality-report .supplementary-content>:first-child{margin-top:0}.quality-report .supplementary-content>:last-child{margin-bottom:0}
+.quality-report .step-list{margin:0;padding:0;list-style:none}.quality-report .step-item{display:grid;grid-template-columns:28px minmax(0,1fr);gap:11px;padding:3px 0 20px}.quality-report .step-item:last-child{padding-bottom:0}.quality-report .step-number{display:grid;place-items:center;width:26px;height:26px;margin:0;border-radius:50%;background:#edf2fa;color:#466794;font-size:.72rem}.quality-report .step-content>h4{margin:1px 0 12px;font-size:.9rem}.quality-report .step-source,.quality-report .oracle-id{margin:0 0 2px;color:var(--muted);font-size:.69rem}.quality-report .expectation{margin:0 0 16px;padding:15px;border:1px solid var(--line);border-radius:8px;background:#fff}.quality-report .comparison{overflow:hidden;border:1px solid var(--line);border-radius:7px}.quality-report .comparison-row{display:grid;grid-template-columns:6rem minmax(0,1fr);gap:12px;padding:11px 13px}.quality-report .comparison-row+.comparison-row{border-top:1px solid var(--line);background:#fafbfd}.quality-report .comparison-row>span{color:var(--muted);font-size:.72rem}.quality-report .comparison-row p,.quality-report .comparison-row ul{margin:0}.quality-report .checkpoint-meta{display:grid;grid-template-columns:6rem minmax(0,1fr);gap:6px 12px;margin:13px 0 0;font-size:.8rem}.quality-report .checkpoint-meta dt{color:var(--muted);font-weight:650}.quality-report .checkpoint-meta dd{margin:0;overflow-wrap:anywhere}
+.quality-report .image-preview-button{display:block;width:100%;padding:0;overflow:hidden;border:0;border-radius:8px;background:#eef2f8}.quality-report .image-preview-button:hover{background:#e5ebf4}.quality-report .image-preview-button img{border:0;border-radius:0}.quality-report .evidence figcaption{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.quality-report .evidence figcaption span{color:var(--accent)}.quality-report .image-dialog{width:min(1280px,calc(100vw - 28px));max-height:94vh}.quality-report .image-dialog-body{max-height:calc(94vh - 62px);overflow:auto;background:#eef1f6}.quality-report .image-dialog-body img{width:auto;min-width:100%;max-width:none;border:0;border-radius:0}
+.quality-report .action-groups{display:flex;flex-direction:column;gap:10px}.quality-report .action-groups>[data-action-group]{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px;padding:17px 19px;border:1px solid var(--line);border-radius:9px;background:#fafbfd}.quality-report .action-groups>[data-action-group] h3,.quality-report .action-groups>[data-action-group] p{margin:0}.quality-report .action-groups>[data-action-group] h3{font-size:.92rem}.quality-report .action-groups>[data-action-group] p:not(.summary-kicker){margin-top:3px;color:var(--muted);font-size:.78rem}.quality-report .action-groups>[data-action-group] button{white-space:nowrap;padding:6px 10px;border-color:#cbd8ef;font-size:.76rem}.quality-report .action-groups>.failure-summary{border-left:3px solid var(--fail)}.quality-report .action-groups>.unknown-summary{border-left:3px solid var(--unknown)}.quality-report .action-not_executed{border-left:3px solid var(--skip)}
+.quality-report .permission-table{width:100%;min-width:760px;table-layout:fixed}.quality-report .permission-table th:nth-child(2),.quality-report .permission-table td:nth-child(2){width:17%}.quality-report .permission-table th:nth-child(6),.quality-report .permission-table td:nth-child(6){width:24%}.quality-report .permission-case-ids{max-width:18rem;overflow-wrap:anywhere;word-break:break-word}.quality-report .permission-case-ids span{display:block}.quality-report .permission-case-ids span+span{margin-top:6px}
+@media(max-width:760px){.quality-report .duration-parts{gap:2px 7px}.quality-report .action-groups>[data-action-group]{grid-template-columns:1fr}.quality-report .action-groups>[data-action-group] button{justify-self:start}.quality-report .comparison-row,.quality-report .checkpoint-meta{grid-template-columns:1fr}.quality-report .image-dialog-body img{min-width:0;width:100%;max-width:100%}}
 </style></head><body class="quality-report"><div class="report-topbar"><div class="report-topbar-inner"><div class="report-brand"><span class="brand-mark" aria-hidden="true">✓</span><span>质量报告</span><span class="brand-divider">/</span><span class="brand-context">E2E</span></div><div class="topbar-run">RUN · ${escapeHtml(model.run.run_id)}</div></div></div><main>
 <header class="report-hero" data-report-section="title"><div class="hero-copy"><p class="eyebrow">END-TO-END TEST REPORT</p><h1>${escapeHtml(model.suite.name)}</h1><p class="hero-description">汇总本轮端到端测试的执行结果、关键证据与结论边界。</p><div class="hero-meta"><div><span>当前阶段</span><strong>${escapeHtml(model.run.status_label)}</strong></div><div><span>记录截止</span><strong>${escapeHtml(model.run.boundary_at_label)}</strong></div></div>${waiting}</div><aside class="hero-verdict ${escapeHtml(verdict.tone)}" aria-label="验收结论"><strong><span class="verdict-dot" aria-hidden="true"></span>${escapeHtml(verdict.label)}</strong><p>${escapeHtml(verdict.summary)}</p></aside></header>
 <section class="report-section" data-report-section="overview"><div class="section-heading"><span class="section-index">01</span><div><h2>测试概览</h2></div><p>全量用例统计 · 不随筛选变化</p></div><div class="metric-strip">${overview}</div><div class="summary-footer"><p class="overview-note">统计口径：通过率 = 通过数量 ÷ 用例总数；失败率 = 失败数量 ÷ 用例总数。全局暂停等待时长：${escapeHtml(model.overview.waiting_duration)}；执行耗时扣除已记录的全局用户等待区段。</p></div></section>
 <section class="report-section" data-report-section="environment"><div class="section-heading"><span class="section-index">02</span><h2>测试环境</h2><p>本次测试的执行上下文</p></div><div class="environment-grid"><div class="environment-item"><span>PRD 链接</span><div class="environment-value">${prd}</div></div><div class="environment-item"><span>测试地址链接</span><div class="environment-value">${targets}</div></div><div class="environment-item"><span>测试账号</span><div class="environment-value">${accounts}</div></div><div class="environment-item"><span>执行时间</span><div class="environment-value"><p>${escapeHtml(model.run.started_at_display_label)} — ${escapeHtml(model.run.completed_at_display_label)}</p><p class="environment-note">时区：${escapeHtml(model.report_context.display_timezone)}</p></div></div><div class="environment-item"><span>代理方式</span><div class="environment-value"><p>${escapeHtml(model.report_context.proxy_method)}</p></div></div><div class="environment-item"><span>环境说明</span><div class="environment-value"><p>${escapeHtml(model.report_context.environment_description)}</p></div></div></div></section>
-<section class="report-section" data-report-section="coverage" data-page-size="${V2_PAGE_SIZE}"><div class="section-heading"><span class="section-index">03</span><h2>需求覆盖与验收</h2><p>逐条查看测试情况 · 每页最多 20 条</p></div><div class="table-wrap"><table class="case-table"><thead><tr><th>测试用例 ID</th><th>模块</th><th>测试场景</th><th>测试结果</th><th>成功/失败的原因</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div><nav class="pagination" aria-label="用例分页"><button type="button" data-page-previous>上一页</button><span data-page-indicator>第 1 / ${pageCount} 页</span><button type="button" data-page-next${pageCount === 1 ? " disabled" : ""}>下一页</button></nav>${templates}<dialog id="case-dialog" aria-labelledby="case-dialog-title"><div class="dialog-head"><h2 id="case-dialog-title" data-dialog-title>用例详情</h2><button type="button" data-dialog-close aria-label="关闭用例详情">关闭</button></div><div class="dialog-body" data-dialog-content></div></dialog></section>
+<section class="report-section" data-report-section="coverage" data-page-size="${V2_PAGE_SIZE}"><div class="section-heading"><span class="section-index">03</span><h2>需求覆盖与验收</h2><p>逐条查看测试情况 · 每页最多 20 条</p></div><div class="active-filter" role="status"><span data-active-filter hidden></span><button type="button" data-clear-filter hidden>显示全部用例</button></div><div class="table-wrap"><table class="case-table"><thead><tr><th>测试用例 ID</th><th>模块</th><th>测试场景</th><th>测试结果</th><th>成功/失败的原因</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div><nav class="pagination" aria-label="用例分页"><button type="button" data-page-previous>上一页</button><span data-page-indicator aria-live="polite">第 1 / ${pageCount} 页 · 共 ${model.rows.length} 条</span><button type="button" data-page-next${pageCount === 1 ? " disabled" : ""}>下一页</button></nav>${templates}<dialog id="case-dialog" aria-labelledby="case-dialog-title"><div class="dialog-head"><h2 id="case-dialog-title" data-dialog-title>用例详情</h2><button type="button" data-dialog-close aria-label="关闭用例详情">关闭</button></div><div class="dialog-body" data-dialog-content></div></dialog><dialog id="image-dialog" class="image-dialog" aria-labelledby="image-dialog-title"><div class="dialog-head"><h2 id="image-dialog-title" data-image-title>关键证据截图</h2><button type="button" data-image-close aria-label="关闭放大截图">关闭</button></div><div class="image-dialog-body"><img data-enlarged-image alt=""></div></dialog></section>
 <section class="report-section" data-report-section="data-cleanup"><div class="section-heading"><span class="section-index">04</span><h2>测试数据与清理</h2><p>本 Run 的数据事实与资源收尾</p></div><div class="cleanup-panel"><article class="cleanup-block data-facts"><div class="cleanup-heading"><span class="cleanup-icon" aria-hidden="true">⌁</span><h3>已记录的测试数据事实</h3></div>${timeline(sampleFacts)}</article><article class="cleanup-block cleanup-result"><div class="cleanup-heading"><span class="cleanup-icon" aria-hidden="true">✓</span><h3>实际清理结果</h3></div><p class="cleanup-status"><span class="status-dot" aria-hidden="true"></span><strong>${escapeHtml(model.cleanup_summary.status)}</strong></p>${semanticFactTable(model.cleanup_summary.items, model.cleanup_summary.status === "无需清理" ? "本轮没有需要清理的代理资源。" : "未记录具体清理事项。")}</article></div></section>
-<section class="report-section" data-report-section="conclusion"><div class="section-heading"><span class="section-index">05</span><h2>结论边界和后续行动</h2><p>优先处理失败项，再补充无法确定项的事实</p></div><div class="conclusion-layout"><div class="conclusion-summary-grid"><article class="conclusion-block failure-summary"><p class="summary-kicker">需要优先处理</p><h3>未通过</h3>${v2ResultList(model.result_details.failed, "本轮没有已记录的未通过用例。")}</article><article class="conclusion-block unknown-summary"><p class="summary-kicker">需要补充事实</p><h3>无法确定与未验证范围</h3>${v2ResultList(model.result_details.undetermined, "本轮没有无法确定用例。")}</article></div><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">01</span><span class="disclosure-label"><strong>权限准备状态</strong><small>查看角色、账号与核验范围</small></span></summary><div class="disclosure-content">${permissionSection(model.permission)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">02</span><span class="disclosure-label"><strong>关键执行记录</strong><small>查看本轮执行过程与阶段事实</small></span></summary><div class="disclosure-content">${timeline(model.timeline)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">03</span><span class="disclosure-label"><strong>代理验证</strong><small>查看影响范围与恢复结论</small></span></summary><div class="disclosure-content">${proxySummary(model)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">04</span><span class="disclosure-label"><strong>一致性与证据边界</strong><small>查看报告可信范围与证据说明</small></span></summary><div class="disclosure-content">${semanticFactTable(model.consistency.checks)}</div></details></div></section>
+<section class="report-section" data-report-section="conclusion"><div class="section-heading"><span class="section-index">05</span><h2>结论边界和后续行动</h2><p>按已知结果类别归组，不推断共同根因</p></div><div class="conclusion-layout"><div class="action-groups">${actionGroups}</div><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">01</span><span class="disclosure-label"><strong>权限准备状态</strong><small>查看角色、账号与核验范围</small></span></summary><div class="disclosure-content">${v2PermissionSection(model.permission)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">02</span><span class="disclosure-label"><strong>关键执行记录</strong><small>查看本轮执行过程与阶段事实</small></span></summary><div class="disclosure-content">${timeline(model.timeline)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">03</span><span class="disclosure-label"><strong>代理验证</strong><small>查看影响范围与恢复结论</small></span></summary><div class="disclosure-content">${proxySummary(model)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">04</span><span class="disclosure-label"><strong>一致性与证据边界</strong><small>查看报告可信范围与证据说明</small></span></summary><div class="disclosure-content">${semanticFactTable(model.consistency.checks)}</div></details></div></section>
 </main><script>${V2_REPORT_SCRIPT}</script></body></html>\n`;
 }
 

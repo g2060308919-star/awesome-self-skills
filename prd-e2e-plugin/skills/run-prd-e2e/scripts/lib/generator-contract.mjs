@@ -1,8 +1,8 @@
 import { canonicalJsonBytes, canonicalStringify, sha256Text, sha256Value } from "./digest.mjs";
 import { fail, requireCondition } from "./errors.mjs";
 
-export const GENERATOR_SCHEMA_VERSION = "4.2.0";
-export const GENERATOR_COMPILER_VERSION = "0.7.0";
+export const GENERATOR_SCHEMA_VERSION = "4.3.0";
+export const GENERATOR_COMPILER_VERSION = "0.8.0";
 
 function same(left, right) {
   return canonicalStringify(left) === canonicalStringify(right);
@@ -12,8 +12,11 @@ function requireCanonicalBytes(value, rawBytes, label) {
   requireCondition(typeof rawBytes === "string" && rawBytes === canonicalJsonBytes(value), "HANDOFF_REF_MISMATCH", `${label} bytes are not the canonical Generator artifact.`);
 }
 
-function requireContract(value, label) {
-  requireCondition(value?.schema_version === GENERATOR_SCHEMA_VERSION && value?.compiler_version === GENERATOR_COMPILER_VERSION, "HANDOFF_REF_MISMATCH", `${label} does not use the locked Generator contract.`);
+function requireContract(value, label, reference) {
+  const supported = (value?.schema_version === GENERATOR_SCHEMA_VERSION && value?.compiler_version === GENERATOR_COMPILER_VERSION)
+    || (value?.schema_version === "4.2.0" && value?.compiler_version === "0.7.0");
+  const consistent = !reference || (value?.schema_version === reference.schema_version && value?.compiler_version === reference.compiler_version);
+  requireCondition(supported && consistent, "HANDOFF_REF_MISMATCH", `${label} does not use one consistent supported Generator contract.`);
 }
 
 function requireCaseDocumentRef(value, label) {
@@ -52,7 +55,7 @@ export function validateCaseDocumentHandoff(input) {
   requireCondition(sha256Text(caseDocumentBytes) === reference.bundle_digest, "HANDOFF_REF_MISMATCH", "Case Document bundle digest does not match its immutable reference.");
 
   requireContract(caseDocumentManifest, "Case Document manifest");
-  requireContract(caseDocument, "Case Document bundle");
+  requireContract(caseDocument, "Case Document bundle", caseDocumentManifest);
   requireCondition(caseDocumentManifest.delivery_intent === "case_document" && caseDocumentManifest.authority === "canonical", "HANDOFF_REF_MISMATCH", "Case Document manifest is not canonical.");
   requireCondition(["delivered_cases", "delivered_with_gaps"].includes(caseDocumentManifest.result_kind), "CASE_NOT_EXECUTABLE", "Case Document does not contain executable Cases.");
   requireCondition(caseDocument.delivery_intent === "case_document" && ["delivered_cases", "delivered_with_gaps"].includes(caseDocument.result_kind), "CASE_NOT_EXECUTABLE", "Case Document bundle is not executable.");
@@ -81,8 +84,8 @@ export function validateGeneratorHandoff(input) {
   } = input;
   const reference = validateCaseDocumentHandoff(input);
 
-  requireContract(executionPlanManifest, "Execution Plan manifest");
-  requireContract(executionPlan, "Execution Plan");
+  requireContract(executionPlanManifest, "Execution Plan manifest", caseDocumentManifest);
+  requireContract(executionPlan, "Execution Plan", executionPlanManifest);
   requireCanonicalBytes(executionPlanManifest, executionPlanManifestBytes, "Execution Plan manifest");
   requireCanonicalBytes(executionPlan, executionPlanBytes, "Execution Plan");
   requireCondition(typeof executionPlanManifest.run_id === "string" && executionPlanManifest.run_id.trim(), "HANDOFF_REF_MISMATCH", "Execution Plan manifest Run ID is invalid.");
@@ -123,8 +126,8 @@ export function validateNoExecutionHandoff(input) {
     executionPlanBytes
   } = input;
   const reference = validateCaseDocumentHandoff(input);
-  requireContract(executionPlanManifest, "Execution Plan manifest");
-  requireContract(executionPlan, "Execution Plan");
+  requireContract(executionPlanManifest, "Execution Plan manifest", input.caseDocumentManifest);
+  requireContract(executionPlan, "Execution Plan", executionPlanManifest);
   requireCanonicalBytes(executionPlanManifest, executionPlanManifestBytes, "Execution Plan manifest");
   requireCanonicalBytes(executionPlan, executionPlanBytes, "Execution Plan");
   requireCondition(typeof executionPlanManifest.run_id === "string" && executionPlanManifest.run_id.trim(), "HANDOFF_REF_MISMATCH", "Execution Plan manifest Run ID is invalid.");

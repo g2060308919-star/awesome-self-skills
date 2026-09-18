@@ -10,11 +10,11 @@ import { validateTestCases } from "../skills/b2b-e2e-runner/scripts/lib/contract
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-test("vendored Generator registry has the locked 4.2.0 / 0.7.0 contract and intact canonical Schema digests", async () => {
+test("vendored Generator registry has the locked 4.3.0 / 0.8.0 contract and intact canonical Schema digests", async () => {
   const scripts = path.join(pluginRoot, "skills", "generate-test-cases", "scripts");
   const manifest = JSON.parse(await readFile(path.join(scripts, "schema-manifest.json"), "utf8"));
-  assert.equal(manifest.schema_version, "4.2.0");
-  assert.equal(manifest.compiler_version, "0.7.0");
+  assert.equal(manifest.schema_version, "4.3.0");
+  assert.equal(manifest.compiler_version, "0.8.0");
   assert.equal(manifest.digest, sha256Value({
     compiler_version: manifest.compiler_version,
     schema_version: manifest.schema_version,
@@ -26,14 +26,9 @@ test("vendored Generator registry has the locked 4.2.0 / 0.7.0 contract and inta
   }
   const bundleSchema = JSON.parse(await readFile(path.join(scripts, "schemas", "test-bundle.schema.json"), "utf8"));
   const planSchema = JSON.parse(await readFile(path.join(scripts, "schemas", "execution-plan.schema.json"), "utf8"));
-  assert.deepEqual(bundleSchema.$defs.caseDocumentBundle.allOf[0].oneOf[1].properties, {
-    schema_version: { const: "4.2.0" },
-    compiler_version: { const: "0.7.0" }
-  });
-  assert.deepEqual(planSchema.$defs.v4ContractVersion.oneOf[1].properties, {
-    schema_version: { const: "4.2.0" },
-    compiler_version: { const: "0.7.0" }
-  });
+  for (const pairs of [bundleSchema.$defs.caseDocumentBundle.allOf[0].oneOf, planSchema.$defs.v4ContractVersion.oneOf]) {
+    assert.ok(pairs.some(pair => pair.properties.schema_version.const === "4.3.0" && pair.properties.compiler_version.const === "0.8.0"));
+  }
 });
 
 test("Compiler output from a Generator 4.2 fixture passes the actual vendored Runner 2.0 validator", () => {
