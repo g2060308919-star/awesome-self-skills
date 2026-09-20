@@ -155,4 +155,8 @@ test("NFR-002: proxy config requires non-production and rejects unsafe HTTP or s
       request: { headers: { set: { Authorization: "Bearer fixture" } } }
     }]
   }), error => error.code === "SECRET_DETECTED");
+  assert.throws(() => validateProxyConfig({ ...base, endpoint: "http://user:pass@127.0.0.1:9222" }),
+    error => error.code === "ENDPOINT_REJECTED");
+  assert.throws(() => validateProxyConfig({ ...base, endpoint: "http://127.0.0.1:9222/?token=fixture" }),
+    error => error.code === "ENDPOINT_REJECTED");
 });

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { generateReport, initializeRun, recordEvent, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
+import { markAsHistoricalV2 } from "./test-helpers.mjs";
 
 async function writeCases(root, count = 1, { hostile = false } = {}) {
   const casesPath = path.join(root, "cases.json");
@@ -26,6 +27,7 @@ async function writeCases(root, count = 1, { hostile = false } = {}) {
 async function baseRun(root, count = 1, options) {
   const { casesPath, cases } = await writeCases(root, count, options);
   const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+  await markAsHistoricalV2(run.runRoot);
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: cases.map(item => item.case_id)
   });

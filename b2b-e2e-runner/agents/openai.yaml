@@ -1,4 +1,4 @@
 interface:
   display_name: "B2B E2E Runner"
-  short_description: "Run confirmed B2B E2E cases with staged permissions and auditable reports"
-  default_prompt: "Use $b2b-e2e-runner through Chrome DevTools MCP. Explain concrete account permissions in plain language without inventing a general-account group; execute ready work, upload real files, explore authorized data and request specific help when needed. Keep stage reports internal while waiting. Only on explicit Run completion deliver the validated HTML report and complete same-model dialogue table; preserve screenshot provenance and side-effect safety."
+  short_description: "Run complete B2B E2E flows with optional isolated Mock fallback"
+  default_prompt: "Use $b2b-e2e-runner through Chrome DevTools MCP. Ask for explicit Mock fallback consent before account and ordinary-proxy preflight, then execute the real chain first. Map every checkpoint to locations, permissions and dependencies; preserve cross-site return work and request only scoped help. Use fail-closed single-Target Request-stage Mock only for proven data gaps and never claim backend validation. Keep stage reports internal while waiting. Only on explicit Run completion deliver the validated HTML report and complete same-model dialogue table; preserve real results, screenshot provenance and side-effect safety."

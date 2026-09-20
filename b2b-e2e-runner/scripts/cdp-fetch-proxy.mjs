@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -7,6 +8,8 @@ import { writeJsonAtomic } from "./lib/atomic-json.mjs";
 import { CdpClient, fetchCdpJson } from "./lib/cdp-client.mjs";
 import { assertNoSecrets, sanitizeUrl } from "./lib/redaction.mjs";
 import { TargetLock } from "./lib/target-lock.mjs";
+import { MockScenarioError } from "./lib/mock-scenario.mjs";
+import { loadMockProxyBinding } from "./lib/mock-runtime.mjs";
 
 export const BODY_LIMIT_BYTES = 5 * 1024 * 1024;
 
@@ -88,11 +91,17 @@ export function validateProxyConfig(config) {
   let endpoint;
   try { endpoint = new URL(config.endpoint); } catch { fail("RULE_CONTRACT", "CDP endpoint URL 无效"); }
   if (!isLoopback(endpoint.hostname)) fail("ENDPOINT_REJECTED", "V1 只连接本机 loopback CDP endpoint");
+  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || endpoint.pathname !== "/") {
+    fail("ENDPOINT_REJECTED", "CDP endpoint 必须是无认证信息、查询、片段或额外路径的本机 origin");
+  }
   const targetId = config.target_id ?? config.targetId;
   const runId = config.run_id ?? config.runId ?? "runner";
   const lockRoot = config.lock_root ?? config.lockRoot;
   if (typeof targetId !== "string" || !targetId) fail("RULE_CONTRACT", "target_id 必填");
   if (typeof lockRoot !== "string" || !path.isAbsolute(lockRoot)) fail("RULE_CONTRACT", "lock_root 必须是绝对路径");
+  if (config.mock_scenario && (typeof config.proxy_cycle_id !== "string" || !config.proxy_cycle_id)) {
+    fail("RULE_CONTRACT", "启用 mock_scenario 时 proxy_cycle_id 必填");
+  }
   assertNoSecrets(config.rules);
   const rules = compileRules(config.rules);
   for (const rule of rules) {
@@ -196,7 +205,12 @@ export class ProxyListener {
     runId = "runner",
     statusPath,
     clientFactory = CdpClient.connect,
-    diagnostic = () => {}
+    diagnostic = () => {},
+    mockScenarioEngine = null,
+    mockProxyCycleId = null,
+    mockReceiptSink = async () => {},
+    prepareOwnedTargetForCleanup = null,
+    verifyOwnedTargetForCleanup = null
   }) {
     this.endpoint = endpoint;
     this.browserWebSocketUrl = browserWebSocketUrl;
@@ -205,6 +219,14 @@ export class ProxyListener {
     this.statusPath = statusPath;
     this.clientFactory = clientFactory;
     this.diagnostic = diagnostic;
+    this.mockScenarioEngine = mockScenarioEngine;
+    this.mockProxyCycleId = mockProxyCycleId;
+    this.mockReceiptSink = mockReceiptSink;
+    this.prepareOwnedTargetForCleanup = prepareOwnedTargetForCleanup;
+    this.verifyOwnedTargetForCleanup = verifyOwnedTargetForCleanup ?? (async () => {
+      const result = await this.client.command("Target.getTargetInfo", { targetId: this.targetId });
+      return result?.targetInfo?.url === "about:blank";
+    });
     this.lock = new TargetLock({ root: lockRoot, endpoint, targetId, runId });
     this.client = null;
     this.sessionId = null;
@@ -212,7 +234,10 @@ export class ProxyListener {
     this.started = false;
     this.state = "configured";
     this.stopping = null;
-    this.counts = { requestMatched: 0, responseMatched: 0, continued: 0, fulfilled: 0, ruleErrors: 0 };
+    this.counts = {
+      requestMatched: 0, responseMatched: 0, continued: 0, fulfilled: 0, ruleErrors: 0,
+      mockFulfilled: 0, mockBlocked: 0, mockPassthrough: 0
+    };
     this.recentErrors = [];
   }
 
@@ -244,14 +269,10 @@ export class ProxyListener {
       this.state = "attached";
       await this.#persist();
       await this.client.command("Network.enable", {}, this.sessionId);
-      const patterns = this.rules.flatMap(rule => ["Request", "Response"].map(requestStage => ({
-        urlPattern: `${rule.match.protocol}//${rule.match.hostname}*${rule.match.path_prefix}*`,
-        requestStage
-      })));
-      await this.client.command("Fetch.enable", {
-        patterns
-      }, this.sessionId);
-      this.state = "fetch_enabled";
+      // Register every lifecycle and pause handler before Fetch.enable. CDP may
+      // emit requestPaused as soon as interception is enabled; registering
+      // afterwards leaves a race where a business request is paused without an
+      // owner and can neither be failed closed nor fulfilled deterministically.
       this.unsubscribers.push(this.client.on(this.sessionId, "Fetch.requestPaused", event => this.#handlePaused(event)));
       this.unsubscribers.push(this.client.on("", "Target.detachedFromTarget", event => {
         if (event.sessionId === this.sessionId || event.targetId === this.targetId) this.stop().catch(() => {});
@@ -261,6 +282,17 @@ export class ProxyListener {
         this.#recordError("CDP_DISCONNECTED", event.reason ?? "CDP transport closed");
         this.stop().catch(() => {});
       }));
+      const ordinaryPatterns = this.rules.flatMap(rule => ["Request", "Response"].map(requestStage => ({
+        urlPattern: `${rule.match.protocol}//${rule.match.hostname}*${rule.match.path_prefix}*`,
+        requestStage
+      })));
+      const patterns = [...ordinaryPatterns, ...(this.mockScenarioEngine?.requestPatterns() ?? [])].filter((pattern, index, all) =>
+        all.findIndex(candidate => candidate.urlPattern === pattern.urlPattern && candidate.requestStage === pattern.requestStage) === index
+      );
+      await this.client.command("Fetch.enable", {
+        patterns
+      }, this.sessionId);
+      this.state = "fetch_enabled";
       this.started = true;
       this.state = "active";
       await this.#persist();
@@ -293,6 +325,20 @@ export class ProxyListener {
     this.state = "stopping";
     await this.#persist().catch(() => {});
     if (this.client && this.sessionId) {
+      if (this.mockScenarioEngine) {
+        try {
+          if (this.prepareOwnedTargetForCleanup) {
+            await this.prepareOwnedTargetForCleanup({ targetId: this.targetId, sessionId: this.sessionId });
+          }
+          const safe = await this.verifyOwnedTargetForCleanup({ targetId: this.targetId, sessionId: this.sessionId });
+          if (!safe) fail("MOCK_CLEANUP_NOT_ISOLATED", "Mock 测试页尚未由 Chrome DevTools MCP 安全导航到 about:blank，保持拦截与锁");
+        } catch (error) {
+          this.#recordError(error.code ?? "MOCK_CLEANUP_PREPARE_FAILED", error.message);
+          this.state = "cleanup_failed";
+          await this.#persist().catch(() => {});
+          return this.status();
+        }
+      }
       await this.client.command("Fetch.disable", {}, this.sessionId).catch(() => {});
       this.state = "fetch_disabled";
       await this.client.command("Target.detachFromTarget", { sessionId: this.sessionId }).catch(() => {});
@@ -316,6 +362,52 @@ export class ProxyListener {
     const responseStage = event.responseStatusCode !== undefined;
     const rule = this.rules.find(item => matchRule(item, event.request.url, event.request.method));
     try {
+      if (this.mockScenarioEngine && !responseStage) {
+        try {
+          const outcome = await this.mockScenarioEngine.handle({
+            url: event.request.url,
+            method: event.request.method,
+            headers: event.request.headers ?? {},
+            ...(event.request.postData === undefined ? {} : { body: event.request.postData })
+          }, {
+            proxy_cycle_id: this.mockProxyCycleId,
+            request_id: event.requestId
+          });
+          if (outcome.disposition === "mocked") {
+            const responseHeaders = Object.entries(outcome.response.headers).map(([name, value]) => ({ name, value: String(value) }));
+            // Persist/import the receipt before the page can observe success. Any
+            // Mock-path failure, including an ordinary filesystem error such as
+            // EACCES, must block the request instead of falling through to the
+            // legacy proxy path and potentially reaching real upstream.
+            await this.mockReceiptSink(structuredClone(outcome));
+            await this.client.command("Fetch.fulfillRequest", {
+              requestId: event.requestId,
+              responseCode: outcome.response.status,
+              responseHeaders,
+              body: Buffer.from(outcome.response.body, "utf8").toString("base64")
+            }, this.sessionId);
+            this.counts.fulfilled += 1;
+            this.counts.mockFulfilled += 1;
+            return;
+          }
+          if (outcome.disposition === "passthrough") this.counts.mockPassthrough += 1;
+        } catch (error) {
+          this.counts.mockBlocked += 1;
+          const code = error instanceof MockScenarioError || error?.code
+            ? (error.code ?? "MOCK_REQUEST_BLOCKED")
+            : "MOCK_INTERNAL_BLOCKED";
+          this.#recordError(code, error.message);
+          await this.client.command("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" }, this.sessionId);
+          this.diagnostic({
+            event: "mock-request-blocked",
+            code,
+            message: error.message,
+            url: sanitizeUrl(event.request.url),
+            stage: "request"
+          });
+          return;
+        }
+      }
       if (!rule) {
         this.counts.continued += 1;
         await this.client.command(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }, this.sessionId);
@@ -386,6 +478,7 @@ export class ProxyListener {
 
 export async function createProxyListener(config) {
   const validated = validateProxyConfig(config);
+  const mock = await loadMockProxyBinding(validated);
   const endpoint = validated.endpoint;
   const [version, targets] = await Promise.all([
     fetchCdpJson(endpoint, "/json/version"),
@@ -397,7 +490,11 @@ export async function createProxyListener(config) {
     ...validated,
     endpoint,
     browserWebSocketUrl: version.webSocketDebuggerUrl,
-    rules: validated.rules
+    rules: validated.rules,
+    ...(mock ? {
+      mockScenarioEngine: mock.engine,
+      mockProxyCycleId: mock.proxyCycleId
+    } : {})
   });
 }
 
@@ -435,6 +532,40 @@ export async function stopProxyFromState(statePath, {
   return { stopped: true, signaled: true, targetId: state.targetId };
 }
 
+export function installStopSignalHandlers(listener, {
+  signalTarget = process,
+  exit = code => process.exit(code)
+} = {}) {
+  let stopping = false;
+  const completed = new EventEmitter();
+  const dispose = () => {
+    signalTarget.off("SIGINT", stop);
+    signalTarget.off("SIGTERM", stop);
+  };
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    try {
+      const status = await listener.stop();
+      if (status.state === "cleanup_failed") {
+        stopping = false;
+        completed.emit("attempt", status);
+        return;
+      }
+      dispose();
+      completed.emit("attempt", status);
+      exit(0);
+    } catch (error) {
+      stopping = false;
+      completed.emit("attempt", { state: "cleanup_failed", error });
+      throw error;
+    }
+  };
+  signalTarget.on("SIGINT", stop);
+  signalTarget.on("SIGTERM", stop);
+  return { completed, dispose, stop };
+}
+
 async function main() {
   const [command, ...args] = process.argv.slice(2);
   const option = name => {
@@ -458,15 +589,7 @@ async function main() {
   const listener = await createProxyListener(config);
   await listener.start();
   process.stdout.write(JSON.stringify({ ok: true, ...listener.status() }) + "\n");
-  let stopping = false;
-  const stop = async () => {
-    if (stopping) return;
-    stopping = true;
-    await listener.stop();
-    process.exit(0);
-  };
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  installStopSignalHandlers(listener);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
