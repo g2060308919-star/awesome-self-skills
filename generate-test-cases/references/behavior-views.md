@@ -28,7 +28,7 @@ Every evidence binding points to the exact element field (for example `/business
 
 Before drafting Cases, identify each source-backed对象、条件、触发动作 and 独立业务结果. Split outcomes by independently decidable result, not punctuation, keyword count, shared click, or number of steps. A closed enumeration, permission allow/deny branch, or explicitly separate input/result mapping produces its own precise outcome inputs and expectations when the source requires them. Multiple observation surfaces that prove the same result remain supporting observations of one outcome.
 
-Read related rules together for the same object and action. Preserve whether conditions are simultaneous (AND), alternatives (OR), prerequisites, or exceptions; select combinations that distinguish those meanings without generating a Cartesian product. The same rejection copy does not merge independently failing restrictions, while an evidence-backed impossible combination is excluded rather than invented as a negative path.
+Read related rules together for the same object and action. Preserve whether conditions are simultaneous (AND), alternatives (OR), prerequisites, or exceptions; select combinations that distinguish those meanings without generating a Cartesian product. Converge role, state, field, timing, and integration rules before Case writing. For example, preserve “role AND state” when both are required, scope duplicate detection to the evidenced workspace, and keep separate workspaces independent when the source says they are. The same rejection copy does not merge independently failing restrictions, while an evidence-backed impossible combination is excluded rather than invented as a negative path.
 
 A formal Test Point corresponds to one independently decidable business outcome, not each technical surface. A Fact may produce several outcomes when each has a different expected result (for example separate enum values). UI/API/storage observations of the same outcome are supporting observations, not extra primary Test Points.
 
@@ -66,6 +66,10 @@ cannot form cycles. Evidence exclusions require exact Claim support; uncertainty
 cost, length, or lack of mention is not exclusion evidence. Semantic-gap and
 Exploratory dispositions must reference their real existing records. A partial
 batch or stale plan revision is not formal completion.
+
+Complete `design_assurance` before Cases. Every concrete candidate responsibility states what must be distinguished or proved, and every actual candidate has one real disposition plus a representative target where applicable. The complete plan's `impacted_prior_batches` lists only genuinely affected completed earlier batches and is an empty array when none are affected. Do not draft arbitrary Cases and backfill the ledger to match them. If Case design discovers a new responsibility, return it to the owning rule group and reconsider affected prior batches before regenerating Cases.
+
+Compare semantic identity across page or workspace, business object, role, state, input partition, action, primary result, observation contract, and path history. A shared title, source paragraph, copy string, error message, or terminal Test Point is not enough to declare duplication. Merge only items with the same business result and design responsibility, and retain every source binding and disposition. Never merge distinct objects/pages, independent constraints, enumerated results, or a complete path with its required single-point Case. After disposition, check both directions between responsibilities and retained/represented outcomes; candidate, Test Point, and Case counts need not be equal.
 
 ## Complete the interaction audit without inventing semantics
 

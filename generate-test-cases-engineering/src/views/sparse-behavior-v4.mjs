@@ -6,12 +6,18 @@ import { validateAgainstSchema } from '../schema-validator.mjs';
 const text = { type: 'string', minLength: 1, pattern: '\\S' };
 /** @param {Record<string,unknown>} properties */
 const closed = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
-export const sparseEvidenceContextSchema = closed({
-  facts: { type: 'array', items: closed({ fact_id: text, module_id: text,
-    acceptance_role: { enum: ['primary_acceptance', 'dependency_contract', 'context_only'] }, condition_field: text }) },
-  claims: { type: 'array', items: closed({ claim_id: text, level: { enum: ['E3', 'E2', 'E1'] }, supported: { type: 'boolean' },
-    assertions: { type: 'array', minItems: 1, items: closed({ fact_id: text, field_path: text, value: {} }) } }) }
-});
+export const sparseEvidenceContextSchema = {
+  type: 'object',
+  properties: {
+    facts: { type: 'array', items: closed({ fact_id: text, module_id: text,
+      acceptance_role: { enum: ['primary_acceptance', 'dependency_contract', 'context_only'] }, condition_field: text }) },
+    claims: { type: 'array', items: closed({ claim_id: text, level: { enum: ['E3', 'E2', 'E1'] }, supported: { type: 'boolean' },
+      assertions: { type: 'array', minItems: 1, items: closed({ fact_id: text, field_path: text, value: {} }) } }) },
+    diagnostics: { type: 'array', maxItems: 0 }
+  },
+  required: ['facts', 'claims'],
+  additionalProperties: false
+};
 /** @param {string} code @param {string} path @param {string} message */
 const diagnostic = (code, path, message) => ({ category: 'adapter_revision', code, path, message });
 /** @param {any} value @param {string} pointer */
@@ -22,6 +28,19 @@ function at(value, pointer) {
     target = target[segment];
   }
   return { exists: true, value: target };
+}
+
+/** The only Behavior View fields that can receive positive Evidence bindings.
+ * Keep this predicate aligned with requiredBehaviorBindingsV4 so a Claim cannot
+ * authorize a field that the sparse verifier never consumes.
+ * @param {unknown} value */
+export function isBehaviorAssertionFieldPathV4(value) {
+  if (typeof value !== 'string') return false;
+  if (/^\/(?:business_outcome|condition|expected)$/u.test(value)) return true;
+  const index = '(?:0|[1-9][0-9]*)';
+  return new RegExp(`^/partitions/${index}/(?:expected|value|bounds/(?:lower|upper|inclusive))$`, 'u').test(value)
+    || new RegExp(`^/surfaces/${index}/assertion$`, 'u').test(value)
+    || new RegExp(`^/semantic_effects/${index}/(?:kind|subject|before|after)$`, 'u').test(value);
 }
 /** Every source-bearing semantic field is explicit; no synthetic surfaces/bounds.
  * @param {any} element

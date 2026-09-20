@@ -450,6 +450,10 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   if (Array.isArray(semanticEvidence.diagnostics) && semanticEvidence.diagnostics.length) {
     return needRevision('evidence_claims', semanticEvidence.diagnostics);
   }
+  const behaviorEvidence = system.behavior_evidence ?? { facts: [], claims: [] };
+  if (Array.isArray(behaviorEvidence.diagnostics) && behaviorEvidence.diagnostics.length) {
+    return needRevision('evidence_claims', behaviorEvidence.diagnostics);
+  }
   const scope = compileScopeManifestV4({
     discovery_digest: evidence.topology_discovery.discovery_digest,
     primary_surface: evidence.scope_manifest.primary_surface,
@@ -507,7 +511,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     if (assurance.diagnostics.length) return needRevision('behavior_views', assurance.diagnostics);
     currentDesignAssurance = assurance.normalized;
   }
-  const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
+  const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, behaviorEvidence);
   if (behavior.kind === 'need_revision') return needRevision('behavior_views', behavior.diagnostics);
   if (behavior.kind !== 'compiled') return qualityFailure('BUSINESS_OUTCOME_COMPILATION_FAILED', behavior.diagnostics);
   const caseSchemaFailure = validateArtifact(artifacts.case_drafts, caseDraftsSchema, 'case_drafts');

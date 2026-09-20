@@ -131,6 +131,14 @@ async function pendingSemanticReply(installed, directory) {
   await stage(directory, 'source_pack', fixture.artifacts.source_pack);
   const sourceReply = await installed.advanceStrict(directory);
   assert.equal(sourceReply.stage, 'evidence_claims', JSON.stringify(sourceReply));
+  const evidence = fixture.artifacts.evidence_claims;
+  const discovery = installed.discoverV4Topology(fixture.artifacts.source_pack, evidence.claims);
+  Object.assign(evidence, installed.constructV4TopologyEvidence(fixture.artifacts.source_pack, evidence.claims, {
+    discovery_digest: discovery.discovery_digest,
+    primary_surface: evidence.scope_manifest.primary_surface,
+    topology_review: evidence.topology_review,
+    topology_dispositions: evidence.topology_dispositions
+  }));
   await stage(directory, 'evidence_claims', fixture.artifacts.evidence_claims);
   const reply = await installed.advanceStrict(directory);
   assert.equal(reply.status, 'need_user_answers', JSON.stringify(reply));

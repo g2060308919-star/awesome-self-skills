@@ -48890,6 +48890,206 @@ function discoverTopologyV4(sourceStructure, semanticDiscovery = { semantic_cand
   return sealDiscovery({ source_structure_digest, discovery_digest, scanned_units, topology_candidates: topologyCandidates });
 }
 
+// src/views/sparse-behavior-v4.mjs
+init_behavior_views_schema();
+init_canonical();
+
+// src/not-applicable.mjs
+init_test_obligations_schema();
+init_canonical();
+init_schema_validator();
+var riskKinds = Object.freeze([...test_obligations_schema_default.$defs.riskReviewBase.properties.risk_kind.enum]);
+var text4 = { type: "string", minLength: 1, pattern: "\\S" };
+var role = { enum: ["primary_acceptance", "dependency_contract", "context_only"] };
+var closed8 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var contract = (name) => ({ $defs: test_obligations_schema_default.$defs, $ref: `#/$defs/${name}` });
+var notApplicableSubjectSchema = contract("notApplicableSubject");
+var exclusionBasisSchema = contract("exclusionBasis");
+var justification = {
+  subject: notApplicableSubjectSchema,
+  acceptance_role: role,
+  reason_code: { enum: ["out_of_scope", "inapplicable_condition", "superseded_requirement"] },
+  basis: exclusionBasisSchema
+};
+var intentSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({ ...justification, reason: text4 }) };
+var notApplicableRecordSchema = contract("notApplicableRecord");
+var notApplicableContextSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({
+  subjects: { type: "array", items: closed8({ subject: notApplicableSubjectSchema, acceptance_role: role }) },
+  verified_bases: { type: "array", items: closed8(justification) }
+}) };
+function compareScalar(left, right) {
+  const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
+  const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
+  for (let index = 0; index < Math.min(a.length, b.length); index++) if (a[index] !== b[index]) return a[index] - b[index];
+  return a.length - b.length;
+}
+var canonicalIds = (values) => [...new Set(values.map((value) => value.normalize("NFC")))].sort(compareScalar);
+function normalize2(input) {
+  if (typeof input === "string") return input.normalize("NFC");
+  if (Array.isArray(input)) return input.map(normalize2);
+  if (input && typeof input === "object") return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, normalize2(value)]));
+  return input;
+}
+function canonicalExclusionBasis(input) {
+  const basis = normalize2(input);
+  if (basis && typeof basis === "object" && !Array.isArray(basis)) {
+    for (const key of ["claim_ids", "decision_ids"]) if (Array.isArray(basis[key]) && basis[key].every((id2) => typeof id2 === "string")) {
+      basis[key] = canonicalIds(basis[key]);
+    }
+  }
+  if (validateAgainstSchema(basis, exclusionBasisSchema).length) throw new TypeError("NOT_APPLICABLE_BASIS_INVALID");
+  return basis;
+}
+function canonicalIntent(input) {
+  const request = normalize2(input);
+  if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("NOT_APPLICABLE_INTENT_INVALID");
+  request.basis = canonicalExclusionBasis(request.basis);
+  if (validateAgainstSchema(request, intentSchema).length) throw new TypeError("NOT_APPLICABLE_INTENT_INVALID");
+  return request;
+}
+function compileNotApplicable(input, systemContext) {
+  const request = canonicalIntent(input);
+  const context = normalize2(systemContext);
+  if (context && Array.isArray(context.verified_bases)) for (const entry of context.verified_bases) {
+    if (entry && typeof entry === "object") entry.basis = canonicalExclusionBasis(entry.basis);
+  }
+  if (validateAgainstSchema(context, notApplicableContextSchema).length) throw new TypeError("NOT_APPLICABLE_CONTEXT_INVALID");
+  const subject2 = { subject: request.subject, acceptance_role: request.acceptance_role };
+  if (context.subjects.filter((item) => canonicalStringify(item) === canonicalStringify(subject2)).length !== 1) {
+    throw new TypeError("NOT_APPLICABLE_SUBJECT_UNRESOLVED");
+  }
+  const { reason, ...identity2 } = request;
+  if (!context.verified_bases.some((item) => canonicalStringify(item) === canonicalStringify(identity2))) {
+    throw new TypeError("NOT_APPLICABLE_BASIS_UNVERIFIED");
+  }
+  return { not_applicable_record_id: `NA-${digest(identity2)}`, ...request };
+}
+function validateNotApplicable(record23, systemContext) {
+  const errors = validateAgainstSchema(record23, notApplicableRecordSchema);
+  if (errors.length) return errors;
+  const { not_applicable_record_id, ...request } = (
+    /** @type {any} */
+    record23
+  );
+  try {
+    const expected = compileNotApplicable(request, systemContext);
+    if (canonicalStringify(expected) !== canonicalStringify(record23)) return [{ category: "quality_failure", code: "NOT_APPLICABLE_RECORD_MISMATCH", path: "/", message: "NotApplicable record must match its canonical compiler-derived identity and basis." }];
+    return [];
+  } catch (error) {
+    return [{ category: "quality_failure", code: error instanceof Error ? error.message : "NOT_APPLICABLE_INVALID", path: "/", message: "NotApplicable subject, role and verified basis must all resolve." }];
+  }
+}
+
+// src/views/sparse-behavior-v4.mjs
+init_schema_validator();
+var text5 = { type: "string", minLength: 1, pattern: "\\S" };
+var closed9 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var sparseEvidenceContextSchema = {
+  type: "object",
+  properties: {
+    facts: { type: "array", items: closed9({
+      fact_id: text5,
+      module_id: text5,
+      acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
+      condition_field: text5
+    }) },
+    claims: { type: "array", items: closed9({
+      claim_id: text5,
+      level: { enum: ["E3", "E2", "E1"] },
+      supported: { type: "boolean" },
+      assertions: { type: "array", minItems: 1, items: closed9({ fact_id: text5, field_path: text5, value: {} }) }
+    }) },
+    diagnostics: { type: "array", maxItems: 0 }
+  },
+  required: ["facts", "claims"],
+  additionalProperties: false
+};
+var diagnostic18 = (code2, path14, message) => ({ category: "adapter_revision", code: code2, path: path14, message });
+function at(value, pointer) {
+  let target = value;
+  for (const segment of pointer.slice(1).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))) {
+    if (!target || typeof target !== "object" || !Object.hasOwn(target, segment)) return { exists: false, value: void 0 };
+    target = target[segment];
+  }
+  return { exists: true, value: target };
+}
+function isBehaviorAssertionFieldPathV4(value) {
+  if (typeof value !== "string") return false;
+  if (/^\/(?:business_outcome|condition|expected)$/u.test(value)) return true;
+  const index = "(?:0|[1-9][0-9]*)";
+  return new RegExp(`^/partitions/${index}/(?:expected|value|bounds/(?:lower|upper|inclusive))$`, "u").test(value) || new RegExp(`^/surfaces/${index}/assertion$`, "u").test(value) || new RegExp(`^/semantic_effects/${index}/(?:kind|subject|before|after)$`, "u").test(value);
+}
+function requiredBehaviorBindingsV4(element) {
+  const paths = ["/business_outcome"];
+  if (element.condition !== void 0) paths.push("/condition");
+  if (element.expected !== void 0) paths.push("/expected");
+  for (const [index, partition] of (element.partitions ?? []).entries()) {
+    paths.push(`/partitions/${index}/expected`);
+    if (partition.kind === "enum") paths.push(`/partitions/${index}/value`);
+    else for (const key of ["lower", "upper", "inclusive"]) paths.push(`/partitions/${index}/bounds/${key}`);
+  }
+  for (const [index] of (element.surfaces ?? []).entries()) paths.push(`/surfaces/${index}/assertion`);
+  for (const [index, effect] of (element.semantic_effects ?? []).entries()) {
+    for (const key of ["kind", "subject", "before", "after"]) if (effect[key] !== void 0) paths.push(`/semantic_effects/${index}/${key}`);
+  }
+  return paths.sort(compareScalar);
+}
+function validateSparseBehaviorElementV4(input, systemContext) {
+  const diagnostics2 = validateAgainstSchema(input, { $defs: behavior_views_schema_default.$defs, $ref: "#/$defs/v4Element" }).map((item) => ({ ...item, category: "adapter_revision" }));
+  if (diagnostics2.length) return diagnostics2;
+  if (validateAgainstSchema(systemContext, sparseEvidenceContextSchema).length) return [diagnostic18("BEHAVIOR_EVIDENCE_CONTEXT_INVALID", "/", "Sparse behavior requires compiler-owned Evidence context.")];
+  const element = (
+    /** @type {any} */
+    input
+  );
+  const context = (
+    /** @type {any} */
+    systemContext
+  );
+  const facts = context.facts.filter((item) => item.fact_id === element.fact_id);
+  if (facts.length !== 1) diagnostics2.push(diagnostic18("BEHAVIOR_FACT_UNRESOLVED", "/fact_id", "Each element must own one known atomic Fact; split independent Facts."));
+  const byClaim = /* @__PURE__ */ new Map();
+  for (const claim of context.claims) {
+    if (byClaim.has(claim.claim_id)) diagnostics2.push(diagnostic18("BEHAVIOR_CLAIM_AMBIGUOUS", "/evidence_bindings", "Claim IDs must resolve uniquely."));
+    byClaim.set(claim.claim_id, claim);
+  }
+  const required = new Set(requiredBehaviorBindingsV4(element));
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, binding] of element.evidence_bindings.entries()) {
+    const field = at(element, binding.field_path);
+    if (seen.has(binding.field_path) || !required.has(binding.field_path) || !field.exists) {
+      diagnostics2.push(diagnostic18("BEHAVIOR_BINDING_INVALID", `/evidence_bindings/${index}`, "A binding must uniquely identify an existing semantic field."));
+    }
+    seen.add(binding.field_path);
+    for (const claimId of binding.claim_ids) {
+      const claim = byClaim.get(claimId);
+      if (!claim?.supported || !claim.assertions.some((assertion) => assertion.fact_id === element.fact_id && assertion.field_path === binding.field_path && canonicalStringify(assertion.value) === canonicalStringify(field.value))) {
+        diagnostics2.push(diagnostic18("BEHAVIOR_FIELD_UNSUPPORTED", binding.field_path, "Every formal value and assertion requires a positive Claim for this exact Fact, field and value."));
+      }
+    }
+  }
+  for (const path14 of required) {
+    if (!seen.has(path14)) diagnostics2.push(diagnostic18("BEHAVIOR_BINDING_MISSING", path14, "This semantic field requires a source-backed evidence binding."));
+    const value = at(element, path14).value;
+    if (typeof value === "string" && (/^(?:N\/?A|not applicable)$/iu.test(value.trim()) || /PRD\s*(?:未定义|未提及)|(?:not defined|not specified)\s+(?:in|by)\s+(?:the\s+)?PRD/iu.test(value))) {
+      diagnostics2.push(diagnostic18("BEHAVIOR_PLACEHOLDER_FORBIDDEN", path14, "Missing requirements or N/A placeholders cannot become formal business semantics."));
+    }
+  }
+  const partitions = /* @__PURE__ */ new Set();
+  for (const [index, partition] of (element.partitions ?? []).entries()) {
+    if (partition.kind === "range" && partition.bounds.lower > partition.bounds.upper) diagnostics2.push(diagnostic18("BEHAVIOR_RANGE_INVALID", `/partitions/${index}`, "A range must have ordered source-backed bounds."));
+    const signature = canonicalStringify(partition.kind === "enum" ? { kind: partition.kind, value: partition.value } : { kind: partition.kind, bounds: partition.bounds });
+    if (partitions.has(signature)) diagnostics2.push(diagnostic18("BEHAVIOR_PARTITION_DUPLICATE", `/partitions/${index}`, "A partition cannot declare two independent or conflicting results."));
+    partitions.add(signature);
+  }
+  for (const [index, effect] of (element.semantic_effects ?? []).entries()) {
+    const bound = element.evidence_bindings.filter((binding) => binding.field_path.startsWith(`/semantic_effects/${index}/`));
+    const refs3 = canonicalIds(bound.flatMap((binding) => binding.claim_ids));
+    if (canonicalStringify(refs3) !== canonicalStringify(canonicalIds(effect.claim_ids))) diagnostics2.push(diagnostic18("BEHAVIOR_EFFECT_EVIDENCE_MISMATCH", `/semantic_effects/${index}/claim_ids`, "Effect Claim IDs must exactly summarize its field-level evidence."));
+  }
+  return diagnostics2;
+}
+
 // src/v4-system-context.mjs
 var DIMENSIONS = /* @__PURE__ */ new Set([
   "shared-entity",
@@ -49141,24 +49341,114 @@ function behaviorEvidence(evidence) {
     condition_field: fact.field_path.split("/").filter(Boolean).at(-1) ?? "value"
   }));
   const factById = new Map(evidence.fact_ledger.map((fact) => [fact.fact_id, fact]));
-  const claims = evidence.claims.filter(supportedBusinessClaim).map((claim) => {
-    const submitted = Array.isArray(claim.semantic_value?.behavior_assertions) ? claim.semantic_value.behavior_assertions : [];
-    const entries2 = submitted.filter((assertion) => {
-      if (!record14(assertion) || Object.keys(assertion).sort().join(",") !== "fact_id,field_path,value" || typeof assertion.fact_id !== "string" || typeof assertion.field_path !== "string" || !assertion.field_path.startsWith("/")) return false;
+  if (evidence.schema_version !== "4.3.0") {
+    const claims2 = evidence.claims.filter(supportedBusinessClaim).map((claim) => {
+      const submitted = Array.isArray(claim.semantic_value?.behavior_assertions) ? claim.semantic_value.behavior_assertions : [];
+      const entries2 = submitted.filter((assertion) => {
+        if (!record14(assertion) || Object.keys(assertion).sort().join(",") !== "fact_id,field_path,value" || typeof assertion.fact_id !== "string" || typeof assertion.field_path !== "string" || !assertion.field_path.startsWith("/")) return false;
+        const fact = factById.get(assertion.fact_id);
+        return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
+      }).map((assertion) => [canonicalStringify(assertion), structuredClone(assertion)]);
+      return {
+        claim_id: claim.claim_id,
+        level: claim.level,
+        supported: claim.level !== "E1" || claim.claim_form === "decision-record",
+        assertions: [...new Map(entries2).values()]
+      };
+    }).filter((claim) => claim.assertions.length > 0);
+    return { facts, claims: claims2, diagnostics: [] };
+  }
+  const diagnostics2 = [];
+  const claims = [];
+  const invalid = (code2, path14, message) => {
+    diagnostics2.push({ category: "adapter_revision", code: code2, path: path14, message });
+  };
+  for (const [claimIndex, claim] of evidence.claims.entries()) {
+    const container = semanticContainer(claim);
+    if (!Object.hasOwn(container, "behavior_assertions")) continue;
+    const familyPath = `/claims/${claimIndex}/semantic_value/behavior_assertions`;
+    if (!supportedBusinessClaim(claim)) {
+      invalid(
+        "BEHAVIOR_ASSERTIONS_CLAIM_UNSUPPORTED",
+        familyPath,
+        "Behavior assertions require a supported business Claim."
+      );
+      continue;
+    }
+    if (!Array.isArray(container.behavior_assertions)) {
+      invalid(
+        "BEHAVIOR_ASSERTIONS_ARRAY_REQUIRED",
+        familyPath,
+        "Behavior assertions must be an array using the closed item contract."
+      );
+      continue;
+    }
+    const assertions = [];
+    const byField = /* @__PURE__ */ new Map();
+    for (const [assertionIndex, assertion] of container.behavior_assertions.entries()) {
+      const path14 = `${familyPath}/${assertionIndex}`;
+      if (!exactRecord(assertion, ["fact_id", "field_path", "value"])) {
+        invalid(
+          "BEHAVIOR_ASSERTION_SHAPE_INVALID",
+          path14,
+          "A behavior assertion contains exactly fact_id, field_path and value."
+        );
+        continue;
+      }
+      if (!nonBlank(assertion.fact_id)) {
+        invalid(
+          "BEHAVIOR_ASSERTION_FACT_INVALID",
+          `${path14}/fact_id`,
+          "A behavior assertion requires a nonblank Fact ID."
+        );
+        continue;
+      }
+      if (!isBehaviorAssertionFieldPathV4(assertion.field_path)) {
+        invalid(
+          "BEHAVIOR_ASSERTION_FIELD_PATH_INVALID",
+          `${path14}/field_path`,
+          "The field path must identify a semantic field consumed by sparse Behavior validation."
+        );
+        continue;
+      }
       const fact = factById.get(assertion.fact_id);
-      return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
-    }).map((assertion) => [
-      canonicalStringify(assertion),
-      structuredClone(assertion)
-    ]);
-    return {
+      if (!fact) {
+        invalid(
+          "BEHAVIOR_ASSERTION_FACT_UNRESOLVED",
+          `${path14}/fact_id`,
+          "The referenced Fact must exist in the same Evidence artifact."
+        );
+        continue;
+      }
+      if (!Array.isArray(fact.claim_ids) || !fact.claim_ids.includes(claim.claim_id)) {
+        invalid(
+          "BEHAVIOR_ASSERTION_FACT_CLAIM_MISMATCH",
+          `${path14}/fact_id`,
+          "The referenced Fact must explicitly include the asserting Claim."
+        );
+        continue;
+      }
+      const key = `${assertion.fact_id}\0${assertion.field_path}`;
+      const prior = byField.get(key);
+      if (prior !== void 0) {
+        invalid(
+          canonicalStringify(prior) === canonicalStringify(assertion.value) ? "BEHAVIOR_ASSERTION_DUPLICATE" : "BEHAVIOR_ASSERTION_CONFLICT",
+          path14,
+          "One Claim may assert one value for each Fact and Behavior field."
+        );
+        continue;
+      }
+      byField.set(key, structuredClone(assertion.value));
+      assertions.push(structuredClone(assertion));
+    }
+    if (assertions.length) claims.push({
       claim_id: claim.claim_id,
       level: claim.level,
-      supported: claim.level !== "E1" || claim.claim_form === "decision-record",
-      assertions: [...new Map(entries2).values()]
-    };
-  }).filter((claim) => claim.assertions.length > 0);
-  return { facts, claims };
+      supported: true,
+      assertions
+    });
+  }
+  return { facts, claims, diagnostics: diagnostics2 };
 }
 function orderingSystem(pack, evidence) {
   const locatorById = new Map(pack.locators.map((locator) => [locator.locator_id, locator]));
@@ -50505,7 +50795,7 @@ function record16(value, code2) {
     value
   );
 }
-function text4(value, code2) {
+function text6(value, code2) {
   if (typeof value !== "string" || !value.trim()) throw new TypeError(code2);
   return value;
 }
@@ -50554,11 +50844,11 @@ function normalizeSuspensionLedger(value) {
   const byRoot = /* @__PURE__ */ new Map();
   for (const submitted of value) {
     const item = record16(submitted, "DECISION_SUSPENSION_LEDGER_INVALID");
-    const rootId = text4(item.root_issue_id, "DECISION_SUSPENSION_LEDGER_INVALID").normalize("NFC");
+    const rootId = text6(item.root_issue_id, "DECISION_SUSPENSION_LEDGER_INVALID").normalize("NFC");
     if (byRoot.has(rootId) || !Array.isArray(item.cumulative_suspended_decision_ids)) {
       throw new TypeError("DECISION_SUSPENSION_LEDGER_INVALID");
     }
-    const ids3 = item.cumulative_suspended_decision_ids.map((id2) => text4(id2, "DECISION_SUSPENSION_LEDGER_INVALID"));
+    const ids3 = item.cumulative_suspended_decision_ids.map((id2) => text6(id2, "DECISION_SUSPENSION_LEDGER_INVALID"));
     byRoot.set(rootId, sortedUnique2(ids3));
   }
   return [...byRoot.entries()].sort(([left], [right]) => compareCodePoints11(left, right)).map(([root_issue_id, cumulative_suspended_decision_ids]) => ({
@@ -50571,7 +50861,7 @@ function normalizeTargets(value) {
   const seen = /* @__PURE__ */ new Set();
   const output = value.map((submitted) => {
     const item = record16(submitted, "REOPEN_TARGETS_INVALID");
-    const rootIssueId = text4(item.root_issue_id, "REOPEN_TARGETS_INVALID").normalize("NFC");
+    const rootIssueId = text6(item.root_issue_id, "REOPEN_TARGETS_INVALID").normalize("NFC");
     const priorDigest = sha(item.prior_root_version_digest ?? item.root_version_digest, "REOPEN_TARGETS_INVALID");
     if (seen.has(rootIssueId)) throw new TypeError("REOPEN_TARGETS_INVALID");
     seen.add(rootIssueId);
@@ -50584,8 +50874,8 @@ function projectEffectiveDecisionsV4(submittedDecisions, submittedLedger) {
   const ledger = normalizeSuspensionLedger(submittedLedger);
   const byId = /* @__PURE__ */ new Map();
   for (const decision of journal) {
-    const decisionId = text4(decision.decision_id, "DECISION_ID_INVALID");
-    const targetRoot = text4(decision.target?.root_issue_id, "DECISION_TARGET_INVALID");
+    const decisionId = text6(decision.decision_id, "DECISION_ID_INVALID");
+    const targetRoot = text6(decision.target?.root_issue_id, "DECISION_TARGET_INVALID");
     if (byId.has(decisionId)) throw new TypeError("DECISION_JOURNAL_DUPLICATE");
     byId.set(decisionId, targetRoot);
   }
@@ -50604,13 +50894,13 @@ function projectEffectiveDecisionsV4(submittedDecisions, submittedLedger) {
 }
 function deriveDecisionReopenOverlayV4(input) {
   const value = record16(input, "REOPEN_OVERLAY_INPUT_INVALID");
-  const eventId = text4(value.reopen_event_id, "REOPEN_EVENT_ID_INVALID").normalize("NFC");
+  const eventId = text6(value.reopen_event_id, "REOPEN_EVENT_ID_INVALID").normalize("NFC");
   const targets = normalizeTargets(value.targets);
   const priorLedger = normalizeSuspensionLedger(value.prior_suspension_ledger ?? []);
   const priorByRoot = new Map(priorLedger.map((item) => [item.root_issue_id, item.cumulative_suspended_decision_ids]));
   const projection = projectEffectiveDecisionsV4(value.decisions, priorLedger);
   const reopenedTargets = targets.map((target) => {
-    const newly = sortedUnique2(projection.effective_decisions.filter((decision) => decision.target?.root_issue_id === target.root_issue_id).map((decision) => text4(decision.decision_id, "DECISION_ID_INVALID")));
+    const newly = sortedUnique2(projection.effective_decisions.filter((decision) => decision.target?.root_issue_id === target.root_issue_id).map((decision) => text6(decision.decision_id, "DECISION_ID_INVALID")));
     const cumulative = sortedUnique2([...priorByRoot.get(target.root_issue_id) ?? [], ...newly]);
     priorByRoot.set(target.root_issue_id, cumulative);
     const reopenedRootVersionDigest = canonicalDigest3({
@@ -50893,7 +51183,7 @@ function compileSemanticReopenSiblingCheckpointV4(submittedSeed, submittedParent
   const checkpoint2 = {
     schema_version: contract2.schema_version,
     compiler_version: contract2.compiler_version,
-    run_id: text4(seed.run_id, "REOPEN_SIBLING_SEED_INVALID"),
+    run_id: text6(seed.run_id, "REOPEN_SIBLING_SEED_INVALID"),
     revision: 0,
     commit_profile: "pre_case_pending",
     source_review_witness: canonicalClone3(parent.source_review_witness),
@@ -51108,7 +51398,7 @@ async function readParentCase(catalogRoot2, caseDirectory, reference) {
 }
 async function readCaseDocumentSemanticRootRefsV4(catalogRoot2, submittedReference) {
   const reference = record16(submittedReference, "REOPEN_CASE_DOCUMENT_REF_INVALID");
-  const caseRunId = text4(reference.run_id, "REOPEN_CASE_DOCUMENT_REF_INVALID");
+  const caseRunId = text6(reference.run_id, "REOPEN_CASE_DOCUMENT_REF_INVALID");
   if (!Number.isSafeInteger(reference.revision) || reference.revision < 0) {
     throw new TypeError("REOPEN_CASE_DOCUMENT_REF_INVALID");
   }
@@ -51229,10 +51519,10 @@ function resultFor(transaction) {
 async function executeSemanticReopenTransactionV4(catalogRoot2, submittedEvent, services, hooks = {}) {
   const event = record16(submittedEvent, "REOPEN_EVENT_INVALID");
   if (event.event_type !== "reopen_semantic_question") throw new TypeError("REOPEN_EVENT_INVALID");
-  const executionRunId = text4(event.run_id, "REOPEN_EVENT_INVALID");
-  const reopenEventId = text4(event.reopen_event_id, "REOPEN_EVENT_INVALID").normalize("NFC");
+  const executionRunId = text6(event.run_id, "REOPEN_EVENT_INVALID");
+  const reopenEventId = text6(event.reopen_event_id, "REOPEN_EVENT_INVALID").normalize("NFC");
   const reference = record16(event.case_document_ref, "REOPEN_CASE_DOCUMENT_REF_INVALID");
-  const caseRunId = text4(reference.run_id, "REOPEN_CASE_DOCUMENT_REF_INVALID");
+  const caseRunId = text6(reference.run_id, "REOPEN_CASE_DOCUMENT_REF_INVALID");
   if (!Number.isSafeInteger(reference.revision) || reference.revision < 0) {
     throw new TypeError("REOPEN_CASE_DOCUMENT_REF_INVALID");
   }
@@ -52505,92 +52795,6 @@ init_test_bundle_schema();
 init_canonical();
 init_case_semantics_v4();
 
-// src/not-applicable.mjs
-init_test_obligations_schema();
-init_canonical();
-init_schema_validator();
-var riskKinds = Object.freeze([...test_obligations_schema_default.$defs.riskReviewBase.properties.risk_kind.enum]);
-var text5 = { type: "string", minLength: 1, pattern: "\\S" };
-var role = { enum: ["primary_acceptance", "dependency_contract", "context_only"] };
-var closed8 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
-var contract = (name) => ({ $defs: test_obligations_schema_default.$defs, $ref: `#/$defs/${name}` });
-var notApplicableSubjectSchema = contract("notApplicableSubject");
-var exclusionBasisSchema = contract("exclusionBasis");
-var justification = {
-  subject: notApplicableSubjectSchema,
-  acceptance_role: role,
-  reason_code: { enum: ["out_of_scope", "inapplicable_condition", "superseded_requirement"] },
-  basis: exclusionBasisSchema
-};
-var intentSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({ ...justification, reason: text5 }) };
-var notApplicableRecordSchema = contract("notApplicableRecord");
-var notApplicableContextSchema = { $defs: test_obligations_schema_default.$defs, ...closed8({
-  subjects: { type: "array", items: closed8({ subject: notApplicableSubjectSchema, acceptance_role: role }) },
-  verified_bases: { type: "array", items: closed8(justification) }
-}) };
-function compareScalar(left, right) {
-  const a = Array.from(left, (character) => character.codePointAt(0) ?? 0);
-  const b = Array.from(right, (character) => character.codePointAt(0) ?? 0);
-  for (let index = 0; index < Math.min(a.length, b.length); index++) if (a[index] !== b[index]) return a[index] - b[index];
-  return a.length - b.length;
-}
-var canonicalIds = (values) => [...new Set(values.map((value) => value.normalize("NFC")))].sort(compareScalar);
-function normalize2(input) {
-  if (typeof input === "string") return input.normalize("NFC");
-  if (Array.isArray(input)) return input.map(normalize2);
-  if (input && typeof input === "object") return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, normalize2(value)]));
-  return input;
-}
-function canonicalExclusionBasis(input) {
-  const basis = normalize2(input);
-  if (basis && typeof basis === "object" && !Array.isArray(basis)) {
-    for (const key of ["claim_ids", "decision_ids"]) if (Array.isArray(basis[key]) && basis[key].every((id2) => typeof id2 === "string")) {
-      basis[key] = canonicalIds(basis[key]);
-    }
-  }
-  if (validateAgainstSchema(basis, exclusionBasisSchema).length) throw new TypeError("NOT_APPLICABLE_BASIS_INVALID");
-  return basis;
-}
-function canonicalIntent(input) {
-  const request = normalize2(input);
-  if (!request || typeof request !== "object" || Array.isArray(request)) throw new TypeError("NOT_APPLICABLE_INTENT_INVALID");
-  request.basis = canonicalExclusionBasis(request.basis);
-  if (validateAgainstSchema(request, intentSchema).length) throw new TypeError("NOT_APPLICABLE_INTENT_INVALID");
-  return request;
-}
-function compileNotApplicable(input, systemContext) {
-  const request = canonicalIntent(input);
-  const context = normalize2(systemContext);
-  if (context && Array.isArray(context.verified_bases)) for (const entry of context.verified_bases) {
-    if (entry && typeof entry === "object") entry.basis = canonicalExclusionBasis(entry.basis);
-  }
-  if (validateAgainstSchema(context, notApplicableContextSchema).length) throw new TypeError("NOT_APPLICABLE_CONTEXT_INVALID");
-  const subject2 = { subject: request.subject, acceptance_role: request.acceptance_role };
-  if (context.subjects.filter((item) => canonicalStringify(item) === canonicalStringify(subject2)).length !== 1) {
-    throw new TypeError("NOT_APPLICABLE_SUBJECT_UNRESOLVED");
-  }
-  const { reason, ...identity2 } = request;
-  if (!context.verified_bases.some((item) => canonicalStringify(item) === canonicalStringify(identity2))) {
-    throw new TypeError("NOT_APPLICABLE_BASIS_UNVERIFIED");
-  }
-  return { not_applicable_record_id: `NA-${digest(identity2)}`, ...request };
-}
-function validateNotApplicable(record23, systemContext) {
-  const errors = validateAgainstSchema(record23, notApplicableRecordSchema);
-  if (errors.length) return errors;
-  const { not_applicable_record_id, ...request } = (
-    /** @type {any} */
-    record23
-  );
-  try {
-    const expected = compileNotApplicable(request, systemContext);
-    if (canonicalStringify(expected) !== canonicalStringify(record23)) return [{ category: "quality_failure", code: "NOT_APPLICABLE_RECORD_MISMATCH", path: "/", message: "NotApplicable record must match its canonical compiler-derived identity and basis." }];
-    return [];
-  } catch (error) {
-    return [{ category: "quality_failure", code: error instanceof Error ? error.message : "NOT_APPLICABLE_INVALID", path: "/", message: "NotApplicable subject, role and verified basis must all resolve." }];
-  }
-}
-
 // src/obligations/business-outcomes-v4.mjs
 init_behavior_views_schema();
 init_test_obligations_schema();
@@ -52600,15 +52804,15 @@ init_canonical();
 init_test_obligations_schema();
 init_canonical();
 init_schema_validator();
-var text6 = { type: "string", minLength: 1, pattern: "\\S" };
-var ids = { type: "array", minItems: 1, uniqueItems: true, items: text6 };
-var closed9 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
-var subject = { module_id: text6, risk_kind: { enum: [...riskKinds] }, acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] } };
-var contextSchema = { $defs: test_obligations_schema_default.$defs, ...closed9({
+var text7 = { type: "string", minLength: 1, pattern: "\\S" };
+var ids = { type: "array", minItems: 1, uniqueItems: true, items: text7 };
+var closed10 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var subject = { module_id: text7, risk_kind: { enum: [...riskKinds] }, acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] } };
+var contextSchema = { $defs: test_obligations_schema_default.$defs, ...closed10({
   primary_module_ids: { ...ids, minItems: 0 },
-  formal_test_points: { type: "array", items: closed9({ ...subject, formal_test_point_id: text6, claim_ids: ids }) },
-  semantic_gaps: { type: "array", items: closed9({ ...subject, semantic_gap_id: text6, subject_fact_ids: ids, missing_aspect: text6 }) },
-  exploratory: { type: "array", items: closed9({ ...subject, exploratory_id: text6, policy_id: text6, policy_version: text6 }) },
+  formal_test_points: { type: "array", items: closed10({ ...subject, formal_test_point_id: text7, claim_ids: ids }) },
+  semantic_gaps: { type: "array", items: closed10({ ...subject, semantic_gap_id: text7, subject_fact_ids: ids, missing_aspect: text7 }) },
+  exploratory: { type: "array", items: closed10({ ...subject, exploratory_id: text7, policy_id: text7, policy_version: text7 }) },
   not_applicable_records: { type: "array", items: notApplicableRecordSchema },
   not_applicable_context: notApplicableContextSchema
 }) };
@@ -52672,108 +52876,6 @@ function validateRiskReviewLedger(ledger, systemContext) {
 
 // src/obligations/business-outcomes-v4.mjs
 init_schema_validator();
-
-// src/views/sparse-behavior-v4.mjs
-init_behavior_views_schema();
-init_canonical();
-init_schema_validator();
-var text7 = { type: "string", minLength: 1, pattern: "\\S" };
-var closed10 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
-var sparseEvidenceContextSchema = closed10({
-  facts: { type: "array", items: closed10({
-    fact_id: text7,
-    module_id: text7,
-    acceptance_role: { enum: ["primary_acceptance", "dependency_contract", "context_only"] },
-    condition_field: text7
-  }) },
-  claims: { type: "array", items: closed10({
-    claim_id: text7,
-    level: { enum: ["E3", "E2", "E1"] },
-    supported: { type: "boolean" },
-    assertions: { type: "array", minItems: 1, items: closed10({ fact_id: text7, field_path: text7, value: {} }) }
-  }) }
-});
-var diagnostic18 = (code2, path14, message) => ({ category: "adapter_revision", code: code2, path: path14, message });
-function at(value, pointer) {
-  let target = value;
-  for (const segment of pointer.slice(1).split("/").map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))) {
-    if (!target || typeof target !== "object" || !Object.hasOwn(target, segment)) return { exists: false, value: void 0 };
-    target = target[segment];
-  }
-  return { exists: true, value: target };
-}
-function requiredBehaviorBindingsV4(element) {
-  const paths = ["/business_outcome"];
-  if (element.condition !== void 0) paths.push("/condition");
-  if (element.expected !== void 0) paths.push("/expected");
-  for (const [index, partition] of (element.partitions ?? []).entries()) {
-    paths.push(`/partitions/${index}/expected`);
-    if (partition.kind === "enum") paths.push(`/partitions/${index}/value`);
-    else for (const key of ["lower", "upper", "inclusive"]) paths.push(`/partitions/${index}/bounds/${key}`);
-  }
-  for (const [index] of (element.surfaces ?? []).entries()) paths.push(`/surfaces/${index}/assertion`);
-  for (const [index, effect] of (element.semantic_effects ?? []).entries()) {
-    for (const key of ["kind", "subject", "before", "after"]) if (effect[key] !== void 0) paths.push(`/semantic_effects/${index}/${key}`);
-  }
-  return paths.sort(compareScalar);
-}
-function validateSparseBehaviorElementV4(input, systemContext) {
-  const diagnostics2 = validateAgainstSchema(input, { $defs: behavior_views_schema_default.$defs, $ref: "#/$defs/v4Element" }).map((item) => ({ ...item, category: "adapter_revision" }));
-  if (diagnostics2.length) return diagnostics2;
-  if (validateAgainstSchema(systemContext, sparseEvidenceContextSchema).length) return [diagnostic18("BEHAVIOR_EVIDENCE_CONTEXT_INVALID", "/", "Sparse behavior requires compiler-owned Evidence context.")];
-  const element = (
-    /** @type {any} */
-    input
-  );
-  const context = (
-    /** @type {any} */
-    systemContext
-  );
-  const facts = context.facts.filter((item) => item.fact_id === element.fact_id);
-  if (facts.length !== 1) diagnostics2.push(diagnostic18("BEHAVIOR_FACT_UNRESOLVED", "/fact_id", "Each element must own one known atomic Fact; split independent Facts."));
-  const byClaim = /* @__PURE__ */ new Map();
-  for (const claim of context.claims) {
-    if (byClaim.has(claim.claim_id)) diagnostics2.push(diagnostic18("BEHAVIOR_CLAIM_AMBIGUOUS", "/evidence_bindings", "Claim IDs must resolve uniquely."));
-    byClaim.set(claim.claim_id, claim);
-  }
-  const required = new Set(requiredBehaviorBindingsV4(element));
-  const seen = /* @__PURE__ */ new Set();
-  for (const [index, binding] of element.evidence_bindings.entries()) {
-    const field = at(element, binding.field_path);
-    if (seen.has(binding.field_path) || !required.has(binding.field_path) || !field.exists) {
-      diagnostics2.push(diagnostic18("BEHAVIOR_BINDING_INVALID", `/evidence_bindings/${index}`, "A binding must uniquely identify an existing semantic field."));
-    }
-    seen.add(binding.field_path);
-    for (const claimId of binding.claim_ids) {
-      const claim = byClaim.get(claimId);
-      if (!claim?.supported || !claim.assertions.some((assertion) => assertion.fact_id === element.fact_id && assertion.field_path === binding.field_path && canonicalStringify(assertion.value) === canonicalStringify(field.value))) {
-        diagnostics2.push(diagnostic18("BEHAVIOR_FIELD_UNSUPPORTED", binding.field_path, "Every formal value and assertion requires a positive Claim for this exact Fact, field and value."));
-      }
-    }
-  }
-  for (const path14 of required) {
-    if (!seen.has(path14)) diagnostics2.push(diagnostic18("BEHAVIOR_BINDING_MISSING", path14, "This semantic field requires a source-backed evidence binding."));
-    const value = at(element, path14).value;
-    if (typeof value === "string" && (/^(?:N\/?A|not applicable)$/iu.test(value.trim()) || /PRD\s*(?:未定义|未提及)|(?:not defined|not specified)\s+(?:in|by)\s+(?:the\s+)?PRD/iu.test(value))) {
-      diagnostics2.push(diagnostic18("BEHAVIOR_PLACEHOLDER_FORBIDDEN", path14, "Missing requirements or N/A placeholders cannot become formal business semantics."));
-    }
-  }
-  const partitions = /* @__PURE__ */ new Set();
-  for (const [index, partition] of (element.partitions ?? []).entries()) {
-    if (partition.kind === "range" && partition.bounds.lower > partition.bounds.upper) diagnostics2.push(diagnostic18("BEHAVIOR_RANGE_INVALID", `/partitions/${index}`, "A range must have ordered source-backed bounds."));
-    const signature = canonicalStringify(partition.kind === "enum" ? { kind: partition.kind, value: partition.value } : { kind: partition.kind, bounds: partition.bounds });
-    if (partitions.has(signature)) diagnostics2.push(diagnostic18("BEHAVIOR_PARTITION_DUPLICATE", `/partitions/${index}`, "A partition cannot declare two independent or conflicting results."));
-    partitions.add(signature);
-  }
-  for (const [index, effect] of (element.semantic_effects ?? []).entries()) {
-    const bound = element.evidence_bindings.filter((binding) => binding.field_path.startsWith(`/semantic_effects/${index}/`));
-    const refs3 = canonicalIds(bound.flatMap((binding) => binding.claim_ids));
-    if (canonicalStringify(refs3) !== canonicalStringify(canonicalIds(effect.claim_ids))) diagnostics2.push(diagnostic18("BEHAVIOR_EFFECT_EVIDENCE_MISMATCH", `/semantic_effects/${index}/claim_ids`, "Effect Claim IDs must exactly summarize its field-level evidence."));
-  }
-  return diagnostics2;
-}
-
-// src/obligations/business-outcomes-v4.mjs
 var text8 = { type: "string", minLength: 1, pattern: "\\S" };
 var refs2 = { type: "array", uniqueItems: true, items: text8 };
 var closed11 = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
@@ -54826,6 +54928,10 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
   if (Array.isArray(semanticEvidence.diagnostics) && semanticEvidence.diagnostics.length) {
     return needRevision("evidence_claims", semanticEvidence.diagnostics);
   }
+  const behaviorEvidence2 = system.behavior_evidence ?? { facts: [], claims: [] };
+  if (Array.isArray(behaviorEvidence2.diagnostics) && behaviorEvidence2.diagnostics.length) {
+    return needRevision("evidence_claims", behaviorEvidence2.diagnostics);
+  }
   const scope = compileScopeManifestV4({
     discovery_digest: evidence.topology_discovery.discovery_digest,
     primary_surface: evidence.scope_manifest.primary_surface,
@@ -54889,7 +54995,7 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     if (assurance.diagnostics.length) return needRevision("behavior_views", assurance.diagnostics);
     currentDesignAssurance = assurance.normalized;
   }
-  const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, system.behavior_evidence);
+  const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, behaviorEvidence2);
   if (behavior.kind === "need_revision") return needRevision("behavior_views", behavior.diagnostics);
   if (behavior.kind !== "compiled") return qualityFailure2("BUSINESS_OUTCOME_COMPILATION_FAILED", behavior.diagnostics);
   const caseSchemaFailure = validateArtifact(artifacts.case_drafts, case_drafts_schema_default, "case_drafts");
@@ -60552,6 +60658,127 @@ async function createV4RunDirectory(submittedCatalogRoot, request, unexpected) {
   };
 }
 
+// src/topology-adapter-v4.mjs
+init_source_pack_schema();
+init_evidence_claims_schema();
+init_canonical();
+init_schema_validator();
+init_source_locators_v4();
+init_v4_contract();
+var topologyText = { type: "string", minLength: 1, pattern: "\\S" };
+var topologyIds = { type: "array", minItems: 1, uniqueItems: true, items: topologyText };
+var closedTopologyInput = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+var topologyCandidateFields = { kind: { enum: ["module_mention", "boundary_signal"] }, label: topologyText, locator_ids: topologyIds };
+var authorizationSchema = closedTopologyInput({
+  candidates: { type: "array", uniqueItems: true, items: { oneOf: [
+    closedTopologyInput({
+      ...topologyCandidateFields,
+      kind: { const: "module_mention" },
+      disposition: { const: "module" },
+      module_ref: topologyText,
+      role: { enum: ["primary", "upstream", "downstream", "external"] }
+    }),
+    closedTopologyInput({
+      ...topologyCandidateFields,
+      kind: { const: "boundary_signal" },
+      disposition: { const: "boundary" },
+      from_module_ref: topologyText,
+      to_module_ref: topologyText,
+      channel: topologyText,
+      acceptance_scope: { const: "contract_only" }
+    }),
+    closedTopologyInput({ ...topologyCandidateFields, disposition: { const: "not_relevant" } })
+  ] } },
+  reviewable_interaction_cells: { type: "array", uniqueItems: true, items: closedTopologyInput({
+    module_ids: topologyIds,
+    dimension: { enum: ["shared-entity", "role", "client", "interface-event", "time", "concurrency", "side-effect"] }
+  }) }
+});
+function checkTopologyInput(value, schema, code2) {
+  if (validateAgainstSchema(value, schema).length) throw new TypeError(code2);
+}
+function prepareTopologyInput(sourcePack, submittedClaims) {
+  const pack = snapshotTopologyInputV4(sourcePack);
+  const claims = snapshotTopologyInputV4(submittedClaims);
+  checkTopologyInput(pack, source_pack_schema_default, "TOPOLOGY_SOURCE_PACK_INVALID");
+  if (!isV4SchemaVersion(pack.schema_version) || pack.delivery_intent !== "case_document") {
+    throw new TypeError("TOPOLOGY_SOURCE_PACK_INVALID");
+  }
+  checkTopologyInput(claims, { $defs: evidence_claims_schema_default.$defs, type: "array", items: { $ref: "#/$defs/v4EvidenceClaim" } }, "TOPOLOGY_CLAIMS_INVALID");
+  const byId = new Map(claims.map((claim) => [claim.claim_id, claim]));
+  if (byId.size !== claims.length) throw new TypeError("TOPOLOGY_CLAIMS_INVALID");
+  const problems = [
+    ...validateV4SourceReviews(pack),
+    ...validateV4ClaimLocators(pack, claims.filter((c) => c.claim_form === "direct"))
+  ];
+  if (problems.length) throw new TypeError(`TOPOLOGY_SOURCE_BINDING_INVALID:${problems[0].code}`);
+  function claimLocators(claim, visited = /* @__PURE__ */ new Set()) {
+    if (!claim || visited.has(claim.claim_id)) throw new TypeError("TOPOLOGY_CLAIM_ANCESTRY_INVALID");
+    visited.add(claim.claim_id);
+    const result = new Set(
+      /** @type {string[]} */
+      claim.source_locator_ids ?? []
+    );
+    for (const id2 of claim.parent_claim_ids ?? []) {
+      for (const locator of claimLocators(byId.get(id2), new Set(visited))) result.add(locator);
+    }
+    return result;
+  }
+  for (const claim of claims) {
+    const auth = claim.semantic_value?.topology_authorization;
+    if (auth === void 0) continue;
+    checkTopologyInput(auth, authorizationSchema, "TOPOLOGY_AUTHORIZATION_INVALID");
+    if (claim.domain !== "business" || claim.level === "E1" && claim.claim_form !== "decision-record") {
+      throw new TypeError("TOPOLOGY_AUTHORIZATION_INVALID");
+    }
+    const locators = claimLocators(claim);
+    for (const item of auth.candidates) {
+      if (item.locator_ids.some((id2) => !locators.has(id2))) {
+        throw new TypeError("TOPOLOGY_AUTHORIZATION_LOCATOR_INVALID");
+      }
+    }
+  }
+  const system = topologySystem({ claims }, canonicalTopologyStructure(pack));
+  return { claims, system };
+}
+function discoverV4Topology(sourcePack, claims) {
+  const { system } = prepareTopologyInput(sourcePack, claims);
+  return discoverTopologyV4(system.canonical_source_structure, {
+    semantic_candidates: system.semantic_topology_candidates ?? []
+  });
+}
+function constructV4TopologyEvidence(sourcePack, claims, submittedReview) {
+  const prepared = prepareTopologyInput(sourcePack, claims);
+  const review = snapshotTopologyInputV4(submittedReview);
+  checkTopologyInput(review, { $defs: evidence_claims_schema_default.$defs, ...closedTopologyInput({
+    discovery_digest: { $ref: "#/$defs/v4SourceSha256" },
+    primary_surface: topologyText,
+    topology_review: { $ref: "#/$defs/topologyReview" },
+    topology_dispositions: { type: "array", items: { $ref: "#/$defs/topologyDisposition" } }
+  }) }, "TOPOLOGY_REVIEW_INPUT_INVALID");
+  const compiled = compileScopeManifestV4(review, prepared.system);
+  if (compiled.diagnostics.length) throw new TypeError(compiled.diagnostics.map((d) => d.code).join(","));
+  for (const disposition of review.topology_dispositions) {
+    const item = compiled.discovery.topology_candidates.find((c) => c.candidate_id === disposition.candidate_id);
+    const basis = disposition.review_basis_claim_ids ?? disposition.review_basis?.claim_ids ?? [];
+    for (const id2 of basis) {
+      const auth = prepared.claims.find((c) => c.claim_id === id2)?.semantic_value?.topology_authorization;
+      const matches2 = auth?.candidates.some((declared) => {
+        if (declared.kind !== item.kind || declared.label !== item.label || canonicalStringify([...declared.locator_ids].sort()) !== canonicalStringify([...item.locator_ids].sort()) || declared.disposition !== disposition.disposition) return false;
+        const fields = disposition.disposition === "module" ? ["module_ref", "role"] : disposition.disposition === "boundary" ? ["from_module_ref", "to_module_ref", "channel", "acceptance_scope"] : [];
+        return fields.every((key) => declared[key] === disposition[key]);
+      });
+      if (!matches2) throw new TypeError("TOPOLOGY_AUTHORIZATION_DISPOSITION_MISMATCH");
+    }
+  }
+  return {
+    topology_discovery: structuredClone(compiled.discovery),
+    topology_review: structuredClone(review.topology_review),
+    topology_dispositions: structuredClone(review.topology_dispositions),
+    scope_manifest: compiled.scope_manifest
+  };
+}
+
 // src/entry.mjs
 function fatalReply2(code2, message) {
   return {
@@ -60602,7 +60829,9 @@ export {
   advanceStrict,
   constructIndependentReviewCompletionV4,
   constructV4Action,
+  constructV4TopologyEvidence,
   createV4RunDirectory,
+  discoverV4Topology,
   sourceAcquisitionMaterialPathV4,
   stageV4PrdCollectionObservation,
   stageV4SourceAcquisitionAction

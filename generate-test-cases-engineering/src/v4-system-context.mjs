@@ -4,6 +4,7 @@ import { isV4SchemaVersion } from './v4-contract.mjs';
 import { createSourceSubjectRegistry } from './source-subjects-v4.mjs';
 import { createCompilerSourceRuntimeV4 } from './source-runtime-registry-v4.mjs';
 import { discoverTopologyV4 } from './topology-discovery.mjs';
+import { isBehaviorAssertionFieldPathV4 } from './views/sparse-behavior-v4.mjs';
 
 const DIMENSIONS = new Set([
   'shared-entity', 'role', 'client', 'interface-event', 'time', 'concurrency', 'side-effect'
@@ -137,7 +138,7 @@ function subjectRegistry(pack, evidence) {
 }
 
 /** @param {any} pack */
-function canonicalTopologyStructure(pack) {
+export function canonicalTopologyStructure(pack) {
   return {
     sources: [...pack.sources].sort((a, b) => compare(a.source_id, b.source_id)).map(source => {
       const review = pack.source_reviews.find((/** @type {any} */ item) => item.source_id === source.source_id);
@@ -185,7 +186,7 @@ function canonicalTopologyStructure(pack) {
 }
 
 /** @param {any} evidence @param {any} canonicalSourceStructure */
-function topologySystem(evidence, canonicalSourceStructure) {
+export function topologySystem(evidence, canonicalSourceStructure) {
   // Semantic topology hints and their authorization are part of the reviewed
   // Claim value. They are never reverse-engineered from the dispositions or
   // interaction reviews currently being checked.
@@ -279,25 +280,94 @@ function behaviorEvidence(evidence) {
     condition_field: fact.field_path.split('/').filter(Boolean).at(-1) ?? 'value'
   }));
   const factById = new Map(evidence.fact_ledger.map((/** @type {any} */ fact) => [fact.fact_id, fact]));
-  const claims = evidence.claims.filter(supportedBusinessClaim).map((/** @type {any} */ claim) => {
-    const submitted = Array.isArray(claim.semantic_value?.behavior_assertions)
-      ? claim.semantic_value.behavior_assertions : [];
-    const entries = submitted.filter((/** @type {any} */ assertion) => {
-      if (!record(assertion) || Object.keys(assertion).sort().join(',') !== 'fact_id,field_path,value'
-        || typeof assertion.fact_id !== 'string' || typeof assertion.field_path !== 'string'
-        || !assertion.field_path.startsWith('/')) return false;
+  if (evidence.schema_version !== '4.3.0') {
+    const claims = evidence.claims.filter(supportedBusinessClaim).map((/** @type {any} */ claim) => {
+      const submitted = Array.isArray(claim.semantic_value?.behavior_assertions)
+        ? claim.semantic_value.behavior_assertions : [];
+      const entries = submitted.filter((/** @type {any} */ assertion) => {
+        if (!record(assertion) || Object.keys(assertion).sort().join(',') !== 'fact_id,field_path,value'
+          || typeof assertion.fact_id !== 'string' || typeof assertion.field_path !== 'string'
+          || !assertion.field_path.startsWith('/')) return false;
+        const fact = factById.get(assertion.fact_id);
+        return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
+      }).map((/** @type {any} */ assertion) => [canonicalStringify(assertion), structuredClone(assertion)]);
+      return {
+        claim_id: claim.claim_id, level: claim.level,
+        supported: claim.level !== 'E1' || claim.claim_form === 'decision-record',
+        assertions: [...new Map(entries).values()]
+      };
+    }).filter((/** @type {any} */ claim) => claim.assertions.length > 0);
+    return { facts, claims, diagnostics: [] };
+  }
+
+  /** @type {any[]} */
+  const diagnostics = [];
+  /** @type {any[]} */
+  const claims = [];
+  const invalid = (/** @type {string} */ code, /** @type {string} */ path, /** @type {string} */ message) => {
+    diagnostics.push({ category: 'adapter_revision', code, path, message });
+  };
+  for (const [claimIndex, claim] of evidence.claims.entries()) {
+    const container = semanticContainer(claim);
+    if (!Object.hasOwn(container, 'behavior_assertions')) continue;
+    const familyPath = `/claims/${claimIndex}/semantic_value/behavior_assertions`;
+    if (!supportedBusinessClaim(claim)) {
+      invalid('BEHAVIOR_ASSERTIONS_CLAIM_UNSUPPORTED', familyPath,
+        'Behavior assertions require a supported business Claim.');
+      continue;
+    }
+    if (!Array.isArray(container.behavior_assertions)) {
+      invalid('BEHAVIOR_ASSERTIONS_ARRAY_REQUIRED', familyPath,
+        'Behavior assertions must be an array using the closed item contract.');
+      continue;
+    }
+    /** @type {any[]} */
+    const assertions = [];
+    const byField = new Map();
+    for (const [assertionIndex, assertion] of container.behavior_assertions.entries()) {
+      const path = `${familyPath}/${assertionIndex}`;
+      if (!exactRecord(assertion, ['fact_id', 'field_path', 'value'])) {
+        invalid('BEHAVIOR_ASSERTION_SHAPE_INVALID', path,
+          'A behavior assertion contains exactly fact_id, field_path and value.');
+        continue;
+      }
+      if (!nonBlank(assertion.fact_id)) {
+        invalid('BEHAVIOR_ASSERTION_FACT_INVALID', `${path}/fact_id`,
+          'A behavior assertion requires a nonblank Fact ID.');
+        continue;
+      }
+      if (!isBehaviorAssertionFieldPathV4(assertion.field_path)) {
+        invalid('BEHAVIOR_ASSERTION_FIELD_PATH_INVALID', `${path}/field_path`,
+          'The field path must identify a semantic field consumed by sparse Behavior validation.');
+        continue;
+      }
       const fact = factById.get(assertion.fact_id);
-      return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
-    }).map((/** @type {any} */ assertion) => [
-      canonicalStringify(assertion), structuredClone(assertion)
-    ]);
-    return {
-      claim_id: claim.claim_id, level: claim.level,
-      supported: claim.level !== 'E1' || claim.claim_form === 'decision-record',
-      assertions: [...new Map(entries).values()]
-    };
-  }).filter((/** @type {any} */ claim) => claim.assertions.length > 0);
-  return { facts, claims };
+      if (!fact) {
+        invalid('BEHAVIOR_ASSERTION_FACT_UNRESOLVED', `${path}/fact_id`,
+          'The referenced Fact must exist in the same Evidence artifact.');
+        continue;
+      }
+      if (!Array.isArray(fact.claim_ids) || !fact.claim_ids.includes(claim.claim_id)) {
+        invalid('BEHAVIOR_ASSERTION_FACT_CLAIM_MISMATCH', `${path}/fact_id`,
+          'The referenced Fact must explicitly include the asserting Claim.');
+        continue;
+      }
+      const key = `${assertion.fact_id}\u0000${assertion.field_path}`;
+      const prior = byField.get(key);
+      if (prior !== undefined) {
+        invalid(canonicalStringify(prior) === canonicalStringify(assertion.value)
+          ? 'BEHAVIOR_ASSERTION_DUPLICATE' : 'BEHAVIOR_ASSERTION_CONFLICT', path,
+        'One Claim may assert one value for each Fact and Behavior field.');
+        continue;
+      }
+      byField.set(key, structuredClone(assertion.value));
+      assertions.push(structuredClone(assertion));
+    }
+    if (assertions.length) claims.push({
+      claim_id: claim.claim_id, level: claim.level, supported: true, assertions
+    });
+  }
+  return { facts, claims, diagnostics };
 }
 
 /** @param {any} pack @param {any} evidence */
