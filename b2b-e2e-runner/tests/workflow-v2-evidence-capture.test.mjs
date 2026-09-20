@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { generateReport, initializeRun, recordEvent, validateRun } from "../scripts/run-artifacts.mjs";
+import { markAsHistoricalV2 } from "./test-helpers.mjs";
 
 const checkpointId = "SCREEN/s/o";
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -20,6 +21,7 @@ async function createRun(root) {
     }]
   }));
   const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+  await markAsHistoricalV2(run.runRoot);
   await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["SCREEN"] });
   return run;
 }

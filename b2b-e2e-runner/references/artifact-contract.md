@@ -12,7 +12,16 @@
 
 每次 MCP 预检、登录/角色变化、代理变化、关键动作/效果、检查点、阻塞/协助、样本变化和清理后立即用 `record` 更新。写入采用同目录临时文件、完整序列化、fsync、原子 rename；任何时刻正式 JSON 都可解析。
 
-新建正式 Run 使用 profile `permission-batches-html-v2`。`init` 将 `workflow_profile` 写为首个事件；随后在任何业务开始前记录一次 `permission_plan`。历史 v1 和无 profile Run 保持原校验、恢复及报告语义，不自动迁移、删改或借删除 profile 降级。未知 profile 拒绝。
+新建正式 Run 使用 profile `permission-batches-html-v2`。`init` 将 `workflow_profile` 写为首个事件，并为新 Run 写入 `execution_coverage@1.0`；明确传入 `--mock-fallback allowed|declined` 时再写 `mock_fallback@1.0` 和紧随其后的初始 `mock_policy`。随后在任何业务开始前记录一次 `permission_plan` 与完整 `coverage_plan`。历史 v1、无 profile 以及没有 `extensions` 的历史 v2 Run 保持原校验、恢复及报告语义，不自动迁移、删改或借删除标记降级。未知扩展或版本拒绝。
+
+覆盖层事件：
+
+- `coverage_plan` 精确覆盖全部原检查点，记录递增修订、快照哈希、稳定 scope、既有权限组、位置、原步骤与显式依赖；refine 不得改变已执行含义或删除现有范围。
+- `coverage_context` 绑定 scope、计划/实际账号、Target、存储上下文、环境、实际安全 URL、切换状态和事实/角色观察引用。上下文变化、权限变化、计划修订、全局等待/恢复会使相关未来工作重新核验。
+- `coverage_review` 绑定当前计划修订和事件边界；用于 switch、batch_end、wait、resume、checkpoint_close、final，逐项分类范围并用事实引用证明选择。`checkpoint_result` 增加 `execution_refs` 与 `coverage_review_ref`；开始事件增加 `scope_ids` 与 `context_refs`。
+- `data_gap` 记录真实 blocker/探索、缺失条件、已知请求事实和未开始步骤的依赖。普通 `undetermined` 可用 `data_gap_ref` 支撑未开始依赖步骤，不再伪造 `resolution_ref`，但必须保留探索引用、`not_attempted_reason` 且没有开放协作。
+
+Mock 层事件包括不可覆盖/可撤回的 `mock_policy`、从合法数据缺口派生的 `mock_candidate`、版本化 `mock_attempt`、去重请求事实 `mock_observation`、不覆盖原检查点的 `mock_checkpoint` 和候选收尾 `mock_disposition`。场景/状态/回执是运行资产，不是第二份产品结果；代理不得直接覆盖 `execution-log.json`，Runner 通过既有 `record` 导入。重复回执幂等，跨 Run、未知证据、过期上下文和无效顺序同时在 record 与重放校验中拒绝。
 
 权限计划契约保持不变：
 
@@ -50,6 +59,7 @@ v2 最终 `undetermined` 的 `checkpoint_result` 必须在 `exploration_summary`
 ```text
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --workflow-profile permission-batches-html-v2
+node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --workflow-profile permission-batches-html-v2 --mock-fallback allowed|declined
 node <SKILL_ROOT>/scripts/run-artifacts.mjs record --run <RUN_ROOT> --event <EVENT_JSON>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs resume-check --run <RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs validate --run <RUN_ROOT>

@@ -1,4 +1,5 @@
 import { derivePermissionState } from "./permission-batches.mjs";
+import { deriveMockState, projectEffectiveResults } from "./mock-fallback.mjs";
 
 export const resultLabels = Object.freeze({
   passed: "通过",
@@ -142,6 +143,12 @@ function semanticEvent(event) {
     return { ...base, stage: "环境清理", description, outcome: semanticOutcome(event.cleanup?.completed, "清理已完成", "清理未完成") };
   }
   if (event.type === "resume_check") return { ...base, stage: "恢复检查", description: `第 ${event.resume_count ?? 1} 次恢复检查已记录；继续执行前需要重新核验页面、账号权限和代理状态`, outcome: "等待重新核验" };
+  if (event.type === "data_gap") return { ...base, stage: "真实数据缺口", description: event.missing_conditions?.join("；") ?? "已登记真实数据缺口", outcome: `${event.checkpoint_ids?.length ?? 0} 个检查点受影响` };
+  if (event.type === "mock_candidate") return { ...base, stage: "Mock 补测候选", description: event.purpose ?? "已登记前端补测目的", outcome: `${event.checkpoint_ids?.length ?? 0} 个原检查点` };
+  if (event.type === "mock_attempt") return { ...base, stage: "Mock 补测", description: `补测尝试 ${event.attempt_id}`, outcome: ({ started: "已开始", paused: "已暂停", resumed: "已恢复", scenario_updated: "场景已更新", finished: "已完成", aborted: "已中止" })[event.action] ?? "状态未记录" };
+  if (event.type === "mock_observation") return { ...base, stage: "Mock 请求事实", description: event.request_facts?.join("；") ?? "已记录请求事实", outcome: ({ mocked: "已在上游前返回模拟响应", blocked: "已阻止未知请求", passthrough: "已按明确依据安全透传" })[event.disposition] ?? "处置未记录" };
+  if (event.type === "mock_checkpoint" && event.action === "result") return { ...base, stage: "Mock 检查点", description: event.observation ?? "已记录前端补测观察", outcome: resultLabels[event.result] ?? "结果未记录" };
+  if (event.type === "coverage_review") return { ...base, stage: "执行覆盖审查", description: event.reason ?? "已复核执行范围", outcome: ({ checkpoint_close: "检查点已审查", final: "最终覆盖已审查", wait: "等待范围已审查", resume: "恢复范围已审查", switch: "切换范围已审查", batch_end: "批次结束已审查" })[event.purpose] ?? "已审查" };
   return { ...base, stage: "其他记录", description: "存在一条无法生成语义摘要的执行记录", outcome: "请查看机器账本" };
 }
 
@@ -232,7 +239,7 @@ function evidenceById(executionLog) {
   return entries;
 }
 
-function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, permissionGroups) {
+function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, permissionGroups, projection, mockState) {
   let checkpointIndex = 0;
   const steps = testCase.steps.map(step => ({
     step_id: step.step_id,
@@ -297,6 +304,25 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     observed_account_ref: group.last_observation?.observed_account_ref ?? null,
     verification: group.verification
   }));
+  const mockRecords = [];
+  for (const attempt of mockState?.attempts?.values?.() ?? []) {
+    if (attempt.case_id !== testCase.case_id) continue;
+    for (const [checkpointId, result] of attempt.checkpoint_results) {
+      mockRecords.push({
+        attempt_id: attempt.attempt_id,
+        checkpoint_id: checkpointId,
+        result: result.result,
+        result_label: resultLabels[result.result],
+        observation: result.observation,
+        reason: result.reason,
+        request_refs: [...(result.request_refs ?? [])],
+        evidence_refs: [...(result.evidence_refs ?? [])]
+      });
+    }
+  }
+  const effectiveReason = projection?.source === "mock"
+    ? `Mock 前端补测：${projection.reason}`
+    : (projection?.reason ?? state.reason ?? "缺少必要检查点结果，无法确定");
   return {
     anchor: `case-${caseIndex + 1}`,
     display_id: displayId(caseIndex),
@@ -304,21 +330,32 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     module: testCase.module,
     title: testCase.title,
     preconditions: testCase.preconditions.length ? [...testCase.preconditions] : ["无"],
-    result: state.result,
-    result_label: resultLabels[state.result],
-    reason: state.reason || "缺少必要检查点结果，无法确定",
+    result: projection?.effective_result ?? state.result,
+    result_label: resultLabels[projection?.effective_result ?? state.result],
+    real_result: state.result,
+    real_result_label: resultLabels[state.result],
+    result_source: projection?.source ?? "real",
+    reason: effectiveReason,
     steps,
     permissions,
     actual_records: actualRecords,
     capture_records: captureRecords,
-    exploration_records: [...explorationByKey.values()]
+    exploration_records: [...explorationByKey.values()],
+    mock_records: mockRecords
   };
 }
 
 export function buildReportModel(testCases, executionLog) {
   const evidence = evidenceById(executionLog);
   const derivedPermission = derivePermissionState(testCases, executionLog);
-  const caseDetails = testCases.cases.map((testCase, index) => buildCaseDetail(testCase, executionLog.cases[index], index, evidence, executionLog, derivedPermission.groups));
+  const mockEnabled = executionLog.extensions?.mock_fallback?.schema_version === "1.0";
+  const effectiveProjection = mockEnabled ? projectEffectiveResults(testCases, executionLog) : null;
+  const projectedByCase = new Map((effectiveProjection?.cases ?? []).map(item => [item.case_id, item]));
+  const mockState = mockEnabled ? deriveMockState(testCases, executionLog) : null;
+  const caseDetails = testCases.cases.map((testCase, index) => buildCaseDetail(
+    testCase, executionLog.cases[index], index, evidence, executionLog, derivedPermission.groups,
+    projectedByCase.get(testCase.case_id), mockState
+  ));
   const rows = caseDetails.map(detail => ({
     anchor: detail.anchor,
     display_id: detail.display_id,
@@ -327,10 +364,14 @@ export function buildReportModel(testCases, executionLog) {
     title: detail.title,
     result: detail.result,
     result_label: detail.result_label,
+    real_result: detail.real_result,
+    result_source: detail.result_source,
     reason: detail.reason
   }));
   const counts = { passed: 0, failed: 0, undetermined: 0, not_executed: 0 };
   for (const row of rows) counts[row.result] += 1;
+  const mockAllowed = mockState?.policy === "allowed";
+  const mockUsed = (mockState?.attempts?.size ?? 0) > 0 || rows.some(row => row.result_source === "mock");
   const permission = {
     ...derivedPermission,
     groups: derivedPermission.groups.map(group => ({
@@ -341,7 +382,8 @@ export function buildReportModel(testCases, executionLog) {
   };
   const importantTypes = new Set([
     "mcp_preflight", "role_observation", "assistance", "blocker", "sample_selected", "sample_replaced",
-    "permission_availability", "permission_batch", "permission_wait", "proxy_state", "cleanup_state", "resume_check", "evidence_capture"
+    "permission_availability", "permission_batch", "permission_wait", "proxy_state", "cleanup_state", "resume_check", "evidence_capture",
+    "data_gap", "mock_candidate", "mock_attempt", "mock_observation", "mock_checkpoint", "coverage_review"
   ]);
   const importantEvents = (executionLog.events ?? []).filter(event => importantTypes.has(event.type)).map(event => structuredClone(event));
   const roles = executionLog.browser?.role_observations ?? [];
@@ -395,13 +437,21 @@ export function buildReportModel(testCases, executionLog) {
       execution_duration: durations.execution_label,
       waiting_duration: durations.waiting_label
     },
+    mock_summary: {
+      enabled: mockAllowed,
+      used: mockUsed,
+      real_passed: effectiveProjection?.counts.real_passed ?? counts.passed,
+      mock_supplemented_passed: rows.filter(row => row.result === "passed" && row.result_source === "mock").length
+    },
     report_context: {
       prd_links: structuredClone(reportContext?.prd_links ?? []),
       environment_description: reportContext?.environment_description ?? "未记录",
       display_timezone: displayTimezone,
       source_description: reportContext?.description ?? "未记录",
       accounts,
-      proxy_method: proxy.required ? "单 Target CDP Fetch 代理" : "未使用代理"
+      proxy_method: proxy.required
+        ? (mockUsed ? "单 Target CDP Fetch 代理（包含 Mock 前端补测）" : "单 Target CDP Fetch 代理")
+        : "未使用代理"
     },
     case_details: caseDetails,
     result_details: {

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import * as runtime from "../scripts/run-artifacts.mjs";
+import { markAsHistoricalV2 } from "./test-helpers.mjs";
 
 async function setup(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-delivery-"));
@@ -11,6 +12,7 @@ async function setup(t) {
   const casesPath = path.join(root, "cases.json");
   await writeFile(casesPath, JSON.stringify({ schema_version: "2.0", suite: { name: "交付", target_urls: ["http://localhost"] }, cases: [{ case_id: "C", module: "观察", title: "结果", preconditions: [], steps: [{ step_id: "s", action: "查看", expected: [{ oracle_id: "o", text: "完成" }] }] }] }));
   const run = await runtime.initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+  await markAsHistoricalV2(run.runRoot);
   await runtime.recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["C"] });
   return run;
 }

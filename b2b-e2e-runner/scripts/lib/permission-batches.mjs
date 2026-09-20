@@ -366,8 +366,23 @@ function validateV2Undetermined(event, executionLog, record, knownCheckpoints) {
     requireValue(resolution?.type === "assistance" && ["resolved", "unavailable", "stop_waiting", "stop_run"].includes(resolution.phase), "resolution_ref 未引用先前的合法协作解决或结束记录");
     requireValue(resolution.checkpoint_ids.includes(event.checkpoint_id), "resolution_ref 引用的协作记录影响范围不包含当前检查点");
   }
+  if (event.data_gap_ref !== undefined) {
+    requireValue(executionLog.extensions?.execution_coverage?.schema_version === "1.0",
+      "data_gap_ref 仅适用于启用执行覆盖的新 Run");
+    const gap = eventBySequence(executionLog, event.data_gap_ref);
+    requireValue(gap?.type === "data_gap" && gap.checkpoint_ids?.includes(event.checkpoint_id),
+      "data_gap_ref 未引用先前且覆盖当前检查点的合法数据缺口");
+    requireValue((gap.exploration_refs ?? []).includes(event.exploration_ref) ||
+      (gap.real_blocker_refs ?? []).includes(event.exploration_ref),
+    "data_gap_ref 与 checkpoint_result 的真实探索依据不一致");
+    requireValue(Array.isArray(gap.not_started_dependencies) && gap.not_started_dependencies.length > 0,
+      "data_gap_ref 缺少未开始步骤的具体依赖说明");
+    requireValue(nonEmptyString(event.not_attempted_reason),
+      "data_gap_ref 收尾未开始检查点时必须说明 not_attempted_reason");
+  }
   if (record.checkpoint?.status !== "running" && event.permission_group_ids === undefined) {
-    requireValue(event.resolution_ref !== undefined, "尚未开始的 v2 检查点终结为 undetermined 时缺少 resolution_ref");
+    requireValue(event.resolution_ref !== undefined || event.data_gap_ref !== undefined,
+      "尚未开始的 v2 检查点终结为 undetermined 时缺少 resolution_ref 或 data_gap_ref");
   }
 }
 
@@ -384,6 +399,24 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     requireValue(!permissionPlan(executionLog), "permission_plan 只能建立一次");
     requireValue(!(executionLog.events ?? []).some(item => ["case_started", "checkpoint_started", "checkpoint_result"].includes(item.type)), "权限计划必须在业务执行前建立");
     validatePlan(testCases, executionLog, event);
+    return;
+  }
+  if (event.type === "mock_policy") {
+    rejectUnknownKeys(event, new Set([
+      "type", "action", "decision", "decision_source", "basis", "sequence", "at"
+    ]), "mock_policy");
+    requireValue(executionLog.extensions?.mock_fallback?.schema_version === "1.0", "mock_policy 缺少对应的 Mock 扩展");
+    requireValue(["initial", "revoked"].includes(event.action), "mock_policy.action 必须为 initial 或 revoked");
+    requireValue(["allowed", "declined"].includes(event.decision), "mock_policy.decision 无效");
+    requireValue(event.decision_source === "user", "mock_policy.decision_source 必须为 user");
+    requireValue(nonEmptyString(event.basis), "mock_policy 必须包含脱敏的选择依据");
+    if (event.action === "initial") {
+      requireValue(!(executionLog.events ?? []).some(item => item.type === "mock_policy"), "mock_policy.initial 只能记录一次");
+      requireValue(!(executionLog.events ?? []).some(item => item.type === "permission_plan"), "mock_policy.initial 必须早于 permission_plan");
+    } else {
+      requireValue(permissionPlan(executionLog), "mock_policy.revoked 必须在 permission_plan 后记录");
+      requireValue(event.decision === "declined", "mock_policy.revoked 必须将决定撤回为 declined");
+    }
     return;
   }
   const plan = requirePlan(executionLog);
@@ -586,7 +619,7 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     return;
   }
   if (event.type === "run_state" && isV2(executionLog) && (event.status ?? event.state) === "awaiting_user") {
-    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "assistance_ids", "sequence", "at"]), "v2 awaiting_user");
+    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "assistance_ids", "coverage_review_ref", "sequence", "at"]), "v2 awaiting_user");
     requireValue(nonEmptyString(event.reason), "v2 awaiting_user 必须说明全局暂停原因");
     validateStringArray(event.assistance_ids, "v2 awaiting_user.assistance_ids");
     const assistance = assistanceState(executionLog);
@@ -596,15 +629,25 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     return;
   }
   if (event.type === "run_state" && isV2(executionLog) && (event.status ?? event.state) === "running" && executionLog.run?.status === "awaiting_user") {
-    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "sequence", "at"]), "v2 resumed running");
+    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "coverage_review_ref", "sequence", "at"]), "v2 resumed running");
     const awaiting = [...(executionLog.events ?? [])].reverse().find(item =>
       item.type === "run_state" && (item.status ?? item.state) === "awaiting_user"
     );
     const resume = [...(executionLog.events ?? [])].reverse().find(item => item.type === "resume_check");
     requireValue(resume && (resume.sequence ?? 0) > (awaiting?.sequence ?? 0), "v2 全局暂停后必须先执行 resume-check 才能恢复 running");
     const assistance = assistanceState(executionLog);
-    for (const assistanceId of awaiting?.assistance_ids ?? []) {
-      requireValue(assistance.has(assistanceId) && assistance.get(assistanceId).remaining.size === 0, `v2 全局暂停关联的协作事项尚未解决：${assistanceId}`);
+    if (executionLog.extensions?.execution_coverage?.schema_version === "1.0") {
+      const review = eventBySequence(executionLog, event.coverage_review_ref);
+      requireValue(review?.type === "coverage_review" && review.purpose === "resume" && review.checkpoint_ids?.length > 0,
+        "v2 部分恢复必须引用包含已释放检查点的 resume 审查");
+      for (const item of assistance.values()) {
+        requireValue(!review.checkpoint_ids.some(checkpointId => item.remaining.has(checkpointId)),
+          "v2 resume 审查包含仍受开放协作阻塞的检查点");
+      }
+    } else {
+      for (const assistanceId of awaiting?.assistance_ids ?? []) {
+        requireValue(assistance.has(assistanceId) && assistance.get(assistanceId).remaining.size === 0, `v2 全局暂停关联的协作事项尚未解决：${assistanceId}`);
+      }
     }
     return;
   }
@@ -630,6 +673,7 @@ function initialReplayCases(testCases) {
 
 export function validatePermissionLog(testCases, executionLog) {
   const replay = {
+    ...(executionLog.extensions ? { extensions: structuredClone(executionLog.extensions) } : {}),
     run: { status: "initialized", actual_case_order: [], resume_count: 0 },
     browser: {
       owned_target_ids: [],

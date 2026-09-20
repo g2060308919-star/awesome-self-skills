@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
+import { EventEmitter, once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ProxyListener, compileRules, stopProxyFromState } from "../scripts/cdp-fetch-proxy.mjs";
+import {
+  ProxyListener,
+  compileRules,
+  installStopSignalHandlers,
+  stopProxyFromState
+} from "../scripts/cdp-fetch-proxy.mjs";
 
 class FakeCdp {
   constructor(targetId) {
@@ -192,4 +198,32 @@ test("AC-022/FR-076: stop verifies state owner token before signaling exactly it
     await listener.stop();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("cleanup_failed keeps SIGTERM handler installed so cleanup can be retried", async () => {
+  const signals = new EventEmitter();
+  const calls = [];
+  const exits = [];
+  const listener = {
+    async stop() {
+      calls.push("stop");
+      return { state: calls.length === 1 ? "cleanup_failed" : "stopped" };
+    }
+  };
+  const { completed } = installStopSignalHandlers(listener, {
+    signalTarget: signals,
+    exit: code => exits.push(code)
+  });
+
+  signals.emit("SIGTERM");
+  await once(completed, "attempt");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(exits, []);
+  assert.equal(signals.listenerCount("SIGTERM"), 1);
+
+  signals.emit("SIGTERM");
+  await once(completed, "attempt");
+  assert.equal(calls.length, 2);
+  assert.deepEqual(exits, [0]);
+  assert.equal(signals.listenerCount("SIGTERM"), 0);
 });

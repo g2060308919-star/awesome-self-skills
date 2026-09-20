@@ -17,6 +17,8 @@ import { validateScreenshotBytes } from "./lib/screenshot-validation.mjs";
 import { aggregateCase, buildReport, renderChatTableMarkdown } from "./lib/report.mjs";
 import { buildReportModel } from "./lib/report-model.mjs";
 import { buildHtmlReport } from "./lib/report-html.mjs";
+import { validateCoverageEvent, validateCoverageLog } from "./lib/execution-coverage.mjs";
+import { validateMockEvent, validateMockLog } from "./lib/mock-fallback.mjs";
 import {
   permissionWorkflowProfile,
   permissionWorkflowProfileV2,
@@ -46,6 +48,33 @@ function createRunId() {
   return `${timestamp}-${crypto.randomUUID()}`;
 }
 
+const EXECUTION_COVERAGE_EXTENSION = "execution_coverage";
+const MOCK_FALLBACK_EXTENSION = "mock_fallback";
+const RUN_EXTENSION_VERSION = "1.0";
+const MOCK_FALLBACK_DECISIONS = new Set(["allowed", "declined"]);
+
+function validateRunExtensions(log) {
+  if (log.extensions === undefined) return;
+  if (!log.extensions || typeof log.extensions !== "object" || Array.isArray(log.extensions)) {
+    throw consistencyError("Run 扩展必须是对象");
+  }
+  const supported = new Set([EXECUTION_COVERAGE_EXTENSION, MOCK_FALLBACK_EXTENSION]);
+  const unknown = Object.keys(log.extensions).find(key => !supported.has(key));
+  if (unknown) throw consistencyError(`未知 Run 扩展：${unknown}`);
+  const profile = log.events?.find(event => event.type === "workflow_profile")?.profile;
+  if (profile !== permissionWorkflowProfileV2) throw consistencyError("Run 扩展只允许用于 v2 工作流");
+  for (const [name, extension] of Object.entries(log.extensions)) {
+    if (!extension || typeof extension !== "object" || Array.isArray(extension) ||
+        Object.keys(extension).length !== 1 || extension.schema_version !== RUN_EXTENSION_VERSION) {
+      throw consistencyError(`Run 扩展 ${name} 版本无效`);
+    }
+  }
+  if (!log.extensions[EXECUTION_COVERAGE_EXTENSION]) throw consistencyError("v1.1 Run 扩展缺少执行覆盖能力");
+  if (log.extensions[MOCK_FALLBACK_EXTENSION] && !log.extensions[EXECUTION_COVERAGE_EXTENSION]) {
+    throw consistencyError("Mock 扩展必须与执行覆盖扩展共同启用");
+  }
+}
+
 async function loadRun(runRoot) {
   const snapshotPath = path.join(runRoot, "test-cases.json");
   const logPath = path.join(runRoot, "execution-log.json");
@@ -63,6 +92,7 @@ async function loadRun(runRoot) {
   }
   const testCases = JSON.parse(snapshotBytes);
   validateTestCases(testCases);
+  validateRunExtensions(log);
   return { snapshotPath, logPath, snapshotHash, logHash: digest(logBytes), testCases, log };
 }
 
@@ -168,11 +198,17 @@ async function scanEvidenceDirectory(runRoot) {
   }
 }
 
-export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId(), workflowProfile }) {
+export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId(), workflowProfile, mockFallback }) {
   ensureRuntime();
   if (!workspaceRoot || !casesPath) throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 必填");
   if (workflowProfile !== undefined && !permissionWorkflowProfiles.includes(workflowProfile)) {
     throw runnerError("INPUT_CONTRACT", "未知 workflow profile");
+  }
+  if (mockFallback !== undefined && !MOCK_FALLBACK_DECISIONS.has(mockFallback)) {
+    throw runnerError("INPUT_CONTRACT", "Mock fallback 只接受 allowed 或 declined");
+  }
+  if (mockFallback !== undefined && workflowProfile !== permissionWorkflowProfileV2) {
+    throw runnerError("INPUT_CONTRACT", "Mock fallback 只允许用于 permission-batches-html-v2");
   }
   if (!/^[A-Za-z0-9._-]+$/.test(runId)) throw runnerError("INPUT_CONTRACT", "Run ID 只能包含字母、数字、点、下划线和连字符");
   let input;
@@ -226,6 +262,20 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
       })))
     };
   });
+  const events = workflowProfile
+    ? [{ type: "workflow_profile", profile: workflowProfile, sequence: 1, at: now }]
+    : [];
+  if (mockFallback !== undefined) {
+    events.push({
+      type: "mock_policy",
+      action: "initial",
+      decision: mockFallback,
+      decision_source: "user",
+      basis: "用户在执行前明确选择",
+      sequence: events.length + 1,
+      at: now
+    });
+  }
   const executionLog = {
     schema_version: "2.0",
     run: {
@@ -238,6 +288,12 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
       resume_count: 0
     },
     test_cases: { path: "./test-cases.json", sha256: snapshotHash },
+    ...(workflowProfile === permissionWorkflowProfileV2 ? {
+      extensions: {
+        [EXECUTION_COVERAGE_EXTENSION]: { schema_version: RUN_EXTENSION_VERSION },
+        ...(mockFallback !== undefined ? { [MOCK_FALLBACK_EXTENSION]: { schema_version: RUN_EXTENSION_VERSION } } : {})
+      }
+    } : {}),
     browser: {
       mcp_status: "unknown",
       owned_target_ids: [],
@@ -254,7 +310,7 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
       cleanup: { attempted: false, succeeded: null, reason: null }
     },
     cases: caseStates,
-    events: workflowProfile ? [{ type: "workflow_profile", profile: workflowProfile, sequence: 1, at: now }] : [],
+    events,
     cleanup: { attempted: false, completed: false, items: [] }
   };
   await writeJsonAtomic(path.join(runRoot, "execution-log.json"), executionLog);
@@ -316,6 +372,8 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
     }
   }
   validatePermissionLog(run.testCases, run.log);
+  validateCoverageLog(run.testCases, run.log);
+  validateMockLog(run.testCases, run.log);
   if (workflowProfile(run.log) === permissionWorkflowProfileV2 && ["awaiting_user", "completed"].includes(run.log.run.status)) {
     const captureEvents = run.log.events.filter(event => event.type === "evidence_capture");
     for (const caseId of run.log.run.actual_case_order) {
@@ -416,6 +474,8 @@ export async function recordEvent(runRoot, event) {
     }
   }
   validatePermissionEvent(run.testCases, run.log, event);
+  validateCoverageEvent(run.testCases, run.log, event);
+  validateMockEvent(run.testCases, run.log, event);
   const ids = expectedCheckpointIds(run.testCases);
   const registeredEvidence = new Map((run.log.events ?? []).flatMap(item => item.evidence ?? []).map(item => [item.evidence_id, item]));
   for (const evidence of event.evidence ?? []) {
@@ -681,7 +741,12 @@ async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
   let result;
   if (command === "init") {
-    result = await initializeRun({ workspaceRoot: options.workspace, casesPath: options.cases, workflowProfile: options["workflow-profile"] });
+    result = await initializeRun({
+      workspaceRoot: options.workspace,
+      casesPath: options.cases,
+      workflowProfile: options["workflow-profile"],
+      mockFallback: options["mock-fallback"]
+    });
   } else if (command === "record") {
     const event = JSON.parse(await readFile(options.event, "utf8"));
     result = await recordEvent(options.run, event);
