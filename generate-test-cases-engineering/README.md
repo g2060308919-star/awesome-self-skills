@@ -83,6 +83,21 @@ assessments and findings to the exact compiler-issued source-first inventory and
 content digest. These helpers do not add a second compiler entry point: every state
 transition still runs through `advanceStrict`.
 
+The topology Adapter adds pure `discoverV4Topology(sourcePack, claims)` and
+`constructV4TopologyEvidence(sourcePack, claims, review)` exports. The latter
+requires explicit unit-review witnesses and evidence-backed dispositions;
+it never auto-completes a review. See the shipped Evidence Policy for the closed
+authorization and review contracts. These helpers construct candidates only:
+source authority, active revision and acceptance still belong to the runner.
+
+This interface addition is a development candidate under the existing
+`4.3.0/0.8.0` artifact contract, not a schema-version change. The schema manifest
+does not hash compiler code; record the actual bundle SHA-256 and Git commit
+alongside review evidence, and check both new exports when identifying a
+candidate installation. The closed `behavior_assertions` Claim input is now
+documented and validated at the Evidence stage for `4.3.0`; legacy `4.0.0` and
+`4.2.0` filtering remains unchanged.
+
 To continue a cancelled run, call the same ordinary create helper with
 `{ parent_run_id, creation_reason: 'resume_cancelled' }` as its second argument.
 The compiler derives the original delivery intent, issues the sibling ID, and

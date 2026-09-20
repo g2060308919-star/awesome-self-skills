@@ -131,7 +131,8 @@ test('runner entry dynamic import exposes only the private run and action seams 
       probe: {
         exports: [
           'advanceStrict', 'constructIndependentReviewCompletionV4',
-          'constructV4Action', 'createV4RunDirectory',
+          'constructV4Action', 'constructV4TopologyEvidence', 'createV4RunDirectory',
+          'discoverV4Topology',
           'sourceAcquisitionMaterialPathV4',
           'stageV4PrdCollectionObservation',
           'stageV4SourceAcquisitionAction'

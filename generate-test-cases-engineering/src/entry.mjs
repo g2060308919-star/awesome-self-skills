@@ -10,6 +10,7 @@ import {
 } from './source-acquisition-v4.mjs';
 import { createV4RunDirectory } from './run-bootstrap-v4.mjs';
 import { stageV4PrdCollectionObservation } from './prd-source-collection-v4.mjs';
+export { discoverV4Topology, constructV4TopologyEvidence } from './topology-adapter-v4.mjs';
 
 export {
   advanceStrict, constructIndependentReviewCompletionV4, constructV4Action,
