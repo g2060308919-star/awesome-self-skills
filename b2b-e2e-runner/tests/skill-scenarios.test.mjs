@@ -188,6 +188,31 @@ test("v2 AC-33..41: workflow routes information gaps through fact-led exploratio
   ]) assert.equal(combined.includes(phrase), true, phrase);
 });
 
+test("v1.1 AC-01..68: Skill routes explicit Mock consent, execution coverage, fail-closed isolation, and one-source reporting", async () => {
+  const [skill, workflow, resultModel, proxy, artifact, security] = await sources();
+  const combined = `${skill}\n${workflow}\n${resultModel}\n${proxy}\n${artifact}\n${security}`;
+  for (const phrase of [
+    "先单独询问是否允许 Mock 前端补测",
+    "不证明真实后端",
+    "--mock-fallback allowed|declined",
+    "coverage_plan",
+    "coverage_context",
+    "coverage_review",
+    "A→B→A",
+    "data_gap_ref",
+    "mock-scenario-v1",
+    "Request 阶段",
+    "真实上游接收数为零",
+    "about:blank",
+    "保持拦截和锁",
+    "Mock 前端补测",
+    "原始真实结果",
+    "历史 v2 Run"
+  ]) assert.equal(combined.includes(phrase), true, phrase);
+  assert.equal(skill.indexOf("先单独询问是否允许 Mock 前端补测") < skill.indexOf("一次性确认"), true);
+  assert.equal(combined.includes("用 HTTP 方法推断读写"), true);
+});
+
 test("UAT-02: strict expected text remains failed when page shows a broader label", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "uat-strict-"));
   try {

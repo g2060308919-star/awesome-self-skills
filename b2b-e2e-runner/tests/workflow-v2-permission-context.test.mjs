@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { initializeRun, recordEvent, validateRun } from "../scripts/run-artifacts.mjs";
 import { derivePermissionState } from "../scripts/lib/permission-batches.mjs";
+import { markAsHistoricalV2 } from "./test-helpers.mjs";
 
 async function createRun(root) {
   const casesPath = path.join(root, "cases.json");
@@ -18,6 +19,7 @@ async function createRun(root) {
     ]
   }));
   const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+  await markAsHistoricalV2(run.runRoot);
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", role_independent_case_ids: [], groups: [
       { group_id: "g-a", role_text: "角色 A", permissions: ["使用功能"], case_ids: ["CTX-A"], checkpoint_ids: ["CTX-A/s/o"], availability: "ready", account_ref: "acct-a", preparation_owner: null, declaration: "用户说明账号 A 已准备" },

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { generateReport, initializeRun, recordEvent, resumeCheck } from "../scripts/run-artifacts.mjs";
+import { markAsHistoricalV2 } from "./test-helpers.mjs";
 
 async function createRun(root) {
   const casesPath = path.join(root, "cases.json");
@@ -17,6 +18,7 @@ async function createRun(root) {
     ]
   }));
   const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+  await markAsHistoricalV2(run.runRoot);
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["BLOCKED", "INDEPENDENT"]
   });
@@ -194,6 +196,7 @@ test("AC-23/28: a v2 permission wait must reference the same open assistance ite
       }]
     }));
     const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+    await markAsHistoricalV2(run.runRoot);
     await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [],
       groups: [{
@@ -235,6 +238,7 @@ test("AC-26/28: v2 stop_waiting ends only its permission scope without the legac
       }]
     }));
     const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+    await markAsHistoricalV2(run.runRoot);
     await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [],
       groups: [{

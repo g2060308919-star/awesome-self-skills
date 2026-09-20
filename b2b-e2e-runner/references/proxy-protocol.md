@@ -46,6 +46,16 @@ Body mode 还可使用 `{ "mode": "replace_text", "value": "..." }`、`{ "mode":
 
 配置不得包含认证 secret，不写死业务域名、环境 header 或绝对路径。明文 HTTP 默认只允许 loopback；只有用例明确确认内网非生产 HTTP 时才可显式放行。
 
+## Mock 场景绑定与请求前隔离
+
+可选 Mock 复用同一个单 Target 代理实例和锁，不启动第二个 Fetch 监听器。配置通过 `run_root` 与 `mock_scenario` 引用 Run 内场景文件：相对路径、SHA-256、`attempt_id`、状态文件和回执文件；还必须有本次 `proxy_cycle_id`。start 会核对 `mock_fallback@1.0`、当前 `mock_policy: allowed`、running 尝试、Run/case/attempt 归属、候选/支持检查点、场景修订与哈希。路径穿越、符号链接、缺失/成对不一致的状态回执、未知版本或撤回授权均失败关闭。
+
+场景 schema 固定为 `mock-scenario-v1`。match 精确比较 origin（含有效端口）、pathname、method、解码后的 query 有序值数组以及 JSON body 的存在性、类型和值；缺失、空字符串、null、数字与字符串不同。额外 query/body 字段只有显式确认后才能忽略。不能用 HTTP 方法推断读写；POST 可以是查询，GET 也可能有副作用。多规则命中、未知业务请求、合成 ID 未覆盖的请求、模板/状态/持久化失败均在 Request 阶段 `failRequest`，绝不落入普通代理的错误透传。
+
+命中规则时在临时状态副本执行受限 set/delete，生成并校验 JSON 或显式 text 响应，先原子保存状态版本和去重回执，再 `fulfillRequest`；整个流程不访问真实上游。相同 attempt + proxy cycle + Fetch request ID 只提交一次，新浏览器请求不擅自幂等。响应仍受 5 MiB 上限，超限阻断而非透传。规则增加只能发生在无在途事务的检查点边界，已使用 route 的语义不可原地改变；状态丢失或与账本版本不一致时不能假装从中间恢复。
+
+本地计数 fixture 的验收必须证明模拟业务写请求的真实上游接收数为零，同时验证页面消费响应、写后读一致、未知请求阻断、另一个 Target 不受影响、刷新/导航和普通规则共存。实际业务报告只能陈述当前 Target 的请求前处理事实；没有服务端证据时不得扩大为整个后端绝无写入。
+
 ## 生命周期
 
 ```text
@@ -59,6 +69,8 @@ start 校验 endpoint→target 映射与 Runner 当前登记的测试页面一�
 同一 Target 内刷新或导航时保持绑定并重新做真实验证。测试转移到新标签页产生新 `targetId` 时，旧代理不得影响新页面；先停止旧绑定，再为新 Target 创建独立实例、锁和验证。
 
 正常结束、失败、中断、SIGINT/SIGTERM、Target 关闭或 CDP 断连都自动尽力 Fetch.disable、detach、停止本 Run 代理进程并释放本 Run 锁，无需用户确认；随后用真实请求验证原行为恢复。只操作与 state 中 Run ID、owner token、endpoint 和 targetId 全部匹配的资源，不得停止其他 Target 的代理，也不得释放其他 Run 的锁。
+
+Mock 清理更严格：Runner 必须先在拦截仍有效时通过 Chrome DevTools MCP 把所属 owned 测试页导航到 `about:blank`，处置在途请求，再请求 stop。stop 会复核 Target 已安全离开模拟场景；若未满足则状态为 `cleanup_failed`，保持拦截和锁，不执行 Fetch.disable/detach，也不退出代理进程。完成安全隔离后再次 stop 才释放。CDP 断连导致无法核验时记录隔离未知，不宣称清理成功，不自动重放结果不明的写操作。
 
 进入 `awaiting_user` 前同样执行上述清理并记录真实恢复结果；保留测试页面和登录态。用户通知后恢复原 Run 时，根据原确认规则为当前已登记 Target 新建代理周期并重新验证，不能沿用上一周期的“已清理”状态，也不能触碰其他页面或 Run。
 
