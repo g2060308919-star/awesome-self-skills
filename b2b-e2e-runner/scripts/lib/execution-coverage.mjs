@@ -1,3 +1,5 @@
+import { derivePermissionState } from "./permission-batches.mjs";
+
 const COVERAGE_VERSION = "1.0";
 const PLAN_ACTIONS = new Set(["initial", "refine"]);
 const LOCATION_STATES = new Set(["known", "needs_discovery"]);
@@ -105,6 +107,10 @@ function groupOwners(plan) {
 
 function groupsById(plan) {
   return new Map((plan?.groups ?? []).map(group => [group.group_id, group]));
+}
+
+function currentPermissionGroups(testCases, log) {
+  return new Map(derivePermissionState(testCases, log).groups.map(group => [group.group_id, group]));
 }
 
 function validateDependency(dependency, records, label) {
@@ -277,13 +283,17 @@ function validateContextEvent(testCases, log, event) {
     if (Number.isInteger(reference)) requireValue(eventAt(log, reference), `coverage_context.fact_refs 引用未知事件：${reference}`);
   }
 
-  const permission = permissionPlan(log);
-  const groups = groupsById(permission);
+  const groups = currentPermissionGroups(testCases, log);
   const requiredGroups = new Set(selected.flatMap(scope => scope.group_ids));
   if (requiredGroups.size > 0) {
     requireValue(string(event.account_ref), "特殊权限执行上下文必须绑定 account_ref");
     for (const groupId of requiredGroups) {
-      requireValue(groups.get(groupId)?.account_ref === event.account_ref, `coverage_context 账号与权限组 ${groupId} 不一致`);
+      const group = groups.get(groupId);
+      requireValue(group, `coverage_context 引用未知权限组 ${groupId}`);
+      requireValue(group.availability === "ready", `coverage_context 权限组 ${groupId} 当前未就绪`);
+      requireValue(string(group.account_ref), `coverage_context 权限组 ${groupId} 当前账号缺失`);
+      requireValue(group.account_ref === event.account_ref, `coverage_context 账号与权限组 ${groupId} 当前账号不一致`);
+      requireValue(group.verification === "verified", `coverage_context 权限组 ${groupId} 当前角色核验无效：${group.verification}`);
     }
     refs(event.role_observation_refs, "coverage_context 权限核验 role_observation_refs");
     const observedGroups = new Set();
@@ -293,6 +303,9 @@ function validateContextEvent(testCases, log, event) {
       const observation = observationPayload(source);
       requireValue(source?.type === "role_observation" && requiredGroups.has(observation.group_id),
         `coverage_context 权限核验引用无效：${reference}`);
+      const currentGroup = groups.get(observation.group_id);
+      requireValue(observation.verification === "verified" && currentGroup?.last_observation?.sequence === source.sequence,
+        `coverage_context 权限组 ${observation.group_id} 未引用当前有效观察`);
       requireValue(observation.account_ref === event.account_ref && observation.observed_account_ref === event.observed_account_ref,
         "coverage_context 与权限核验账号不一致");
       requireValue(observation.target_id === event.target_id && observation.context_ref === event.context_ref && observation.environment_ref === event.environment_ref,
@@ -444,7 +457,7 @@ function validateReviewEvent(testCases, log, event) {
       .filter(item => item?.type === "coverage_context" && string(item.account_ref));
     requireValue(contexts.length > 0, `coverage_review.${event.purpose} 必须引用当前账号的 coverage_context`);
     const accounts = new Set(contexts.map(item => item.account_ref));
-    const groups = groupsById(permissionPlan(log));
+    const groups = currentPermissionGroups(testCases, log);
     const relevant = openScopes(testCases, log, plan).filter(scope =>
       scope.group_ids.some(groupId => accounts.has(groups.get(groupId)?.account_ref))
     );

@@ -50,7 +50,7 @@ Chrome 已安装但未运行时自动启动；没有可操作页面时自动创�
 
 ## 4. Run、覆盖计划和标签页
 
-新建正式 Run 使用 `run-artifacts.mjs init --workflow-profile permission-batches-html-v2 --mock-fallback allowed|declined`，并在业务用例开始前依次记录完整 `permission_plan` 和 `coverage_plan`。`init` 自动写入 `execution_coverage@1.0`；只有明确传入 Mock 选择时写入 `mock_fallback@1.0` 与不可覆盖的初始 `mock_policy`。历史 v1、无 profile 或没有扩展标记的历史 v2 Run 只按原契约恢复，不原地迁移。
+新建正式 Run 使用 `run-artifacts.mjs init --workflow-profile permission-batches-html-v2 --mock-fallback allowed|declined`，并在业务用例开始前依次记录完整 `permission_plan` 和 `coverage_plan`。`permission_plan` 是不可变的权限组—用例—检查点拓扑；运行期可用性、账号和核验必须由初始计划与追加事件派生出的当前权限状态判断，不回写初始计划。`init` 自动写入 `execution_coverage@1.0`；只有明确传入 Mock 选择时写入 `mock_fallback@1.0` 与不可覆盖的初始 `mock_policy`。历史 v1、无 profile 或没有扩展标记的历史 v2 Run 只按原契约恢复，不原地迁移。
 
 `coverage_plan` 必须逐一覆盖全部原检查点，并将它们映射到真实需要的站点/页面范围、既有权限组、原步骤和显式业务依赖。未知位置标为 `needs_discovery` 并写已知入口和具体缺口，不伪造 URL。refine 只能把未执行范围的已发现位置补齐，不能更换 scope、权限、原步骤或依赖语义。跨角色或跨站链路保留原顺序及 A→B→A 返回任务；不得因为当前登录 B 时看不到 A 的工作就把 A 遗留项关闭。
 
@@ -66,7 +66,7 @@ v2 `role_observation` 只证明执行对象和必要切换：记录计划 `accou
 
 每个 `expected` 是独立检查点。操作工具返回成功只记 `action_dispatched`；通过页面、URL、控件、加载或 Network 变化确认后才记 `effect_observed`。固定等待不是通过证据。工具超时但效果已经出现时，以事实为准。有副作用动作的首次效果不明时，记录 `side_effect: true` 并先查页面、列表、详情、提示和相关请求，禁止自动重试。
 
-带覆盖扩展的新 Run 在每次真实或 Mock 检查点开始前记录 `coverage_context`：绑定实际账号、观察账号、精确 Target、存储上下文、非生产环境、实际 URL、角色观察和事实引用。登录、账号、环境、Target、相关权限准备、全局恢复或覆盖计划变化后，旧上下文对未来工作失效；已完成结果不追溯改写。
+带覆盖扩展的新 Run 在每次真实或 Mock 检查点开始前记录 `coverage_context`：绑定实际账号、观察账号、精确 Target、存储上下文、非生产环境、实际 URL、角色观察和事实引用。登录、账号、环境、Target、相关权限准备、全局恢复或覆盖计划变化后，旧上下文对未来工作失效；必须先完成新鲜角色核验并成功记录新的 `coverage_context`，才能操作该范围的业务页面。记录失败时只暂停受影响范围，可继续不依赖该权限组的安全独立工作；不得先操作后补凭证。已完成结果不追溯改写。
 
 切换账号前、权限批次结束前、进入全局等待前、全局恢复后、检查点终结前及最终完成前分别记录 `coverage_review`。审查必须覆盖当次全部相关 scope/checkpoint，分类可推进、可安全准备和真实阻塞，并引用实际事实或开放协作。当前账号仍有独立工作时不得提前切换/排空批次；全局仍有可推进或可准备范围时不得进入 `awaiting_user`。检查点结束必须覆盖其全部站点/步骤和依赖；只有实际观察、真实探索不足、已确认依赖阻塞、用户明确决定、合法数据交接或输入预排除可以作为终结依据。最终审查逐项覆盖全部原检查点，不能靠结果字段非空绕过漏测。
 
