@@ -53,6 +53,86 @@ function observation(group, account, target, context) {
   };
 }
 
+test("permission recovery is accepted by the public Run API and deterministic log replay", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-permission-recovery-"));
+  try {
+    const casesPath = path.join(root, "recovery-cases.json");
+    await writeFile(casesPath, JSON.stringify({
+      schema_version: "2.0",
+      suite: { name: "权限后补覆盖上下文", target_urls: ["https://staging.example.test/review"] },
+      cases: [{
+        case_id: "RECOVER", module: "权限", title: "后补账号后执行", preconditions: [],
+        steps: [{ step_id: "s", action: "打开审阅页", expected: [{ oracle_id: "o", text: "显示审阅内容" }] }]
+      }]
+    }));
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+    await recordEvent(run.runRoot, {
+      type: "permission_plan", version: "1.0", role_independent_case_ids: [], groups: [{
+        group_id: "g-recover", role_text: "审阅角色", permissions: ["审阅内容"], case_ids: ["RECOVER"],
+        checkpoint_ids: ["RECOVER/s/o"], availability: "user_preparation_required", account_ref: null,
+        preparation_owner: "user", declaration: "用户稍后自行准备虚构审阅账号"
+      }]
+    });
+    await recordEvent(run.runRoot, {
+      type: "coverage_plan", action: "initial", revision: 1, snapshot_hash: run.snapshotHash,
+      source: "不可变用例快照与初始权限拓扑",
+      items: [{
+        checkpoint_id: "RECOVER/s/o",
+        scopes: [{
+          scope_id: "scope-recover", group_ids: ["g-recover"], location_ref: "https://staging.example.test/review",
+          location_status: "known", step_refs: ["RECOVER/s"], source_refs: ["snapshot:RECOVER/s", "permission:g-recover"]
+        }],
+        dependencies: []
+      }]
+    });
+    await recordEvent(run.runRoot, {
+      type: "target_inventory", owned_target_ids: ["target-recover"], preexisting_target_ids: [], attached_preexisting_target_ids: []
+    });
+    await recordEvent(run.runRoot, {
+      type: "permission_availability", group_id: "g-recover", availability: "ready",
+      account_ref: "account-recover", declaration: "用户说明虚构审阅账号已准备"
+    });
+    await recordEvent(run.runRoot, observation("g-recover", "account-recover", "target-recover", "context-recover"));
+    const coverage = await recordEvent(run.runRoot, {
+      type: "coverage_context", scope_ids: ["scope-recover"], account_ref: "account-recover",
+      observed_account_ref: "account-recover", target_id: "target-recover", context_ref: "context-recover",
+      environment_ref: "staging", observed_url: "https://staging.example.test/review", verification: "verified",
+      switch_status: "not_required", fact_refs: [5, 6], role_observation_refs: [6]
+    });
+    await recordEvent(run.runRoot, {
+      type: "checkpoint_started", checkpoint_id: "RECOVER/s/o",
+      scope_ids: ["scope-recover"], context_refs: [coverage.sequence]
+    });
+    const observationEvent = await recordEvent(run.runRoot, {
+      type: "page_observation", checkpoint_ids: ["RECOVER/s/o"], scope_ids: ["scope-recover"],
+      context_ref: coverage.sequence, description: "审阅页面显示目标内容"
+    });
+    const review = await recordEvent(run.runRoot, {
+      type: "coverage_review", review_id: "close-recovered-checkpoint", purpose: "checkpoint_close", plan_revision: 1,
+      based_on_sequence: observationEvent.sequence, scope_ids: ["scope-recover"], checkpoint_ids: ["RECOVER/s/o"],
+      fact_refs: [observationEvent.sequence], assistance_refs: [], ready_scope_ids: ["scope-recover"],
+      preparable_scope_ids: [], blocked_scope_ids: [],
+      closures: [{ checkpoint_id: "RECOVER/s/o", closure_kind: "observed", basis_refs: [observationEvent.sequence] }],
+      choice: "close", reason: "后补账号范围已完成真实页面观察"
+    });
+    await recordEvent(run.runRoot, {
+      type: "checkpoint_result", checkpoint_id: "RECOVER/s/o", result: "passed",
+      reason: "审阅页面显示目标内容", observation: "当前虚构账号下目标内容可见", evidence_status: "not_required",
+      execution_refs: [observationEvent.sequence], coverage_review_ref: review.sequence
+    });
+
+    await assert.doesNotReject(validateRun(run.runRoot, { checkReport: false }));
+    await assert.doesNotReject(validateRun(run.runRoot, { checkReport: false }));
+    const log = JSON.parse(await readFile(path.join(run.runRoot, "execution-log.json"), "utf8"));
+    assert.equal(log.events.find(event => event.type === "permission_plan").groups[0].account_ref, null);
+    assert.equal(log.events.find(event => event.type === "permission_availability").account_ref, "account-recover");
+    assert.equal(log.cases[0].checkpoints[0].status, "completed");
+    assert.equal(log.cases[0].checkpoints[0].result, "passed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("AC-19/20: verified execution context allows the tested permission behavior to fail normally", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-context-"));
   try {

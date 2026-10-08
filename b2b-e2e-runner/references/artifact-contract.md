@@ -25,6 +25,7 @@ Mock 层事件包括不可覆盖/可撤回的 `mock_policy`、从合法数据缺
 
 权限计划契约保持不变：
 
+- 初始 `permission_plan` 只保存不可变的权限组—用例—检查点拓扑。后续可用性、账号和核验不回写计划，由初始计划与追加日志确定性派生为当前权限状态；覆盖上下文和切换/批次审查必须查询该当前状态。
 - `version: "1.0"`；`groups` 是本轮实际权限组数组；`role_independent_case_ids` 是确实不依赖角色的原 case ID。
 - 每组必须包含唯一 `group_id`、用例角色原文 `role_text`、非空 `permissions`、原 `case_ids`、完整 `checkpoint_ids`、`availability`、无秘密 `account_ref`、`preparation_owner` 和声明摘要 `declaration`。`ready` 必须有账号引用；`user_preparation_required` 的准备者必须是 `user`。
 - 组数、状态分布及账号映射不限；组与账号不要求一一对应。组覆盖加无角色用例必须完整覆盖快照，不能改写或复制用例。
@@ -50,7 +51,7 @@ v2 最终 `undetermined` 的 `checkpoint_result` 必须在 `exploration_summary`
 
 权限原因直接结束检查点时，`checkpoint_result.permission_group_ids` 保留精确组引用。未知组/检查点、未知版本、缺失覆盖、错误账号/Target、必要切换未完成、未就绪或未实际核验就开始、等待覆盖已完成项、以及仍有未处理检查点时完成 Run 都拒绝。`record` 和日志重放使用同一校验。
 
-有效示例：先记录待准备组的 `permission_availability` 为 `ready`，再记录页面事实为 `verified`，然后开始其检查点。拒绝示例：只因用户说“好了”便直接写 `checkpoint_started`；没有新鲜角色核验时必须失败关闭。
+有效示例：先记录待准备组的 `permission_availability` 为 `ready`，再记录页面事实为 `verified`，成功记录绑定当前账号与新鲜观察的 `coverage_context`，然后开始其检查点。权限、账号或上下文变化后必须重复这道闸门。拒绝示例：只因用户说“好了”便直接写 `checkpoint_started`，或先操作业务页面再补上下文；没有新鲜角色核验或上下文被拒时必须失败关闭并只暂停受影响范围。
 
 ## CLI
 

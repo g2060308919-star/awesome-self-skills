@@ -153,6 +153,315 @@ test("v1.1 AC-55/56: each site context binds the actual account, target, environ
   assert.throws(() => validateCoverageEvent(testCases, log, { ...valid, role_observation_refs: [] }), /权限核验/);
 });
 
+test("permission recovery: a freshly verified account added after the initial plan can establish coverage and start its checkpoint", () => {
+  const log = baseLog();
+  const group = log.events[1].groups.find(item => item.group_id === "role-a");
+  group.availability = "user_preparation_required";
+  group.account_ref = null;
+  group.preparation_owner = "user";
+  group.declaration = "用户稍后自行准备 A 权限";
+  append(log, coveragePlan());
+  append(log, {
+    type: "target_inventory", owned_target_ids: ["target-web1", "target-web2"],
+    preexisting_target_ids: [], attached_preexisting_target_ids: []
+  });
+  append(log, {
+    type: "permission_availability",
+    group_id: "role-a",
+    availability: "ready",
+    account_ref: "account-a-ready",
+    declaration: "用户说明虚构账号已具备 A 权限"
+  });
+  append(log, {
+    type: "role_observation",
+    observation: {
+      group_id: "role-a", account_ref: "account-a-ready", observed_account_ref: "account-a-ready",
+      verification_scope: "execution_context", verification: "verified", target_id: "target-web1",
+      environment_ref: "staging", context_ref: "profile-a-ready", switch_status: "completed",
+      description: "页面已核对虚构账号和 A 权限"
+    }
+  });
+  const context = {
+    type: "coverage_context", scope_ids: ["scope-a-create-web1"], account_ref: "account-a-ready",
+    observed_account_ref: "account-a-ready", target_id: "target-web1", context_ref: "profile-a-ready",
+    environment_ref: "staging", observed_url: "https://web1.example.test/create", verification: "verified",
+    switch_status: "completed", fact_refs: [5, 6], role_observation_refs: [6]
+  };
+
+  assert.doesNotThrow(() => validateCoverageEvent(testCases, log, context));
+  append(log, context);
+  assert.doesNotThrow(() => validateCoverageEvent(testCases, log, {
+    type: "checkpoint_started",
+    checkpoint_id: "A/s1/o1",
+    scope_ids: ["scope-a-create-web1"],
+    context_refs: [7]
+  }));
+  append(log, {
+    type: "checkpoint_started",
+    checkpoint_id: "A/s1/o1",
+    scope_ids: ["scope-a-create-web1"],
+    context_refs: [7]
+  });
+  assert.doesNotThrow(() => validateCoverageLog(testCases, log));
+  assert.doesNotThrow(() => validateCoverageLog(testCases, structuredClone(log)));
+});
+
+test("permission recovery fails closed for groups that are not ready, have another account, or lack fresh verified role evidence", () => {
+  function pendingLog() {
+    const log = baseLog();
+    const group = log.events[1].groups.find(item => item.group_id === "role-a");
+    group.availability = "user_preparation_required";
+    group.account_ref = null;
+    group.preparation_owner = "user";
+    append(log, coveragePlan());
+    return log;
+  }
+
+  function context(overrides = {}) {
+    return {
+      type: "coverage_context", scope_ids: ["scope-a-create-web1"], account_ref: "account-current",
+      observed_account_ref: "account-current", target_id: "target-web1", context_ref: "profile-current",
+      environment_ref: "staging", observed_url: "https://web1.example.test/create", verification: "verified",
+      switch_status: "completed", fact_refs: [3], role_observation_refs: [], ...overrides
+    };
+  }
+
+  const notReady = pendingLog();
+  assert.throws(() => validateCoverageEvent(testCases, notReady, context()), /当前未就绪/);
+
+  const missingAccount = pendingLog();
+  append(missingAccount, {
+    type: "permission_availability", group_id: "role-a", availability: "ready",
+    account_ref: null, declaration: "损坏日志中的就绪状态没有账号"
+  });
+  assert.throws(() => validateCoverageEvent(testCases, missingAccount, context({ fact_refs: [4] })), /当前账号缺失/);
+
+  const missingObservation = pendingLog();
+  append(missingObservation, {
+    type: "permission_availability", group_id: "role-a", availability: "ready",
+    account_ref: "account-current", declaration: "用户说明虚构账号已准备"
+  });
+  assert.throws(() => validateCoverageEvent(testCases, missingObservation, context({ fact_refs: [4] })), /当前角色核验无效：unverified/);
+
+  append(missingObservation, {
+    type: "role_observation",
+    observation: {
+      group_id: "role-a", account_ref: "account-current", observed_account_ref: "account-current",
+      verification_scope: "execution_context", verification: "verified", target_id: "target-web1",
+      environment_ref: "staging", context_ref: "profile-current", switch_status: "completed", description: "当前核验通过"
+    }
+  });
+  assert.throws(() => validateCoverageEvent(testCases, missingObservation, context({
+    account_ref: "account-other", observed_account_ref: "account-other", fact_refs: [4, 5], role_observation_refs: [5]
+  })), /当前账号不一致/);
+
+  const stale = baseLog();
+  append(stale, coveragePlan());
+  append(stale, {
+    type: "role_observation",
+    observation: {
+      group_id: "role-a", account_ref: "account-a", observed_account_ref: "account-a",
+      verification_scope: "execution_context", verification: "verified", target_id: "target-web1",
+      environment_ref: "staging", context_ref: "profile-old", switch_status: "not_required", description: "旧账号核验"
+    }
+  });
+  append(stale, {
+    type: "permission_availability", group_id: "role-a", availability: "ready",
+    account_ref: "account-current", declaration: "用户将权限切换到新账号"
+  });
+  assert.throws(() => validateCoverageEvent(testCases, stale, context({ fact_refs: [4, 5], role_observation_refs: [4] })), /当前角色核验无效：stale/);
+
+  for (const verification of ["mismatch", "unconfirmed"]) {
+    const invalid = pendingLog();
+    append(invalid, {
+      type: "permission_availability", group_id: "role-a", availability: "ready",
+      account_ref: "account-current", declaration: "用户说明虚构账号已准备"
+    });
+    append(invalid, {
+      type: "role_observation",
+      observation: {
+        group_id: "role-a", account_ref: "account-current", observed_account_ref: "account-other",
+        verification_scope: "execution_context", verification, target_id: "target-web1",
+        environment_ref: "staging", context_ref: "profile-current", switch_status: "completed", description: "页面账号核验未通过"
+      }
+    });
+    assert.throws(() => validateCoverageEvent(testCases, invalid, context({ fact_refs: [4, 5], role_observation_refs: [5] })),
+      new RegExp(`当前角色核验无效：${verification}`));
+  }
+
+  const staleReference = pendingLog();
+  append(staleReference, {
+    type: "permission_availability", group_id: "role-a", availability: "ready",
+    account_ref: "account-current", declaration: "用户说明虚构账号已准备"
+  });
+  append(staleReference, {
+    type: "role_observation",
+    observation: {
+      group_id: "role-a", account_ref: "account-current", observed_account_ref: "account-current",
+      verification_scope: "execution_context", verification: "unconfirmed", target_id: "target-web1",
+      environment_ref: "staging", context_ref: "profile-current", switch_status: "completed", description: "较早观察尚未确认"
+    }
+  });
+  append(staleReference, {
+    type: "role_observation",
+    observation: {
+      group_id: "role-a", account_ref: "account-current", observed_account_ref: "account-current",
+      verification_scope: "execution_context", verification: "verified", target_id: "target-web1",
+      environment_ref: "staging", context_ref: "profile-current", switch_status: "completed", description: "当前观察已经核验"
+    }
+  });
+  assert.throws(() => validateCoverageEvent(testCases, staleReference, context({
+    fact_refs: [4, 5, 6], role_observation_refs: [5]
+  })), /当前有效观察|verified/);
+});
+
+test("permission recovery requires every group in a multi-group scope to share the ready verified current account", () => {
+  function multiGroupLog() {
+    const log = baseLog();
+    const roleA = log.events[1].groups.find(item => item.group_id === "role-a");
+    const roleB = log.events[1].groups.find(item => item.group_id === "role-b");
+    for (const group of [roleA, roleB]) {
+      group.availability = "user_preparation_required";
+      group.account_ref = null;
+      group.preparation_owner = "user";
+    }
+    roleB.case_ids = ["A", "B"];
+    roleB.checkpoint_ids = ["A/s1/o1", "B/s1/o1"];
+    const plan = coveragePlan();
+    plan.items[0].scopes[0].group_ids = ["role-a", "role-b"];
+    plan.items[0].scopes[0].source_refs.push("permission:role-b");
+    assert.doesNotThrow(() => validateCoverageEvent(testCases, log, plan));
+    append(log, plan);
+    return log;
+  }
+
+  function makeObservation(groupId) {
+    return {
+      type: "role_observation",
+      observation: {
+        group_id: groupId, account_ref: "account-shared", observed_account_ref: "account-shared",
+        verification_scope: "execution_context", verification: "verified", target_id: "target-web1",
+        environment_ref: "staging", context_ref: "profile-shared", switch_status: "completed",
+        description: `页面已核对 ${groupId}`
+      }
+    };
+  }
+
+  const log = multiGroupLog();
+  append(log, {
+    type: "permission_availability", group_id: "role-a", availability: "ready",
+    account_ref: "account-shared", declaration: "A 已准备"
+  });
+  append(log, makeObservation("role-a"));
+  const context = {
+    type: "coverage_context", scope_ids: ["scope-a-create-web1"], account_ref: "account-shared",
+    observed_account_ref: "account-shared", target_id: "target-web1", context_ref: "profile-shared",
+    environment_ref: "staging", observed_url: "https://web1.example.test/create", verification: "verified",
+    switch_status: "completed", fact_refs: [4, 5], role_observation_refs: [5]
+  };
+  assert.throws(() => validateCoverageEvent(testCases, log, context), /role-b 当前未就绪/);
+
+  append(log, {
+    type: "permission_availability", group_id: "role-b", availability: "ready",
+    account_ref: "account-shared", declaration: "B 已准备"
+  });
+  append(log, makeObservation("role-a"));
+  append(log, makeObservation("role-b"));
+  assert.doesNotThrow(() => validateCoverageEvent(testCases, log, {
+    ...context,
+    fact_refs: [4, 5, 6, 7, 8],
+    role_observation_refs: [7, 8]
+  }));
+});
+
+test("permission recovery makes switch and batch-end reviews include every open scope on the current derived account", () => {
+  for (const purpose of ["switch", "batch_end"]) {
+    const log = baseLog();
+    for (const group of log.events[1].groups) {
+      group.availability = "user_preparation_required";
+      group.account_ref = null;
+      group.preparation_owner = "user";
+    }
+    log.cases[0].checkpoints[1].status = "completed";
+    log.cases[0].checkpoints[1].result = "passed";
+    append(log, coveragePlan());
+    for (const [groupId, targetId, contextRef] of [
+      ["role-a", "target-web1", "profile-a"],
+      ["role-b", "target-web2", "profile-b"]
+    ]) {
+      append(log, {
+        type: "permission_availability", group_id: groupId, availability: "ready",
+        account_ref: "account-shared", declaration: `${groupId} 已由同一虚构账号准备`
+      });
+      append(log, {
+        type: "role_observation",
+        observation: {
+          group_id: groupId, account_ref: "account-shared", observed_account_ref: "account-shared",
+          verification_scope: "execution_context", verification: "verified", target_id: targetId,
+          environment_ref: "staging", context_ref: contextRef, switch_status: "completed", description: `${groupId} 核验通过`
+        }
+      });
+    }
+    append(log, {
+      type: "coverage_context", scope_ids: ["scope-a-create-web1"], account_ref: "account-shared",
+      observed_account_ref: "account-shared", target_id: "target-web1", context_ref: "profile-a",
+      environment_ref: "staging", observed_url: "https://web1.example.test/create", verification: "verified",
+      switch_status: "completed", fact_refs: [4, 5], role_observation_refs: [5]
+    });
+    const incomplete = {
+      type: "coverage_review", review_id: `${purpose}-incomplete`, purpose, plan_revision: 1,
+      based_on_sequence: log.events.length, scope_ids: ["scope-a-create-web1"], checkpoint_ids: ["A/s1/o1"],
+      fact_refs: [8], assistance_refs: [], ready_scope_ids: ["scope-a-create-web1"], preparable_scope_ids: [],
+      blocked_scope_ids: [], closures: [], choice: "switch", reason: "仅覆盖了同账号的一部分范围"
+    };
+    assert.throws(() => validateCoverageEvent(testCases, log, incomplete), /当前账号仍有关联的遗留范围/);
+    assert.doesNotThrow(() => validateCoverageEvent(testCases, log, {
+      ...incomplete,
+      review_id: `${purpose}-complete`,
+      scope_ids: ["scope-a-create-web1", "scope-b-approve-web2"],
+      checkpoint_ids: ["A/s1/o1", "B/s1/o1"],
+      ready_scope_ids: ["scope-a-create-web1"],
+      preparable_scope_ids: ["scope-b-approve-web2"],
+      reason: "覆盖同一当前账号关联的全部未完成范围"
+    }));
+  }
+});
+
+test("initially-ready groups and permission-independent scopes preserve their existing coverage behavior", () => {
+  const ready = baseLog();
+  append(ready, coveragePlan());
+  append(ready, {
+    type: "role_observation",
+    observation: {
+      group_id: "role-a", account_ref: "account-a", observed_account_ref: "account-a",
+      verification_scope: "execution_context", verification: "verified", target_id: "target-web1",
+      environment_ref: "staging", context_ref: "profile-a", switch_status: "not_required", description: "初始账号核验通过"
+    }
+  });
+  assert.doesNotThrow(() => validateCoverageEvent(testCases, ready, {
+    type: "coverage_context", scope_ids: ["scope-a-create-web1"], account_ref: "account-a", observed_account_ref: "account-a",
+    target_id: "target-web1", context_ref: "profile-a", environment_ref: "staging",
+    observed_url: "https://web1.example.test/create", verification: "verified", switch_status: "not_required",
+    fact_refs: [4], role_observation_refs: [4]
+  }));
+
+  const independent = baseLog();
+  independent.events[1].groups = [independent.events[1].groups[0]];
+  independent.events[1].groups[0].checkpoint_ids = ["A/s1/o1", "A/s2/o1"];
+  independent.events[1].role_independent_case_ids = ["B"];
+  const independentPlan = coveragePlan();
+  independentPlan.items[1].scopes[0].group_ids = [];
+  independentPlan.items[1].scopes[0].source_refs = ["snapshot:B/s1"];
+  assert.doesNotThrow(() => validateCoverageEvent(testCases, independent, independentPlan));
+  append(independent, independentPlan);
+  assert.doesNotThrow(() => validateCoverageEvent(testCases, independent, {
+    type: "coverage_context", scope_ids: ["scope-b-approve-web2"], account_ref: null, observed_account_ref: null,
+    target_id: "target-web2", context_ref: "profile-general", environment_ref: "staging",
+    observed_url: "https://web2.example.test/review", verification: "verified", switch_status: "not_required",
+    fact_refs: [3]
+  }));
+});
+
 test("v1.1 AC-51/57/58/65: reviews preserve A→B→A return work and cannot close or wait around uncovered scopes", () => {
   const log = baseLog();
   append(log, coveragePlan());

@@ -172,6 +172,17 @@ test("v2 AC-18..28: instructions separate readiness, execution context, assistan
   ]) assert.equal(combined.includes(phrase), true, phrase);
 });
 
+test("permission recovery docs distinguish immutable topology from current state and gate affected scopes before business actions", async () => {
+  const [skill, workflow, , , artifact] = await sources();
+  for (const [source, phrases] of [
+    [skill, ["initial `permission_plan` as immutable topology", "current derived permission state", "pause only the affected scope"]],
+    [workflow, ["不可变的权限组—用例—检查点拓扑", "派生出的当前权限状态", "不得先操作后补凭证"]],
+    [artifact, ["不回写计划", "覆盖上下文和切换/批次审查必须查询该当前状态", "只暂停受影响范围"]]
+  ]) {
+    for (const phrase of phrases) assert.equal(source.includes(phrase), true, phrase);
+  }
+});
+
 test("v2 AC-33..41: workflow routes information gaps through fact-led exploration without fixed scenario branches", async () => {
   const [, workflow, resultModel, , artifact] = await sources();
   const combined = `${workflow}\n${resultModel}\n${artifact}`;
