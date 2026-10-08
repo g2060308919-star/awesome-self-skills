@@ -86,7 +86,7 @@ function normalizeInput(input) {
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
   const contract = v4ContractForIdentity(bundle);
-  const expectedKeys = [...(contract?.schema_version === '4.3.0'
+  const expectedKeys = [...(['4.3.0', '4.3.1'].includes(contract?.schema_version ?? '')
     ? GENERAL_QUALITY_BUNDLE_KEYS : BASE_BUNDLE_KEYS)].sort();
   const candidate = contract?.candidate === true;
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])
@@ -111,7 +111,7 @@ function normalizeInput(input) {
     'result_kind', 'ordered_case_ids', 'scope_manifest', 'cases', 'coverage',
     'semantic_root_groups', 'exploratory', 'not_applicable'
   ].map(key => [key, structuredClone(bundle[key])]));
-  if (contract.schema_version === '4.3.0') Object.assign(projection, {
+  if (['4.3.0', '4.3.1'].includes(contract.schema_version)) Object.assign(projection, {
     schema_version: bundle.schema_version,
     compiler_version: bundle.compiler_version,
     design_assurance_summary: structuredClone(bundle.design_assurance_summary),
@@ -247,7 +247,7 @@ async function resolveCaseDocument(ref, services) {
     || manifest.bundle.digest !== ref.bundle_digest
     || bundle.delivery_intent !== 'case_document' || bundle.source_revision !== ref.revision
     || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count
-    || (bundle.schema_version === '4.3.0'
+    || (['4.3.0', '4.3.1'].includes(bundle.schema_version)
       && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest)) {
     throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
   }
@@ -377,7 +377,7 @@ export function materializeCaseDocumentDeliveryV4(input) {
         path: `${prefix}/source-reading.json`, digest: byteDigest(sourceReadingBytes ?? ''), format: 'json'
       },
       primary_readable: 'html',
-      ...(canonicalBundle.schema_version === '4.3.0' ? {
+      ...(['4.3.0', '4.3.1'].includes(canonicalBundle.schema_version) ? {
         review_target_digest: canonicalBundle.independent_review_summary.review_target_digest
       } : {})
     } : {}),
@@ -490,7 +490,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateFinalRiskReview(normalized.bundle);
   if (normalized.bundle.source_revision !== manifest.revision
     || normalized.bundle.result_kind !== manifest.result_kind
-    || (normalized.bundle.schema_version === '4.3.0'
+    || (['4.3.0', '4.3.1'].includes(normalized.bundle.schema_version)
       && manifest.review_target_digest
         !== normalized.bundle.independent_review_summary.review_target_digest)
     || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({

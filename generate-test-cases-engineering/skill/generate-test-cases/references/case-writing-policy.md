@@ -95,7 +95,7 @@ Apply an explicit user priority policy when one exists. Otherwise use a stable f
 
 ## Complete the 4.3 source-first review in the same stage
 
-For schema `4.3.0`, `case_drafts.independent_review` is required. It is review
+For schema `4.3.0` or `4.3.1`, `case_drafts.independent_review` is required. It is review
 metadata inside the existing fourth artifact, not business evidence, a fifth
 truth ledger, or another workflow stage.
 

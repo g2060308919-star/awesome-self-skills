@@ -6,7 +6,7 @@ import {
   atomicWriteJson, readJsonIfPresent
 } from './run-store.mjs';
 import { v4ContractForIdentity } from './v4-contract.mjs';
-import { SOURCE_RUNTIME_REGISTRY_VERSION_V4 } from './source-runtime-registry-v4.mjs';
+import { sourceRuntimeRegistryVersionV4 } from './source-runtime-registry-v4.mjs';
 
 const CHANNELS = Object.freeze(['body', 'table', 'image', 'comment', 'reply']);
 const ENUMERATION = new Set(['exhausted', 'partial', 'unsupported', 'not_applicable']);
@@ -203,8 +203,8 @@ function bindSession(session, sourcePack) {
       throw new TypeError('SOURCE_COLLECTION_BINDING_INVALID');
     }
     const asset = item.asset_id === null ? null : sourcePack.source_assets.find((/** @type {any} */ value) =>
-      value.source_id === item.source_id && value.asset_id === item.asset_id && value.status === 'reviewed');
-    if (item.asset_id !== null && !asset) {
+      value.source_id === item.source_id && value.asset_id === item.asset_id);
+    if (item.asset_id !== null && (!asset || (item.acquisition_status === 'acquired' && asset.status !== 'reviewed'))) {
       throw new TypeError('SOURCE_COLLECTION_BINDING_INVALID');
     }
     if (item.acquisition_status === 'acquired'
@@ -275,7 +275,7 @@ export async function stageV4PrdCollectionObservation(
   const body = {
     schema_version: contract.schema_version,
     compiler_version: contract.compiler_version,
-    registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
+    registry_version: sourceRuntimeRegistryVersionV4(contract.schema_version),
     run_id: identity.run_id, source_revision: revision, collection_session: session
   };
   const candidate = { ...body, staging_digest: valueDigest(body) };
@@ -310,7 +310,7 @@ export async function bindV4PrdCollectionObservation(
   const body = {
     schema_version: contract.schema_version,
     compiler_version: contract.compiler_version,
-    registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
+    registry_version: sourceRuntimeRegistryVersionV4(contract.schema_version),
     run_id: sourcePack.run_instance_id, committed_revision: sourcePack.source_revision,
     status: 'collected', collection_sessions: [session], summary,
     source_material_digest: sourceMaterialDigest(sourcePack),

@@ -12,6 +12,10 @@ For offline attachments or pasted input, use `provided_materials` and only the s
 
 After the runner requests the first Source Pack, pass the validated request, closed channel/item observation, and exact raw/capture bytes to `stageV4PrdCollectionObservation`. The helper verifies bytes in memory and persists only safe digests and bindings. The采集技术记录不是业务事实、业务证据或业务权威; every acquired canonical unit must still be classified in `source_reviews`, and only accepted Claims or authorized Decisions may enter business truth. Collection, semantic interpretation, and business adoption are three different facts.
 
+Prepare each first Source with the installed `prepareV4Source({metadata, raw_response_bytes, capture_bytes, assets, acquisition, additional_units})`. The fields `raw_response_bytes` and `capture_bytes` are exact `Uint8Array` values from the collection, and may differ when the declared capture is extracted from a tool response. `assets` contains only actually fetched `{retrieval_uri, bytes}` pairs; keep signed retrieval URIs in memory. `additional_units` is empty until an image region or user statement has actually been reviewed under its existing contract. The helper returns a safe `source`, canonical `units`, `review_units` containing mechanical content digests, and safe collection digests. It does not classify any unit. Use each returned `unit_id` and coordinates in locators, including for non-normative retained units that topology discovery must consume, and set each `review_units` entry's `classification` after actual review. Then run `validateV4SourcePackBeforeStaging(sourcePack)` and stage only when its status is `valid`; this check also verifies that topology discovery can consume the reviewed source structure. The CLI still owns final acceptance. A failed local preparation is a diagnostic, not a compiler-issued request or resume reference.
+
+An unavailable image can be inventoried as a safe `source_assets` entry with status `unavailable` and a matching unavailable image observation. Stage the Source Pack with the original `source_pack` reply. The compiler may then issue a real `need_artifact` request from `source_assets`; use its exact request and `stageV4SourceAcquisitionAction` to provide bytes, then actually inspect the image before supplying `asset_review`. A signed URL is never a stable asset ID, and a refreshed signature alone does not imply changed content. Without a platform refresh route, use the advertised safe upload path or report the missing material. Explicit user authorization to exclude images changes only the declared collection scope and does not remove textual image-related business requirements. No authorization means an unavailable image remains unavailable, not excluded.
+
 ## Keep raw capture and semantic identity separate
 
 Every v4 Source retains both `capture_digest` and `semantic_digest`. `capture_digest` binds the raw captured bytes. `semantic_digest` is SHA-256 over canonical JSON of `semantic_projection`; it excludes run/revision/time/path/retrieval metadata and includes only stable source identity/type, normalized semantic content/structure, and stable assets.
@@ -21,6 +25,8 @@ Canonicalize in this order: strict UTF-8, remove BOM, convert newlines to LF, no
 Do not broadly strip queries. A credential-like query from an unregistered provider is quarantined and produces `need_artifact + UNSUPPORTED_SIGNED_URL_PROVIDER`; accepted JSON/logs/diagnostics keep only redacted stable host/path/resource identity. A signed retrieval URI exists only in short-lived acquisition context and is never a stable Source or asset identity.
 
 For a displayed source-acquisition action, use the installed `stageV4SourceAcquisitionAction` with the validated reply and the complete request set's exact material bytes, safe input records, and fully reviewed safe Source Pack. The helper derives event IDs, capture/semantic/asset digests and the resumed Source Pack before staging it. A signed retrieval URL must never be copied into the resumed Source Pack, staging JSON, a diagnostic, or any persisted input; only the short-lived resolver context may see it.
+
+The reply Schema accepts the compiler's `quality` diagnostic category for required independent review. This fixes reply validation only; it never waives or weakens the independent review gate.
 
 Every removed provider expiry notice enters `semantic_exclusions` with `capture_unit_id`, exact `capture_locator`, `capture_excerpt_digest`, `reason_code=provider_expiry_banner`, and `matcher_version`, all bound to the `capture_digest`. Raw retained and excluded Unicode-scalar ranges must be ordered, nonempty, nonoverlapping, and conserve every content-bearing range.
 
@@ -102,7 +108,7 @@ A final clarification replaces only the proposition and scope it answers. Preser
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
 
-For exact schema `4.3.0`, every semantic-gap input includes the closed
+For exact schema `4.3.0` or `4.3.1`, every semantic-gap input includes the closed
 `acceptance_impact` record described in `clarification-policy.md`. This record is
 analysis metadata, not E3 evidence and not a user answer. It participates in
 the semantic-root version, so changing its classification, criteria, or

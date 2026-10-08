@@ -14,6 +14,11 @@ const PROVIDER_CONTRACTS_V1 = Object.freeze([Object.freeze({
   kind: 'cooper', query_order: 'sensitive'
 })]);
 
+const PROVIDER_CONTRACTS_V2 = Object.freeze([Object.freeze({
+  ...PROVIDER_CONTRACTS_V1[0],
+  hosts: Object.freeze([...PROVIDER_CONTRACTS_V1[0].hosts, 's3-ep-inter.didistatic.com'])
+})]);
+
 const EXPIRY_MATCHERS_V1 = Object.freeze([Object.freeze({
   provider: 'cooper', provider_contract_version: '1',
   matcher_version: 'cooper-expiry-v1',
@@ -21,13 +26,22 @@ const EXPIRY_MATCHERS_V1 = Object.freeze([Object.freeze({
   suffix: ' 小时后过期</span>'
 })]);
 
-export const SOURCE_RUNTIME_REGISTRY_VERSION_V4 = 'source-runtime-v1';
+export const SOURCE_RUNTIME_REGISTRY_VERSION_V4 = 'source-runtime-v2';
+
+/** @param {string} schemaVersion */
+export function sourceRuntimeRegistryVersionV4(schemaVersion) {
+  if (schemaVersion === '4.3.1') return 'source-runtime-v2';
+  if (['4.0.0', '4.2.0', '4.3.0'].includes(schemaVersion)) return 'source-runtime-v1';
+  throw new TypeError('SOURCE_RUNTIME_SCHEMA_UNSUPPORTED');
+}
 
 /** Return fresh opaque registries backed only by the frozen compiler table. */
-export function createCompilerSourceRuntimeV4() {
+export function createCompilerSourceRuntimeV4(schemaVersion = '4.3.1') {
+  const registryVersion = sourceRuntimeRegistryVersionV4(schemaVersion);
   return {
-    registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
-    provider_registry: createSourceProviderRegistry([...PROVIDER_CONTRACTS_V1]),
+    registry_version: registryVersion,
+    provider_registry: createSourceProviderRegistry([...(registryVersion === 'source-runtime-v2'
+      ? PROVIDER_CONTRACTS_V2 : PROVIDER_CONTRACTS_V1)]),
     expiry_registry: createExpiryMatcherRegistry([...EXPIRY_MATCHERS_V1])
   };
 }

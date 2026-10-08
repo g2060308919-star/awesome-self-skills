@@ -22,11 +22,16 @@ For every recovery or resume, invoke the runner on the same absolute directory f
 Treat only compiler-accepted events in the recovered checkpoint as submitted. Preserve accepted answers whose exact root version and scope still apply, preserve every pending part, and leave staging-only attempts unaccepted. If the root version, affected scope, or current presentation changed, retain the older answer for audit but do not replay or silently rebind it. Never submit the same accepted answer again merely because conversation context was lost.
 
 Use the exact schema/compiler pair stored by the run. New runs use
-`4.3.0/0.8.0`; exact `4.0.0/0.5.0` and `4.2.0/0.7.0` recovery retains its
+`4.3.1/0.8.1`; exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, and `4.3.0/0.8.0` recovery retains its
 original validation and delivery semantics. Never add 4.3 design/review fields
 to an accepted older artifact, mix versions, or infer capability from a `v4`
 filename. An unsupported pair stops with a supported recovery path rather than
 being migrated in place.
+
+The Cooper attachment host contract belongs to `source-runtime-v2` in new
+`4.3.1` runs. An older run remains bound to `source-runtime-v1`; use its
+original compiler release for replay when its source acquisition requires
+that contract. Do not edit a frozen run to adopt the new host.
 
 ## Preserve append-only revisions
 

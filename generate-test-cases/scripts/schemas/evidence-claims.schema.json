@@ -14,7 +14,7 @@
         "3.0.0",
         "4.0.0",
         "4.2.0",
-        "4.3.0"
+        "4.3.0", "4.3.1"
       ]
     },
     "source_revision": {
@@ -92,7 +92,7 @@
           ],
           "properties": {
             "schema_version": {
-              "enum": ["4.0.0", "4.2.0", "4.3.0"]
+              "enum": ["4.0.0", "4.2.0", "4.3.0", "4.3.1"]
             },
             "claims": {
               "items": {
@@ -116,7 +116,7 @@
               },
               {
                 "properties": {
-                  "schema_version": { "const": "4.3.0" },
+                  "schema_version": { "enum": ["4.3.0", "4.3.1"] },
                   "semantic_gaps": { "items": { "required": ["acceptance_impact"] } }
                 }
               }

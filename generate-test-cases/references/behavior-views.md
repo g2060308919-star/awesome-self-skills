@@ -48,7 +48,7 @@ For v4 Case ordering, the Adapter later references compiler registry IDs or null
 
 ## Close the 4.3 design-assurance ledger
 
-For a `4.3.0` artifact, populate the Schema-defined `design_assurance` member of
+For a `4.3.0` or `4.3.1` artifact, populate the Schema-defined `design_assurance` member of
 the same `behavior_views` artifact. It is an auditable design record, not a
 business fact, evidence source, fifth artifact, or new stage. Use the exact
 closed branches in `behavior-views.schema.json`; do not infer fields from this

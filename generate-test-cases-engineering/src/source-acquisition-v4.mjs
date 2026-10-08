@@ -25,7 +25,7 @@ import {
   stagingPath
 } from './run-store.mjs';
 import {
-  createCompilerSourceRuntimeV4, SOURCE_RUNTIME_REGISTRY_VERSION_V4
+  createCompilerSourceRuntimeV4, sourceRuntimeRegistryVersionV4
 } from './source-runtime-registry-v4.mjs';
 import { isCandidateV4SchemaVersion } from './v4-contract.mjs';
 import {
@@ -170,7 +170,7 @@ function acquisitionSourceId(sourcePack, item) {
 /** No credential-bearing value is returned. @param {any} sourcePack @param {any} context
  * @param {any|null} [existing] */
 function discoverRequests(sourcePack, context, existing = null) {
-  const { provider_registry: registry } = createCompilerSourceRuntimeV4();
+  const { provider_registry: registry } = createCompilerSourceRuntimeV4(sourcePack.schema_version);
   /** @type {Array<{pointer:string,value:string,source_id:string}>} */
   const strings = [];
   collectStrings(sourcePack, '', 'source-pack', strings);
@@ -263,7 +263,7 @@ function validateStateShape(state) {
   const contract = v4ContractForIdentity(state);
   if (contract?.candidate && state.status === 'collected') {
     if (!only(state, collectionKeys)
-      || state.registry_version !== SOURCE_RUNTIME_REGISTRY_VERSION_V4
+      || state.registry_version !== sourceRuntimeRegistryVersionV4(state.schema_version)
       || typeof state.run_id !== 'string'
       || !Number.isSafeInteger(state.committed_revision) || state.committed_revision < 0
       || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1
@@ -279,7 +279,7 @@ function validateStateShape(state) {
     ? [...legacyKeys.slice(0, -1), 'collection_sessions', 'summary', 'state_digest']
     : legacyKeys;
   if (!only(state, keys) || !contract
-    || state.registry_version !== SOURCE_RUNTIME_REGISTRY_VERSION_V4
+    || state.registry_version !== sourceRuntimeRegistryVersionV4(state.schema_version)
     || typeof state.run_id !== 'string'
     || !Number.isSafeInteger(state.committed_revision) || state.committed_revision < 0
     || !Number.isSafeInteger(state.base_event_count) || state.base_event_count < 0
@@ -391,7 +391,7 @@ function sourceMetadata(source) {
  * function. @param {any} sourcePack @param {any[]} bindings
  * @param {any[]} events @param {Map<string,Uint8Array>} material */
 function verifyCandidateSources(sourcePack, bindings, events, material) {
-  const runtime = createCompilerSourceRuntimeV4();
+  const runtime = createCompilerSourceRuntimeV4(sourcePack.schema_version);
   const eventByRequest = new Map(events.map((/** @type {any} */ event) => [
     event.artifact_request_id, event
   ]));
@@ -484,7 +484,7 @@ function verifyCandidateSources(sourcePack, bindings, events, material) {
  * @param {Map<string,any>} eventByRequest @param {Map<string,Uint8Array>} material
  * @param {any} sourcePack */
 function compileResumedSource(source, sourceBindings, eventByRequest, material, sourcePack) {
-  const runtime = createCompilerSourceRuntimeV4();
+  const runtime = createCompilerSourceRuntimeV4(sourcePack.schema_version);
   const captureBindings = sourceBindings.filter((/** @type {any} */ item) => item.target === 'capture');
   /** @type {any} */
   let captureBytes = encoder.encode(source.semantic_projection.content);
@@ -601,7 +601,7 @@ export async function stageV4SourceAcquisitionAction(
       item => item.artifact_request_id === request.artifact_request_id
     ))) throw new TypeError('ARTIFACT_REQUEST_SET_INCOMPLETE');
 
-  const { provider_registry: registry } = createCompilerSourceRuntimeV4();
+  const { provider_registry: registry } = createCompilerSourceRuntimeV4(state.schema_version);
   const context = {
     run_id: state.run_id, committed_revision: state.committed_revision,
     checkpoint_bytes: encoder.encode(state.checkpoint_text),
@@ -695,7 +695,7 @@ export async function stageV4SourceAcquisitionAction(
 
 /** @param {any} state @param {any} candidate @param {string} runDirectory */
 async function acquireCandidate(state, candidate, runDirectory) {
-  const { provider_registry: registry } = createCompilerSourceRuntimeV4();
+  const { provider_registry: registry } = createCompilerSourceRuntimeV4(state.schema_version);
   const priorEvents = state.events;
   const submittedEvents = Array.isArray(candidate.artifact_events)
     ? candidate.artifact_events.slice(priorEvents.length) : [];
@@ -799,7 +799,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       && canonicalizeSourceCapture({
         stable_source_id: 'event-input', source_type: 'persisted-field',
         capture_bytes: encoder.encode(event.input.resource_id), assets: []
-      }, createCompilerSourceRuntimeV4().provider_registry).status === 'need_artifact'
+      }, createCompilerSourceRuntimeV4(sourcePack.schema_version).provider_registry).status === 'need_artifact'
   );
   if (unsafeEventInput) return { kind: 'rejected', code: 'ARTIFACT_INPUT_INVALID', discard_candidate: true };
   if (discovered.requests.length) {
@@ -827,7 +827,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
     ];
     const body = {
       schema_version: contract.schema_version, compiler_version: contract.compiler_version,
-      registry_version: SOURCE_RUNTIME_REGISTRY_VERSION_V4,
+      registry_version: sourceRuntimeRegistryVersionV4(sourcePack.schema_version),
       run_id: runId, committed_revision: revision, status: 'pending', checkpoint_text: checkpointText,
       checkpoint_created: checkpointCreated,
       artifact_requests: discovered.requests, resume_ref: resume, bindings: discovered.bindings,
@@ -934,7 +934,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     )) {
     throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
   }
-  const { provider_registry: registry } = createCompilerSourceRuntimeV4();
+  const { provider_registry: registry } = createCompilerSourceRuntimeV4(state.schema_version);
   const contextForEvent = (/** @type {any} */ event) => {
     const matches = state.request_history.filter((/** @type {any} */ cycle) =>
       cycle.artifact_requests.some((/** @type {any} */ request) =>

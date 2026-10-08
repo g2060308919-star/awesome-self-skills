@@ -3,10 +3,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import replySchema from '../../skill/generate-test-cases/scripts/schemas/reply.schema.json' with { type: 'json' };
 
 import { advanceStrict } from '../../src/advance-strict.mjs';
 import { constructIndependentReviewCompletionV4 } from '../../src/agent-action-adapter-v4.mjs';
 import { canonicalStringify } from '../../src/canonical.mjs';
+import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { stageV4PrdCollectionObservation } from '../../src/prd-source-collection-v4.mjs';
 import { createV4RunDirectory } from '../../src/run-bootstrap-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
@@ -84,7 +86,7 @@ test('AT23/AT24: strict runner retries a pending review without accepting it, th
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v43-independent-review-'));
   t.after(() => rm(catalog, { recursive: true, force: true }));
   const run = await createV4RunDirectory(catalog, 'case_document');
-  const fixture = v4GeneralQualityFixture();
+  const fixture = v4GeneralQualityFixture('4.3.1');
   fixture.artifacts.source_pack.run_instance_id = run.run_id;
   const baselineClaim = fixture.artifacts.evidence_claims.claims[0];
   baselineClaim.semantic_value.relative_baseline_assertions = [{
@@ -147,6 +149,9 @@ test('AT23/AT24: strict runner retries a pending review without accepting it, th
   const first = /** @type {any} */ (await advanceStrict(run.run_directory));
   assert.equal(first.status, 'need_revision', JSON.stringify(first));
   assert.equal(first.stage, 'case_drafts');
+  assert.deepEqual(validateAgainstSchema(first, replySchema), [], 'actual quality reply must satisfy distributed reply Schema');
+  assert.ok(validateAgainstSchema({ ...first, diagnostics: [{ ...first.diagnostics[0], category: 'unexpected' }] }, replySchema).length);
+  assert.ok(validateAgainstSchema({ ...first, unexpected: true }, replySchema).length);
   assert.ok(first.review_request, JSON.stringify(first));
   assert.equal(first.review_request.review_target_projection.cases[0].steps.length, 4);
   await assert.rejects(

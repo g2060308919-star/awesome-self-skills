@@ -73,8 +73,8 @@ function bindFixtureContract(fixture, schemaVersion) {
   for (const artifact of Object.values(fixture.artifacts)) {
     artifact.schema_version = schemaVersion;
   }
-  if (schemaVersion !== '4.3.0') return fixture;
-  const bound = bindGeneralQualityFixture(fixture);
+  if (!['4.3.0', '4.3.1'].includes(schemaVersion)) return fixture;
+  const bound = bindGeneralQualityFixture(fixture, schemaVersion);
   const completed = bound.artifacts.case_drafts.independent_review;
   bound.artifacts.case_drafts.independent_review = {
     protocol_version: completed.protocol_version,
@@ -94,7 +94,7 @@ async function stageCandidateCollection(installed, directory, reply, fixture) {
   const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
   const schemaVersion = identity.schema_version;
   bindFixtureContract(fixture, schemaVersion);
-  if (!['4.2.0', '4.3.0'].includes(schemaVersion)) return schemaVersion;
+  if (!['4.2.0', '4.3.0', '4.3.1'].includes(schemaVersion)) return schemaVersion;
   const source = fixture.artifacts.source_pack.sources[0];
   const bytes = new TextEncoder().encode(source.content);
   await installed.stageV4PrdCollectionObservation(directory, reply, {
@@ -208,7 +208,7 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
 /** @param {string} runId @param {any} caseDocumentRef @param {any[]} events @param {number} revision */
 function executionSourcePack(runId, caseDocumentRef, events, revision) {
   return {
-    schema_version: '4.3.0', source_revision: revision, run_instance_id: runId,
+    schema_version: '4.3.1', source_revision: revision, run_instance_id: runId,
     run_scope: `execution:${caseDocumentRef.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: structuredClone(caseDocumentRef), output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },

@@ -56,7 +56,7 @@ function observation(status = 'exhausted') {
 /** @param {string} runId @param {string} [sourceVersion] */
 function sourcePack(runId, sourceVersion = '17') {
   return {
-    schema_version: '4.3.0', source_revision: 0, run_instance_id: runId,
+    schema_version: '4.3.1', source_revision: 0, run_instance_id: runId,
     sources: [
       { source_id: 'SRC-prd', version: sourceVersion, capture_digest: byteDigest(CAPTURE.body), semantic_projection: { structure: [{ unit_id: 'UNIT-body' }, { unit_id: 'UNIT-image' }] } },
       { source_id: 'SRC-thread', version: sourceVersion, capture_digest: byteDigest(CAPTURE.comment), semantic_projection: { structure: [{ unit_id: 'UNIT-comment' }, { unit_id: 'UNIT-reply' }] } }
@@ -82,8 +82,8 @@ async function setup() {
 test('D2 new bootstrap uses general-quality identity while an existing legacy identity remains legacy', async () => {
   const { run } = await setup();
   const identity = JSON.parse(await readFile(path.join(run.run_directory, 'run-instance.json'), 'utf8'));
-  assert.equal(identity.schema_version, '4.3.0');
-  assert.equal(identity.compiler_version, '0.8.0');
+  assert.equal(identity.schema_version, '4.3.1');
+  assert.equal(identity.compiler_version, '0.8.1');
 });
 
 test('A01/A02 collection stages actual body/image/comment/reply bytes and binds reviewed source units', async () => {
@@ -126,6 +126,60 @@ test('A04/A06 partial pagination remains incomplete and source version changes c
     collection.bindV4PrdCollectionObservation(changed.run.run_directory, sourcePack(changed.run.run_id, '18')),
     /SOURCE_COLLECTION_VERSION_CHANGED/u
   );
+});
+
+test('unavailable image reasons stay distinct and cannot become reviewed coverage', async () => {
+  for (const reason of [
+    'IMAGE_ACCESS_DENIED', 'IMAGE_RESOURCE_DELETED', 'IMAGE_NETWORK_FAILURE',
+    'IMAGE_SIGNED_LINK_EXPIRED_NO_REFRESH'
+  ]) {
+    const { run, reply } = await setup();
+    const value = /** @type {any} */ (observation());
+    const image = value.items.find((/** @type {any} */ item) => item.item_id === 'image');
+    image.acquisition_status = 'unavailable';
+    image.review_status = 'unread';
+    image.unavailable_reason = reason;
+    image.unit_ids = [];
+    await collection.stageV4PrdCollectionObservation(
+      run.run_directory, reply, value, materialFor(value).filter(item => item.item_id !== 'image')
+    );
+    const pack = sourcePack(run.run_id);
+    pack.source_assets[0].status = 'unavailable';
+    pack.sources[0].semantic_projection.structure = [{ unit_id: 'UNIT-body' }];
+    pack.source_reviews[0].units = pack.source_reviews[0].units.filter(
+      (/** @type {any} */ unit) => unit.unit_id === 'UNIT-body'
+    );
+    const bound = await collection.bindV4PrdCollectionObservation(run.run_directory, pack);
+    assert.equal(bound.summary.status, 'incomplete');
+    assert.ok(bound.summary.limitations.includes(reason));
+    assert.equal(bound.summary.items.find((/** @type {any} */ item) => item.item_id === 'image').review_status, 'unread');
+    assert.equal(pack.source_reviews[0].units.some((/** @type {any} */ unit) => unit.unit_id === 'UNIT-image'), false);
+  }
+});
+
+test('an explicitly text-only supplied scope keeps an image-field rule in the body', async () => {
+  const { run, reply } = await setup();
+  const value = /** @type {any} */ (observation());
+  value.scope.mode = 'provided_materials';
+  value.scope.root_ref = 'provided:user-authorized-text-only';
+  value.channels.find((/** @type {any} */ item) => item.channel === 'image').enumeration_status = 'not_applicable';
+  value.channels.find((/** @type {any} */ item) => item.channel === 'image').page_count = 0;
+  value.channels.find((/** @type {any} */ item) => item.channel === 'image').terminal_page_observed = false;
+  value.items = value.items.filter((/** @type {any} */ item) => item.item_id !== 'image');
+  const pack = /** @type {any} */ (sourcePack(run.run_id));
+  pack.run_scope = 'User authorized supplied text only; illustration coverage excluded';
+  pack.sources[0].content = '评论图片映射到封面图';
+  pack.sources[0].semantic_projection.structure = [{ unit_id: 'UNIT-body' }];
+  pack.source_assets = [];
+  pack.source_reviews[0].units = pack.source_reviews[0].units.filter(
+    (/** @type {any} */ item) => item.unit_id === 'UNIT-body'
+  );
+  await collection.stageV4PrdCollectionObservation(run.run_directory, reply, value, materialFor(value));
+  const bound = await collection.bindV4PrdCollectionObservation(run.run_directory, pack);
+  assert.equal(bound.summary.status, 'complete_within_scope');
+  assert.equal(pack.sources[0].content, '评论图片映射到封面图');
+  assert.equal(bound.collection_sessions[0].scope.mode, 'provided_materials');
+  assert.equal(bound.collection_sessions[0].channels.find((/** @type {any} */ item) => item.channel === 'image').enumeration_status, 'not_applicable');
 });
 
 test('A06 duplicate identities with changed bytes and stale runner bindings fail closed', async () => {

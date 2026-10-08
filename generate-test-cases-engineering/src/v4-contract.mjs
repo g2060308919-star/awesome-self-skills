@@ -11,12 +11,18 @@ export const GENERAL_QUALITY_V4_CONTRACT = Object.freeze({
   strict_semantic_delivery: true
 });
 
+export const SOURCE_RELIABILITY_V4_CONTRACT = Object.freeze({
+  schema_version: '4.3.1', compiler_version: '0.8.1', candidate: true,
+  strict_semantic_delivery: true
+});
+
 const CONTRACTS = Object.freeze([
-  LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, GENERAL_QUALITY_V4_CONTRACT
+  LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, GENERAL_QUALITY_V4_CONTRACT,
+  SOURCE_RELIABILITY_V4_CONTRACT
 ]);
 
 export function latestV4Contract() {
-  return GENERAL_QUALITY_V4_CONTRACT;
+  return SOURCE_RELIABILITY_V4_CONTRACT;
 }
 
 /** @param {unknown} schemaVersion */
@@ -49,7 +55,7 @@ export function isCandidateV4SchemaVersion(schemaVersion) {
 
 /** @param {unknown} value */
 export function isGeneralQualityV4Contract(value) {
-  return v4ContractForIdentity(value) === GENERAL_QUALITY_V4_CONTRACT;
+  return ['4.3.0', '4.3.1'].includes(v4ContractForIdentity(value)?.schema_version ?? '');
 }
 
 /** @param {unknown} value */

@@ -24,8 +24,8 @@ function behaviorEvidence(fixture) {
 }
 
 /** @param {any} fixture */
-export function bindGeneralQualityFixture(fixture) {
-  for (const artifact of Object.values(fixture.artifacts)) artifact.schema_version = '4.3.0';
+export function bindGeneralQualityFixture(fixture, schemaVersion = '4.3.0') {
+  for (const artifact of Object.values(fixture.artifacts)) artifact.schema_version = schemaVersion;
   const behavior = fixture.artifacts.behavior_views;
   const entries = behavior.views.flatMap((/** @type {any} */ view) => view.elements.map((/** @type {any} */ element) => ({
     view, element,
@@ -115,6 +115,6 @@ export function bindGeneralQualityFixture(fixture) {
 }
 
 /** A minimal valid 4.3 four-artifact revision. Later slices extend it in place. */
-export function v4GeneralQualityFixture() {
-  return bindGeneralQualityFixture(v4PipelineFixture());
+export function v4GeneralQualityFixture(schemaVersion = '4.3.0') {
+  return bindGeneralQualityFixture(v4PipelineFixture(), schemaVersion);
 }

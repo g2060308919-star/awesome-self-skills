@@ -32,7 +32,7 @@ Converge without erasing uncertainty: preserve accepted answers, keep explicit u
 
 When the user explicitly adopts a recommendation, use `constructV4Action` only if the latest validated compiler presentation contains the exact current semantic-gap question and action binding for that recommendation and scope. If no such binding exists, do not attach the answer to a similar root or forge an event. Treat the explicitly scoped adopted rule as newly authoritative user input and use the existing source-change/new-run path; if the public interface cannot express that path, stop the affected item and report the compatibility limitation without weakening the rule or silently restarting.
 
-For schema `4.3.0`, every in-scope semantic gap also carries the exact closed
+For schema `4.3.0` or `4.3.1`, every in-scope semantic gap also carries the exact closed
 `acceptance_impact` shape from `evidence-claims.schema.json`. Classify it
 `critical` only when an answer changes core acceptance, a required branch, or
 makes a required result undecidable; cite one or more corresponding criteria.

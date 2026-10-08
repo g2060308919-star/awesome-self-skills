@@ -32,7 +32,7 @@ below. The separately retained single-system release benchmark is not a v4
 development prerequisite and makes no comparator-superiority, external-expert,
 or platform-signed Agent identity claim.
 
-## v4 architecture (latest compiler 0.8.0 / schema 4.3.0)
+## v4 architecture (latest compiler 0.8.1 / schema 4.3.1)
 
 The v4 development track keeps one private module entry point, `advanceStrict(absoluteRunDirectory)`, and exactly four Agent-writable artifacts:
 
@@ -50,7 +50,7 @@ canonical Source → Evidence/Fact/Scope → pre-case clarification
 → canonical JSON + HTML + full Table + compatibility Markdown/CSV
 ```
 
-The exact `4.3.0/0.8.0` pair is a candidate contract. It requires auditable
+The exact `4.3.1/0.8.1` pair retains the general-quality candidate contract. It requires auditable
 candidate responsibility/disposition, acceptance-impact classification for
 semantic gaps, a final critical-semantic delivery gate, and a content-bound
 independent review. The review reuses `case_drafts`: a valid pending submission
@@ -58,7 +58,7 @@ causes the compiler to issue the authoritative target inventory and digest, and
 a completed submission repeats the same generated content with an assessment
 bound to that digest. It is not a fifth artifact or public stage.
 
-Exact `4.0.0/0.5.0` and `4.2.0/0.7.0` runs keep their original contracts and
+Exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, and `4.3.0/0.8.0` runs keep their original contracts and
 bytes. Mixed or unknown version pairs fail closed; old runs are never silently
 backfilled with 4.3 metadata.
 
@@ -90,13 +90,54 @@ it never auto-completes a review. See the shipped Evidence Policy for the closed
 authorization and review contracts. These helpers construct candidates only:
 source authority, active revision and acceptance still belong to the runner.
 
-This interface addition is a development candidate under the existing
-`4.3.0/0.8.0` artifact contract, not a schema-version change. The schema manifest
-does not hash compiler code; record the actual bundle SHA-256 and Git commit
-alongside review evidence, and check both new exports when identifying a
-candidate installation. The closed `behavior_assertions` Claim input is now
-documented and validated at the Evidence stage for `4.3.0`; legacy `4.0.0` and
-`4.2.0` filtering remains unchanged.
+This topology interface was introduced under the `4.3.0/0.8.0` artifact
+contract and remains available in `4.3.1/0.8.1`. The schema manifest does not
+hash compiler code; record the actual bundle SHA-256 and Git commit alongside
+review evidence. The closed `behavior_assertions` Claim input is documented
+and validated at the Evidence stage for `4.3.0` and `4.3.1`; legacy `4.0.0`
+and `4.2.0` filtering remains unchanged.
+
+For first collection, `prepareV4Source({metadata, raw_response_bytes,
+capture_bytes, assets, acquisition, additional_units})` returns a canonical
+Source, exact structural units, review-unit digests, and safe collection digests.
+The caller supplies actual raw/capture bytes and only acquired asset bytes;
+the caller still reviews each unit and image. Before staging a complete Source
+Pack, `validateV4SourcePackBeforeStaging(sourcePack)` checks its Schema,
+canonical structure, reviews, and locator coordinates. Neither helper writes
+the run or issues a recovery request. An unavailable safe asset reference can
+enter the existing `source_assets` request route after the initial CLI reply;
+only the CLI's `need_artifact` reply authorizes `stageV4SourceAcquisitionAction`.
+
+For example, from a caller next to the installed `scripts/` directory:
+
+```js
+import {
+  prepareV4Source, validateV4SourcePackBeforeStaging
+} from './scripts/test-compiler.mjs';
+
+const prepared = prepareV4Source({
+  metadata: { source_id: 'SRC-provided', kind: 'prd', version: '1',
+    status: 'effective', authority: 'user supplied', domain: 'business' },
+  raw_response_bytes: new TextEncoder().encode('订单系统提交后显示成功'),
+  capture_bytes: new TextEncoder().encode('订单系统提交后显示成功'),
+  assets: [], acquisition: {}, additional_units: []
+});
+if (prepared.status !== 'prepared') throw new Error('Review preparation diagnostics');
+const unit = prepared.units[0]; // Use unit.unit_id and unit.section_id in the locator.
+const review = prepared.review_units[0]; // Add classification only after reading unit.text.
+// Insert prepared.source, completed reviews, and locators into the requested Source Pack.
+// Both checks are local; submit the pack to the CLI only after they succeed.
+function checkReviewedPack(sourcePack) {
+  const checked = validateV4SourcePackBeforeStaging(sourcePack);
+  if (checked.status !== 'valid') throw new Error('Repair Source Pack');
+  return sourcePack;
+}
+```
+
+Here `sourcePack` is the complete candidate assembled under the CLI's initial
+`source_pack` request; `unit` and `review` illustrate the compiler-issued
+structural ID and content digest. The example leaves the semantic classification
+and Source Pack assembly to the caller's actual review.
 
 To continue a cancelled run, call the same ordinary create helper with
 `{ parent_run_id, creation_reason: 'resume_cancelled' }` as its second argument.

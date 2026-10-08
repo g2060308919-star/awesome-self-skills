@@ -81,7 +81,7 @@ function compare(left, right) {
 
 /** @param {any} pack */
 function sourceSystem(pack) {
-  const { provider_registry, expiry_registry } = createCompilerSourceRuntimeV4();
+  const { provider_registry, expiry_registry } = createCompilerSourceRuntimeV4(pack.schema_version);
   return { provider_registry, expiry_registry };
 }
 
