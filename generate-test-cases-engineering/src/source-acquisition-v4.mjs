@@ -16,7 +16,7 @@ import {
   validateProvideArtifactEvent
 } from './source-events.mjs';
 import {
-  compileAuditedSource, sourceAcquisitionIdentityDigestV4
+  compileAuditedSource, persistableSourceValues, sourceAcquisitionIdentityDigestV4
 } from './source-compiler-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
 import { createNeedArtifactReplyV4 } from './stop-replies-v4.mjs';
@@ -56,6 +56,63 @@ const compare = (left, right) => left < right ? -1 : left > right ? 1 : 0;
 /** @param {string} runDirectory */
 export function sourceAcquisitionStatePathV4(runDirectory) {
   return path.join(runDirectory, 'derived', 'source-acquisition.json');
+}
+
+/** Compiler-owned immutable snapshot of the safe candidate that produced an
+ * acquired receipt. A prior implementation's acquired state without this
+ * snapshot cannot authorize a changed same-revision semantic candidate. */
+/** @param {string} runDirectory @param {number} revision */
+export function sourceAcquisitionBasePathV4(runDirectory, revision) {
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+  return path.join(runDirectory, 'derived', `source-acquisition-base-r${String(revision).padStart(3, '0')}.json`);
+}
+
+/** @param {string} runDirectory @param {any} state */
+async function acquiredBase(runDirectory, state) {
+  if (state.schema_version !== '4.3.2') return null;
+  const stored = await readJsonIfPresent(
+    runDirectory, sourceAcquisitionBasePathV4(runDirectory, state.committed_revision)
+  );
+  const base = stored?.value;
+  if (!base || stored.digest !== state.accepted_source_pack_digest.slice(7)
+    || base.run_instance_id !== state.run_id
+    || base.source_revision !== state.committed_revision
+    || !Array.isArray(base.artifact_events)
+    || canonicalStringify(base.artifact_events) !== canonicalStringify(state.events)
+    || state.source_receipts.some((/** @type {any} */ receipt) => {
+      const source = base.sources?.find((/** @type {any} */ item) => item.source_id === receipt.source_id);
+      return !source || sourceAcquisitionIdentityDigestV4(source) !== receipt.source_artifact_digest
+        || source.capture_digest !== receipt.capture_digest
+        || source.semantic_digest !== receipt.semantic_digest;
+    })) throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+  return base;
+}
+
+/** Only semantic projections, their locators/reviews, and compiler-owned
+ * decisions can differ from the acquisition base. The normal semantic gate
+ * still decides whether those changes are valid business answers. */
+/** @param {any} base @param {any} candidate */
+function acquiredCandidateMatchesBase(base, candidate) {
+  if (!Array.isArray(base?.sources) || !Array.isArray(candidate?.sources)
+    || !Array.isArray(base?.locators) || !Array.isArray(candidate?.locators)) return false;
+  const before = structuredClone(base); const after = structuredClone(candidate);
+  for (const value of [before, after]) {
+    delete value.sources; delete value.locators; delete value.source_reviews;
+    delete value.decision_records;
+  }
+  return canonicalStringify(before) === canonicalStringify(after)
+    && base.sources.length === candidate.sources.length
+    && base.sources.every((/** @type {any} */ source, /** @type {number} */ index) =>
+      source.source_id === candidate.sources[index]?.source_id
+      && sourceAcquisitionIdentityDigestV4(source)
+        === sourceAcquisitionIdentityDigestV4(candidate.sources[index]))
+    && base.locators.every((/** @type {any} */ locator) => {
+      const next = candidate.locators.find((/** @type {any} */ item) => item.locator_id === locator.locator_id);
+      if (!next) return false;
+      const old = structuredClone(locator); const current = structuredClone(next);
+      delete old.semantic_digest; delete current.semantic_digest;
+      return canonicalStringify(old) === canonicalStringify(current);
+    });
 }
 
 /** Private Adapter material seam. It is not a fifth semantic artifact. */
@@ -757,6 +814,9 @@ async function acquireCandidate(state, candidate, runDirectory) {
   const currentReceipts = verifyCandidateSources(
     candidate, state.bindings, submittedEvents, material, state.collection_sessions
   );
+  if (!persistableSourceValues(candidate, registry)) {
+    throw new TypeError('SOURCE_UNSAFE_PERSISTED_VALUE');
+  }
   const currentAcquisitions = submittedEvents.map((/** @type {any} */ event) => acceptProvidedArtifact(
     context, event, material.get(event.artifact_request_id), registry
   ));
@@ -786,6 +846,18 @@ async function acquireCandidate(state, candidate, runDirectory) {
     } : {})
   };
   const acquired = { ...body, state_digest: hash(body) };
+  if (state.schema_version === '4.3.2') {
+    const basePath = sourceAcquisitionBasePathV4(runDirectory, state.committed_revision);
+    const previous = await readJsonIfPresent(runDirectory, basePath);
+    if (previous && previous.digest !== digest(candidate)) {
+      throw new TypeError('SOURCE_ACQUISITION_BASE_CONFLICT');
+    }
+    if (!previous) await atomicWriteJson(runDirectory, basePath, candidate);
+    const verifiedBase = await readJsonIfPresent(runDirectory, basePath);
+    if (!verifiedBase || verifiedBase.digest !== digest(candidate)) {
+      throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+    }
+  }
   await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), acquired);
   // Raw resolver/upload bytes remain staging-only and are removed immediately
   // after the safe digest receipt is durably committed.
@@ -822,7 +894,28 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
   const context = { run_id: runId, committed_revision: revision, checkpoint_bytes: encoder.encode(checkpointText) };
   const continuingPending = existing?.status === 'pending'
     && existing.run_id === runId && existing.committed_revision === revision;
-  const discovered = discoverRequests(sourcePack, context, continuingPending ? existing : null);
+  const sameRevisionAcquired = existing?.status === 'acquired'
+    && existing.schema_version === '4.3.2'
+    && existing.run_id === runId && existing.committed_revision === revision;
+  if (sameRevisionAcquired) {
+    const { provider_registry: registry } = createCompilerSourceRuntimeV4(sourcePack.schema_version);
+    if (!persistableSourceValues(sourcePack, registry)) {
+      return { kind: 'rejected', code: 'SOURCE_UNSAFE_PERSISTED_VALUE', discard_candidate: true };
+    }
+    const base = await acquiredBase(runDirectory, existing);
+    const currentCheckpoint = await readTextIfPresent(
+      runDirectory, path.join(runDirectory, 'checkpoint.json')
+    );
+    if (currentCheckpoint !== (existing.checkpoint_created ? null : existing.checkpoint_text)) {
+      throw new TypeError('ARTIFACT_RESUME_STALE');
+    }
+    if (!acquiredCandidateMatchesBase(base, sourcePack)) {
+      return { kind: 'rejected', code: 'ARTIFACT_RESUME_STALE' };
+    }
+  }
+  const discovered = discoverRequests(
+    sourcePack, context, continuingPending || sameRevisionAcquired ? existing : null
+  );
   const unsafeEventInput = sourcePack.artifact_events?.some((/** @type {any} */ event) =>
     event?.input?.kind === 'stable_resource_id'
       && canonicalizeSourceCapture({
@@ -900,6 +993,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
   }
   if (existing.status === 'acquired') {
     if (existing.committed_revision === revision
+      && existing.schema_version !== '4.3.2'
       && existing.accepted_source_pack_digest !== hash(sourcePack)) {
       return { kind: 'rejected', code: 'ARTIFACT_IDEMPOTENCY_CONFLICT' };
     }
@@ -959,6 +1053,11 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     };
   }
   const packEvents = Array.isArray(sourcePack?.artifact_events) ? sourcePack.artifact_events : [];
+  const base = state.status === 'acquired' ? await acquiredBase(runDirectory, state) : null;
+  if (base && state.committed_revision === sourcePack?.source_revision
+    && !acquiredCandidateMatchesBase(base, sourcePack)) {
+    throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+  }
   if (state.status !== 'acquired'
     || !Number.isSafeInteger(sourcePack?.source_revision)
     || sourcePack.source_revision < state.committed_revision
@@ -997,10 +1096,11 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
   }
   for (const receipt of state.source_receipts) {
     const source = sourcePack.sources.find((/** @type {any} */ item) => item.source_id === receipt.source_id);
+    const baseSource = base?.sources.find((/** @type {any} */ item) => item.source_id === receipt.source_id);
     if (!source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source)
       || receipt.capture_digest !== source.capture_digest
       || (state.committed_revision === sourcePack.source_revision
-        && receipt.semantic_digest !== source.semantic_digest)
+        && receipt.semantic_digest !== (baseSource ?? source).semantic_digest)
       || receipt.artifact_event_ids.some((/** @type {string} */ eventId) =>
         !state.events.some((/** @type {any} */ event) => event.event_id === eventId)
       )) throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');

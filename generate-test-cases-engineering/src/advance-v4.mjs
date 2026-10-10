@@ -9,6 +9,7 @@ import {
   validateSemanticClarificationCheckpointV4
 } from './clarification.mjs';
 import { canonicalStringify, digest } from './canonical.mjs';
+import { appendedRepair, repairDiagnostics } from './artifact-repair.mjs';
 import {
   finalAuthorityWarningV4, normalizeDecisionMessageV4
 } from './decision-record.mjs';
@@ -18,7 +19,7 @@ import {
   cancelRunV4WithHeldLock, constructCancelRunEventV4,
   replayCancelledRunV4WithHeldLock
 } from './run-cancellation-v4.mjs';
-import { compileCaseDocumentRevisionV4 } from './v4-pipeline.mjs';
+import { compileCaseDocumentRevisionV4, compilePreCaseArtifactsV4 } from './v4-pipeline.mjs';
 import { deriveV4PreCaseSystemContext, deriveV4SystemContext } from './v4-system-context.mjs';
 import {
   advanceSourceAcquisitionV4, loadSourceAcquisitionCompilerStateV4,
@@ -748,6 +749,125 @@ async function consumeSemanticAcquisitionCancellation(
   }
 }
 
+/** Consume only an Evidence generation repair. This dispatch happens before
+ * clarification and before any completed delivery is replayed.
+ * @param {string} runDirectory @param {any} registry @param {Record<string,any>} artifacts
+ * @param {number} revision @param {string} runId @param {unknown} lockOwnership */
+async function consumeEvidenceRepair(
+  runDirectory, registry, artifacts, revision, runId, lockOwnership
+) {
+  if (!artifacts.source_pack || !artifacts.evidence_claims) return { kind: 'none' };
+  if (artifacts.source_pack.schema_version !== '4.3.2') return { kind: 'none' };
+  const candidate = await stagedArtifact(runDirectory, 'source_pack');
+  if (!candidate) return { kind: 'none' };
+  if (candidate.parse_diagnostics.length) return {
+    kind: 'reply', reply: revisionReply(
+      runDirectory, 'source_pack', revision + 1, candidate.value,
+      candidate.parse_diagnostics, runId
+    )
+  };
+  const prior = artifacts.source_pack;
+  const proposedRepairs = candidate.value?.artifact_repairs;
+  const repairChanged = Object.hasOwn(candidate.value ?? {}, 'artifact_repairs')
+    && !same(proposedRepairs, prior.artifact_repairs ?? []);
+  const evidenceRepair = appendedRepair(prior, candidate.value)?.stage === 'evidence_claims'
+    || (repairChanged && (!Array.isArray(proposedRepairs)
+      || proposedRepairs.some((/** @type {any} */ repair) => repair?.stage === 'evidence_claims')));
+  if (!evidenceRepair) {
+    // The previous commit may have completed before staging cleanup.
+    if (candidate.value?.source_revision === revision && same(candidate.value, prior)) {
+      await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+      const stagedEvidence = await stagedArtifact(runDirectory, 'evidence_claims');
+      if (stagedEvidence && stagedEvidence.value?.source_revision === revision
+        && same(stagedEvidence.value, artifacts.evidence_claims)) {
+        await discardStagingSnapshot(runDirectory, 'evidence_claims', stagedEvidence);
+      }
+    }
+    return { kind: 'none' };
+  }
+  const reject = (/** @type {typeof STAGES[number]} */ stage, /** @type {any} */ value, /** @type {any[]} */ issues) => ({
+    kind: 'reply', reply: revisionReply(runDirectory, stage, revision + 1, value, issues, runId)
+  });
+  const sourceIssues = candidate.parse_diagnostics.length
+    ? candidate.parse_diagnostics
+    : diagnostics(candidate.value, registry.schemas.get(AGENT_STAGE_SCHEMA.source_pack));
+  if (sourceIssues.length) return reject('source_pack', candidate.value, sourceIssues);
+  const source = candidate.value;
+  if (source.run_instance_id !== runId || source.source_revision !== revision + 1) return reject(
+    'source_pack', source, [{ category: 'traceability', code: 'SOURCE_REVISION_MISMATCH',
+      path: '/source_revision', message: 'Evidence repair must bind this run and the next revision.' }]
+  );
+  const repairIssues = repairDiagnostics({ source_pack: prior, artifacts }, source);
+  if (repairIssues.length) return reject('source_pack', source, repairIssues);
+  if (appendedRepair(prior, source)?.stage !== 'evidence_claims') return reject(
+    'source_pack', source, [{ category: 'traceability', code: 'ARTIFACT_REPAIR_INVALID',
+      path: '/artifact_repairs', message: 'Exactly one Evidence repair must be appended.' }]
+  );
+  const stablePrior = structuredClone(prior); const stableNext = structuredClone(source);
+  delete stablePrior.source_revision; delete stableNext.source_revision;
+  delete stablePrior.artifact_repairs; delete stableNext.artifact_repairs;
+  if (!same(stablePrior, stableNext)) return reject('source_pack', source, [{
+    category: 'traceability', code: 'V4_SOURCE_APPEND_IMMUTABLE_CHANGED', path: '/',
+    message: 'An Evidence repair must preserve the complete accepted Source Pack except revision and repair history.'
+  }]);
+  const stagedEvidence = await stagedArtifact(runDirectory, 'evidence_claims');
+  if (!stagedEvidence) return {
+    kind: 'reply', reply: artifactRequest(runDirectory, 'evidence_claims', revision + 1, runId)
+  };
+  const evidenceIssues = stagedEvidence.parse_diagnostics.length
+    ? stagedEvidence.parse_diagnostics
+    : diagnostics(stagedEvidence.value, registry.schemas.get(AGENT_STAGE_SCHEMA.evidence_claims));
+  if (evidenceIssues.length) return reject('evidence_claims', stagedEvidence.value, evidenceIssues);
+  const evidence = stagedEvidence.value;
+  if (evidence.schema_version !== source.schema_version || evidence.source_revision !== revision + 1) return reject(
+    'evidence_claims', evidence, [{ category: 'traceability', code: 'SOURCE_REVISION_MISMATCH',
+      path: '/source_revision', message: 'Repaired Evidence must bind the candidate Source revision.' }]
+  );
+  let system;
+  try { system = await preCaseSystem(runDirectory, source, evidence); }
+  catch (error) { return reject('source_pack', source, [{
+    category: 'traceability', code: error instanceof Error ? error.message : 'V4_PRE_CASE_CONTEXT_INVALID',
+    path: '/', message: 'Evidence repair cannot reproduce the compiler-owned source context.'
+  }]); }
+  const gate = compilePreCaseArtifactsV4({ source_pack: source, evidence_claims: evidence }, system);
+  if (gate.status === 'need_revision') return reject(resultStage(gate),
+    resultStage(gate) === 'source_pack' ? source : evidence, gate.diagnostics ?? []);
+  if (!['pre_case_ready', 'need_user_answers'].includes(gate.status)) return {
+    kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
+      gate.reason_code ?? 'V4_PRE_CASE_QUALITY_FAILURE',
+      gate.diagnostics?.[0]?.message ?? 'The repaired Evidence failed the pre-case quality gate.')
+  };
+  let priorCheckpoint; let clarification;
+  try {
+    priorCheckpoint = await committedSemanticCheckpoint(runDirectory, runId, revision);
+    clarification = compilePreCaseClarification(
+      source, evidence, runId, priorCheckpoint.value, new TextEncoder().encode(priorCheckpoint.text)
+    );
+  } catch (error) { return {
+    kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
+      error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
+      'Repaired Evidence cannot form a recoverable pre-case checkpoint.')
+  }; }
+  try {
+    await commitRevisionTransactionV4WithHeldLock(
+      runDirectory, preCaseTransaction(runId, source, evidence, clarification.checkpoint, revision),
+      lockOwnership
+    );
+    await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+    await discardStagingSnapshot(runDirectory, 'evidence_claims', stagedEvidence);
+  } catch (error) { return {
+    kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
+      error instanceof Error ? error.message : 'V4_REVISION_TRANSACTION_FAILED',
+      'Evidence repair revision did not commit atomically.')
+  }; }
+  if (clarification.presentation) return {
+    kind: 'reply', reply: semanticQuestionReply(runId, clarification.presentation)
+  };
+  return { kind: 'advanced', revision: revision + 1,
+    artifacts: { source_pack: source, evidence_claims: evidence },
+    checkpoint: clarification.checkpoint };
+}
+
 /** Consume one append-only clarification revision before replaying the prior
  * presentation. Returning `advanced` means the new committed revision has no
  * remaining pre-case question and the caller should request Behavior Views.
@@ -1473,7 +1593,12 @@ export async function advanceStrictV4Locked(
       error instanceof Error ? error.message : 'Accepted v4 artifacts failed deterministic replay.');
   }
 
-  if (Object.hasOwn(artifacts, 'case_drafts')) {
+  const evidenceRepair = await consumeEvidenceRepair(
+    runDirectory, registry, artifacts, revision, runId, lockOwnership
+  );
+  if (evidenceRepair.kind === 'reply') return evidenceRepair.reply;
+
+  if (evidenceRepair.kind !== 'advanced' && Object.hasOwn(artifacts, 'case_drafts')) {
     try {
       const verified = await verifyCaseDocumentDeliveryV4(runDirectory);
       if (verified.manifest.revision !== revision || verified.manifest.run_id !== runId) {
@@ -1487,7 +1612,7 @@ export async function advanceStrictV4Locked(
   }
 
   /** @type {any} */
-  const append = artifacts.case_drafts
+  const append = evidenceRepair.kind === 'advanced' ? evidenceRepair : artifacts.case_drafts
     ? await consumePostCaseAppend(
       runDirectory, registry, artifacts, revision, runId, lockOwnership
     )

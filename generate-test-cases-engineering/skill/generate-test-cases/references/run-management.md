@@ -39,6 +39,8 @@ Accepted Source Packs, Decisions, semantic controls, execution actions, lifecycl
 
 A candidate append stays in staging until all schema, presentation/version, digest, sequence, and semantic checks pass. Failure changes no committed revision. Checkpoints are written from validated state and use write-temp-then-rename; their exact canonical bytes are digest-bound recovery material.
 
+For a `4.3.2` acquired resource, the compiler keeps one private, digest-bound acquisition base per revision. Retry an unaccepted semantic candidate in staging; the runner verifies that base, its receipts, events, and source identity before reusing the acquisition. The Agent never creates or edits the base file. A missing or damaged base fails closed.
+
 Before any revision that invalidates ready output, commit a current tombstone/stale state. A higher non-ready revision always dominates an older ready pointer. Crash recovery completes or rolls forward the journaled transition; it never restores old ready/current merely because those files still exist.
 
 For 4.3, a staging-only pending or completed independent review is not accepted
@@ -53,6 +55,8 @@ disk.
 ## Repair without rewriting history
 
 Fix an unaccepted artifact in staging at the same candidate revision. For an accepted Agent artifact, append a digest-bound `artifact_repairs` record naming `base_source_revision`, semantic `stage`, exact accepted canonical artifact digest, and reason. Increment revision once, let the compiler carry forward safe predecessors, then regenerate the returned downstream stage. Never edit accepted/derived/output files.
+
+For `4.3.2` Case Document Evidence repair, stage the next Source Pack with exactly one `evidence_claims` repair and the next Evidence candidate together. The compiler validates both and commits the revision atomically; it does not require a new clarification answer for this repair.
 
 An original source-byte change, new authoritative source, or material scope change is not a repair; it requires `NEW_RUN_REQUIRED`, preserving the old run and creating a linked sibling. A business answer is a Decision, never an artifact repair.
 

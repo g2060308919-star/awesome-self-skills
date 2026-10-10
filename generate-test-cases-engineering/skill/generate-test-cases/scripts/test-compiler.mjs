@@ -55046,9 +55046,9 @@ function presentRoots(roots, compiled, contract2, semanticDeliveryGate) {
     };
   });
 }
-function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
-  if (!record18(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4 || !["source_pack", "evidence_claims", "behavior_views", "case_drafts"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
-    return needRevision("source_pack", [{ code: "V4_ARTIFACT_SET_INVALID", path: "/", message: "Exactly four Agent artifacts are required." }]);
+function compilePreCaseArtifactsV4(submittedArtifacts, submittedSystem) {
+  if (!record18(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 2 || !["source_pack", "evidence_claims"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision("source_pack", [{ code: "V4_ARTIFACT_SET_INVALID", path: "/", message: "Exactly Source Pack and Evidence Claims are required for pre-case validation." }]);
   }
   if (!record18(submittedSystem) || Object.keys(submittedSystem).some((key) => !ALLOWED_SYSTEM_KEYS.has(key))) {
     return qualityFailure2("V4_SYSTEM_CONTEXT_INVALID");
@@ -55139,6 +55139,44 @@ function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
     semantic_roots: pendingPreCase,
     non_blocking_diagnostics: []
   };
+  return { status: "pre_case_ready", context: {
+    artifacts,
+    system,
+    contract: contract2,
+    revision,
+    evidence,
+    semanticEvidence,
+    behaviorEvidence: behaviorEvidence2,
+    scope,
+    preCaseRoots
+  } };
+}
+function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
+  if (!record18(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4 || !["source_pack", "evidence_claims", "behavior_views", "case_drafts"].every((key) => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision("source_pack", [{ code: "V4_ARTIFACT_SET_INVALID", path: "/", message: "Exactly four Agent artifacts are required." }]);
+  }
+  const preCase = compilePreCaseArtifactsV4({
+    source_pack: submittedArtifacts.source_pack,
+    evidence_claims: submittedArtifacts.evidence_claims
+  }, submittedSystem);
+  if (preCase.status !== "pre_case_ready") return preCase;
+  const {
+    artifacts: preCaseArtifacts,
+    system,
+    contract: contract2,
+    revision,
+    evidence,
+    semanticEvidence,
+    behaviorEvidence: behaviorEvidence2,
+    scope,
+    preCaseRoots
+  } = preCase.context;
+  const artifacts = {
+    ...preCaseArtifacts,
+    behavior_views: structuredClone(submittedArtifacts.behavior_views),
+    case_drafts: structuredClone(submittedArtifacts.case_drafts)
+  };
+  const sourcePack = artifacts.source_pack;
   for (const stage of ["behavior_views", "case_drafts"]) {
     const artifact = artifacts[stage];
     if (record18(artifact) && (artifact.schema_version !== contract2.schema_version || artifact.source_revision !== void 0 && artifact.source_revision !== revision)) {
@@ -55463,7 +55501,7 @@ function bytesDigest(value) {
 var valueDigest = (value) => `sha256:${digest(value)}`;
 var stagingPath2 = (runDirectory) => path9.join(runDirectory, "staging", "prd-collection.json");
 var statePath = (runDirectory) => path9.join(runDirectory, "derived", "source-acquisition.json");
-async function acceptedSourceForLaterRevision(runDirectory, state, current) {
+async function acceptedSourceForLaterRevision(runDirectory, state, current, acquisitionBase = null) {
   const target = path9.join(
     runDirectory,
     "accepted",
@@ -55471,7 +55509,7 @@ async function acceptedSourceForLaterRevision(runDirectory, state, current) {
     "source-pack.json"
   );
   const prior = (await readJsonIfPresent(runDirectory, target))?.value;
-  if (!prior || valueDigest(prior) !== state.accepted_source_pack_digest || prior.run_instance_id !== current.run_instance_id || canonicalStringify(prior.source_policy) !== canonicalStringify(current.source_policy) || canonicalStringify(prior.source_assets) !== canonicalStringify(current.source_assets) || prior.sources.length !== current.sources.length || prior.sources.some((source) => {
+  if (!prior || (acquisitionBase === null ? valueDigest(prior) !== state.accepted_source_pack_digest : prior.source_revision !== state.committed_revision || prior.run_instance_id !== state.run_id || canonicalStringify(prior.artifact_events) !== canonicalStringify(state.events) || canonicalStringify(prior.run_scope) !== canonicalStringify(acquisitionBase.run_scope) || canonicalStringify(prior.source_policy) !== canonicalStringify(acquisitionBase.source_policy) || canonicalStringify(prior.source_assets) !== canonicalStringify(acquisitionBase.source_assets) || prior.sources.length !== acquisitionBase.sources.length || prior.sources.some((source, index) => source.source_id !== acquisitionBase.sources[index]?.source_id || sourceAcquisitionIdentityDigestV4(source) !== sourceAcquisitionIdentityDigestV4(acquisitionBase.sources[index]))) || prior.run_instance_id !== current.run_instance_id || canonicalStringify(prior.source_policy) !== canonicalStringify(current.source_policy) || canonicalStringify(prior.source_assets) !== canonicalStringify(current.source_assets) || prior.sources.length !== current.sources.length || prior.sources.some((source) => {
     const next = current.sources.find((item) => item.source_id === source.source_id);
     return !next || sourceAcquisitionIdentityDigestV4(source) !== sourceAcquisitionIdentityDigestV4(next);
   })) throw new TypeError("SOURCE_READING_BINDING_INVALID");
@@ -55737,7 +55775,7 @@ async function loadV4SourceReadingSummary(runDirectory, sourcePack) {
     if (state.run_id !== sourcePack.run_instance_id || state.committed_revision > sourcePack.source_revision || (state.committed_revision === sourcePack.source_revision ? state.source_material_digest !== sourceMaterialDigest(sourcePack) || state.accepted_source_pack_digest !== valueDigest(sourcePack) : sourcePack.schema_version !== "4.3.2")) {
       throw new TypeError("SOURCE_READING_BINDING_INVALID");
     }
-    const boundPack2 = state.committed_revision < sourcePack.source_revision ? await acceptedSourceForLaterRevision(runDirectory, state, sourcePack) : sourcePack;
+    const boundPack = state.committed_revision < sourcePack.source_revision ? await acceptedSourceForLaterRevision(runDirectory, state, sourcePack) : sourcePack;
     if (sourcePack.schema_version === "4.3.2") {
       const session = state.collection_sessions?.[0];
       if (state.state_digest !== valueDigest(Object.fromEntries(
@@ -55747,23 +55785,36 @@ async function loadV4SourceReadingSummary(runDirectory, sourcePack) {
         scope: session.scope,
         channels: session.channels,
         items: session.items
-      }) || state.source_material_digest !== sourceMaterialDigest(boundPack2) || state.accepted_source_pack_digest !== valueDigest(boundPack2) || canonicalStringify(state.summary) !== canonicalStringify(summaryFor(session, boundPack2))) {
+      }) || state.source_material_digest !== sourceMaterialDigest(boundPack) || state.accepted_source_pack_digest !== valueDigest(boundPack) || canonicalStringify(state.summary) !== canonicalStringify(summaryFor(session, boundPack))) {
         throw new TypeError("SOURCE_READING_BINDING_INVALID");
       }
     }
     return structuredClone(state.summary);
   }
-  if (sourcePack.schema_version !== "4.3.2" || state.status !== "acquired" || state.run_id !== sourcePack.run_instance_id || state.committed_revision > sourcePack.source_revision || state.state_digest !== valueDigest(Object.fromEntries(
+  const baseStored = state.status === "acquired" && state.schema_version === "4.3.2" ? await readJsonIfPresent(runDirectory, path9.join(
+    runDirectory,
+    "derived",
+    `source-acquisition-base-r${String(state.committed_revision).padStart(3, "0")}.json`
+  )) : null;
+  const base = baseStored?.value;
+  if (sourcePack.schema_version !== "4.3.2" || state.status !== "acquired" || state.run_id !== sourcePack.run_instance_id || state.committed_revision > sourcePack.source_revision || !base || baseStored.digest !== state.accepted_source_pack_digest.slice(7) || base.run_instance_id !== state.run_id || base.source_revision !== state.committed_revision || canonicalStringify(base.artifact_events) !== canonicalStringify(state.events) || canonicalStringify(base.source_policy) !== canonicalStringify(sourcePack.source_policy) || canonicalStringify(base.source_assets) !== canonicalStringify(sourcePack.source_assets) || base.sources.length !== sourcePack.sources.length || base.sources.some((source, index) => source.source_id !== sourcePack.sources[index]?.source_id || sourceAcquisitionIdentityDigestV4(source) !== sourceAcquisitionIdentityDigestV4(sourcePack.sources[index])) || state.state_digest !== valueDigest(Object.fromEntries(
     Object.entries(state).filter(([key]) => key !== "state_digest")
-  )) || state.committed_revision === sourcePack.source_revision && state.accepted_source_pack_digest !== valueDigest(sourcePack) || !Array.isArray(state.source_receipts) || !Array.isArray(state.events) || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1 || state.source_receipts.some((receipt) => {
-    const source = sourcePack.sources.find((value) => value.source_id === receipt.source_id);
-    return !source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source) || receipt.capture_digest !== source.capture_digest || state.committed_revision === sourcePack.source_revision && receipt.semantic_digest !== source.semantic_digest || !receipt.artifact_event_ids.every((id2) => state.events.some((event) => event.event_id === id2));
+  )) || !Array.isArray(state.source_receipts) || !Array.isArray(state.events) || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1 || state.collection_sessions[0]?.session_digest !== valueDigest({
+    version: state.collection_sessions[0]?.version,
+    scope: state.collection_sessions[0]?.scope,
+    channels: state.collection_sessions[0]?.channels,
+    items: state.collection_sessions[0]?.items
+  }) || state.source_receipts.some((receipt) => {
+    const source = base.sources.find((value) => value.source_id === receipt.source_id);
+    return !source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source) || receipt.capture_digest !== source.capture_digest || receipt.semantic_digest !== source.semantic_digest || !receipt.artifact_event_ids.every((id2) => state.events.some((event) => event.event_id === id2));
   })) throw new TypeError("SOURCE_READING_BINDING_INVALID");
-  const boundPack = state.committed_revision === sourcePack.source_revision ? sourcePack : await acceptedSourceForLaterRevision(runDirectory, state, sourcePack);
+  if (state.committed_revision < sourcePack.source_revision) {
+    await acceptedSourceForLaterRevision(runDirectory, state, sourcePack, base);
+  }
   if (canonicalStringify(state.summary) !== canonicalStringify(
-    reboundV4SourceReadingSummary(state.collection_sessions[0], boundPack)
+    reboundV4SourceReadingSummary(state.collection_sessions[0], base)
   )) throw new TypeError("SOURCE_READING_BINDING_INVALID");
-  return structuredClone(state.summary);
+  return state.committed_revision === sourcePack.source_revision ? reboundV4SourceReadingSummary(state.collection_sessions[0], sourcePack) : structuredClone(state.summary);
 }
 async function loadV4CollectionSourceReceipts(runDirectory, sourcePack) {
   const stored = await readJsonIfPresent(runDirectory, statePath(runDirectory));
@@ -55808,6 +55859,43 @@ var hash4 = (value) => `sha256:${digest(value)}`;
 var compare6 = (left, right) => left < right ? -1 : left > right ? 1 : 0;
 function sourceAcquisitionStatePathV4(runDirectory) {
   return path10.join(runDirectory, "derived", "source-acquisition.json");
+}
+function sourceAcquisitionBasePathV4(runDirectory, revision) {
+  if (!Number.isSafeInteger(revision) || revision < 0) throw new TypeError("SOURCE_ACQUISITION_STATE_INVALID");
+  return path10.join(runDirectory, "derived", `source-acquisition-base-r${String(revision).padStart(3, "0")}.json`);
+}
+async function acquiredBase(runDirectory, state) {
+  if (state.schema_version !== "4.3.2") return null;
+  const stored = await readJsonIfPresent(
+    runDirectory,
+    sourceAcquisitionBasePathV4(runDirectory, state.committed_revision)
+  );
+  const base = stored?.value;
+  if (!base || stored.digest !== state.accepted_source_pack_digest.slice(7) || base.run_instance_id !== state.run_id || base.source_revision !== state.committed_revision || !Array.isArray(base.artifact_events) || canonicalStringify(base.artifact_events) !== canonicalStringify(state.events) || state.source_receipts.some((receipt) => {
+    const source = base.sources?.find((item) => item.source_id === receipt.source_id);
+    return !source || sourceAcquisitionIdentityDigestV4(source) !== receipt.source_artifact_digest || source.capture_digest !== receipt.capture_digest || source.semantic_digest !== receipt.semantic_digest;
+  })) throw new TypeError("SOURCE_ACQUISITION_STATE_INVALID");
+  return base;
+}
+function acquiredCandidateMatchesBase(base, candidate) {
+  if (!Array.isArray(base?.sources) || !Array.isArray(candidate?.sources) || !Array.isArray(base?.locators) || !Array.isArray(candidate?.locators)) return false;
+  const before = structuredClone(base);
+  const after = structuredClone(candidate);
+  for (const value of [before, after]) {
+    delete value.sources;
+    delete value.locators;
+    delete value.source_reviews;
+    delete value.decision_records;
+  }
+  return canonicalStringify(before) === canonicalStringify(after) && base.sources.length === candidate.sources.length && base.sources.every((source, index) => source.source_id === candidate.sources[index]?.source_id && sourceAcquisitionIdentityDigestV4(source) === sourceAcquisitionIdentityDigestV4(candidate.sources[index])) && base.locators.every((locator) => {
+    const next = candidate.locators.find((item) => item.locator_id === locator.locator_id);
+    if (!next) return false;
+    const old = structuredClone(locator);
+    const current = structuredClone(next);
+    delete old.semantic_digest;
+    delete current.semantic_digest;
+    return canonicalStringify(old) === canonicalStringify(current);
+  });
 }
 function sourceAcquisitionMaterialPathV4(runDirectory, eventId) {
   if (!EVENT_ID2.test(eventId)) throw new TypeError("ARTIFACT_EVENT_INVALID");
@@ -56425,6 +56513,9 @@ async function acquireCandidate(state, candidate, runDirectory) {
     material,
     state.collection_sessions
   );
+  if (!persistableSourceValues(candidate, registry)) {
+    throw new TypeError("SOURCE_UNSAFE_PERSISTED_VALUE");
+  }
   const currentAcquisitions = submittedEvents.map((event) => acceptProvidedArtifact(
     context,
     event,
@@ -56462,6 +56553,18 @@ async function acquireCandidate(state, candidate, runDirectory) {
     } : {}
   };
   const acquired = { ...body, state_digest: hash4(body) };
+  if (state.schema_version === "4.3.2") {
+    const basePath = sourceAcquisitionBasePathV4(runDirectory, state.committed_revision);
+    const previous = await readJsonIfPresent(runDirectory, basePath);
+    if (previous && previous.digest !== digest(candidate)) {
+      throw new TypeError("SOURCE_ACQUISITION_BASE_CONFLICT");
+    }
+    if (!previous) await atomicWriteJson(runDirectory, basePath, candidate);
+    const verifiedBase = await readJsonIfPresent(runDirectory, basePath);
+    if (!verifiedBase || verifiedBase.digest !== digest(candidate)) {
+      throw new TypeError("SOURCE_ACQUISITION_STATE_INVALID");
+    }
+  }
   await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), acquired);
   await discardAllMaterial(runDirectory);
   await retireAcquisitionCheckpoint(runDirectory, state.checkpoint_text, state.checkpoint_created);
@@ -56487,7 +56590,29 @@ async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId) {
   }
   const context = { run_id: runId, committed_revision: revision, checkpoint_bytes: encoder.encode(checkpointText) };
   const continuingPending = existing?.status === "pending" && existing.run_id === runId && existing.committed_revision === revision;
-  const discovered = discoverRequests(sourcePack, context, continuingPending ? existing : null);
+  const sameRevisionAcquired = existing?.status === "acquired" && existing.schema_version === "4.3.2" && existing.run_id === runId && existing.committed_revision === revision;
+  if (sameRevisionAcquired) {
+    const { provider_registry: registry } = createCompilerSourceRuntimeV4(sourcePack.schema_version);
+    if (!persistableSourceValues(sourcePack, registry)) {
+      return { kind: "rejected", code: "SOURCE_UNSAFE_PERSISTED_VALUE", discard_candidate: true };
+    }
+    const base = await acquiredBase(runDirectory, existing);
+    const currentCheckpoint = await readTextIfPresent(
+      runDirectory,
+      path10.join(runDirectory, "checkpoint.json")
+    );
+    if (currentCheckpoint !== (existing.checkpoint_created ? null : existing.checkpoint_text)) {
+      throw new TypeError("ARTIFACT_RESUME_STALE");
+    }
+    if (!acquiredCandidateMatchesBase(base, sourcePack)) {
+      return { kind: "rejected", code: "ARTIFACT_RESUME_STALE" };
+    }
+  }
+  const discovered = discoverRequests(
+    sourcePack,
+    context,
+    continuingPending || sameRevisionAcquired ? existing : null
+  );
   const unsafeEventInput = sourcePack.artifact_events?.some(
     (event) => event?.input?.kind === "stable_resource_id" && canonicalizeSourceCapture({
       stable_source_id: "event-input",
@@ -56576,7 +56701,7 @@ async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId) {
     return { kind: "rejected", code: "ARTIFACT_RESUME_STALE" };
   }
   if (existing.status === "acquired") {
-    if (existing.committed_revision === revision && existing.accepted_source_pack_digest !== hash4(sourcePack)) {
+    if (existing.committed_revision === revision && existing.schema_version !== "4.3.2" && existing.accepted_source_pack_digest !== hash4(sourcePack)) {
       return { kind: "rejected", code: "ARTIFACT_IDEMPOTENCY_CONFLICT" };
     }
     await loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack);
@@ -56630,6 +56755,10 @@ async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
     };
   }
   const packEvents = Array.isArray(sourcePack?.artifact_events) ? sourcePack.artifact_events : [];
+  const base = state.status === "acquired" ? await acquiredBase(runDirectory, state) : null;
+  if (base && state.committed_revision === sourcePack?.source_revision && !acquiredCandidateMatchesBase(base, sourcePack)) {
+    throw new TypeError("SOURCE_ACQUISITION_STATE_INVALID");
+  }
   if (state.status !== "acquired" || !Number.isSafeInteger(sourcePack?.source_revision) || sourcePack.source_revision < state.committed_revision || state.events.length !== packEvents.length || state.events.some(
     (event, index) => canonicalStringify(event) !== canonicalStringify(packEvents[index])
   )) {
@@ -56668,7 +56797,8 @@ async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
   }
   for (const receipt of state.source_receipts) {
     const source = sourcePack.sources.find((item) => item.source_id === receipt.source_id);
-    if (!source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source) || receipt.capture_digest !== source.capture_digest || state.committed_revision === sourcePack.source_revision && receipt.semantic_digest !== source.semantic_digest || receipt.artifact_event_ids.some(
+    const baseSource = base?.sources.find((item) => item.source_id === receipt.source_id);
+    if (!source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source) || receipt.capture_digest !== source.capture_digest || state.committed_revision === sourcePack.source_revision && receipt.semantic_digest !== (baseSource ?? source).semantic_digest || receipt.artifact_event_ids.some(
       (eventId) => !state.events.some((event) => event.event_id === eventId)
     )) throw new TypeError("SOURCE_ACQUISITION_STATE_INVALID");
   }
@@ -57371,6 +57501,173 @@ async function consumeSemanticAcquisitionCancellation(runDirectory, prior, candi
       message: "Source-acquisition cancellation must be the only append and bind the displayed stop."
     }], runId);
   }
+}
+async function consumeEvidenceRepair(runDirectory, registry, artifacts, revision, runId, lockOwnership) {
+  if (!artifacts.source_pack || !artifacts.evidence_claims) return { kind: "none" };
+  if (artifacts.source_pack.schema_version !== "4.3.2") return { kind: "none" };
+  const candidate = await stagedArtifact(runDirectory, "source_pack");
+  if (!candidate) return { kind: "none" };
+  if (candidate.parse_diagnostics.length) return {
+    kind: "reply",
+    reply: revisionReply2(
+      runDirectory,
+      "source_pack",
+      revision + 1,
+      candidate.value,
+      candidate.parse_diagnostics,
+      runId
+    )
+  };
+  const prior = artifacts.source_pack;
+  const proposedRepairs = candidate.value?.artifact_repairs;
+  const repairChanged = Object.hasOwn(candidate.value ?? {}, "artifact_repairs") && !same2(proposedRepairs, prior.artifact_repairs ?? []);
+  const evidenceRepair = appendedRepair(prior, candidate.value)?.stage === "evidence_claims" || repairChanged && (!Array.isArray(proposedRepairs) || proposedRepairs.some((repair) => repair?.stage === "evidence_claims"));
+  if (!evidenceRepair) {
+    if (candidate.value?.source_revision === revision && same2(candidate.value, prior)) {
+      await discardStagingSnapshot(runDirectory, "source_pack", candidate);
+      const stagedEvidence2 = await stagedArtifact(runDirectory, "evidence_claims");
+      if (stagedEvidence2 && stagedEvidence2.value?.source_revision === revision && same2(stagedEvidence2.value, artifacts.evidence_claims)) {
+        await discardStagingSnapshot(runDirectory, "evidence_claims", stagedEvidence2);
+      }
+    }
+    return { kind: "none" };
+  }
+  const reject = (stage, value, issues) => ({
+    kind: "reply",
+    reply: revisionReply2(runDirectory, stage, revision + 1, value, issues, runId)
+  });
+  const sourceIssues = candidate.parse_diagnostics.length ? candidate.parse_diagnostics : diagnostics(candidate.value, registry.schemas.get(AGENT_STAGE_SCHEMA.source_pack));
+  if (sourceIssues.length) return reject("source_pack", candidate.value, sourceIssues);
+  const source = candidate.value;
+  if (source.run_instance_id !== runId || source.source_revision !== revision + 1) return reject(
+    "source_pack",
+    source,
+    [{
+      category: "traceability",
+      code: "SOURCE_REVISION_MISMATCH",
+      path: "/source_revision",
+      message: "Evidence repair must bind this run and the next revision."
+    }]
+  );
+  const repairIssues = repairDiagnostics({ source_pack: prior, artifacts }, source);
+  if (repairIssues.length) return reject("source_pack", source, repairIssues);
+  if (appendedRepair(prior, source)?.stage !== "evidence_claims") return reject(
+    "source_pack",
+    source,
+    [{
+      category: "traceability",
+      code: "ARTIFACT_REPAIR_INVALID",
+      path: "/artifact_repairs",
+      message: "Exactly one Evidence repair must be appended."
+    }]
+  );
+  const stablePrior = structuredClone(prior);
+  const stableNext = structuredClone(source);
+  delete stablePrior.source_revision;
+  delete stableNext.source_revision;
+  delete stablePrior.artifact_repairs;
+  delete stableNext.artifact_repairs;
+  if (!same2(stablePrior, stableNext)) return reject("source_pack", source, [{
+    category: "traceability",
+    code: "V4_SOURCE_APPEND_IMMUTABLE_CHANGED",
+    path: "/",
+    message: "An Evidence repair must preserve the complete accepted Source Pack except revision and repair history."
+  }]);
+  const stagedEvidence = await stagedArtifact(runDirectory, "evidence_claims");
+  if (!stagedEvidence) return {
+    kind: "reply",
+    reply: artifactRequest(runDirectory, "evidence_claims", revision + 1, runId)
+  };
+  const evidenceIssues = stagedEvidence.parse_diagnostics.length ? stagedEvidence.parse_diagnostics : diagnostics(stagedEvidence.value, registry.schemas.get(AGENT_STAGE_SCHEMA.evidence_claims));
+  if (evidenceIssues.length) return reject("evidence_claims", stagedEvidence.value, evidenceIssues);
+  const evidence = stagedEvidence.value;
+  if (evidence.schema_version !== source.schema_version || evidence.source_revision !== revision + 1) return reject(
+    "evidence_claims",
+    evidence,
+    [{
+      category: "traceability",
+      code: "SOURCE_REVISION_MISMATCH",
+      path: "/source_revision",
+      message: "Repaired Evidence must bind the candidate Source revision."
+    }]
+  );
+  let system;
+  try {
+    system = await preCaseSystem(runDirectory, source, evidence);
+  } catch (error) {
+    return reject("source_pack", source, [{
+      category: "traceability",
+      code: error instanceof Error ? error.message : "V4_PRE_CASE_CONTEXT_INVALID",
+      path: "/",
+      message: "Evidence repair cannot reproduce the compiler-owned source context."
+    }]);
+  }
+  const gate = compilePreCaseArtifactsV4({ source_pack: source, evidence_claims: evidence }, system);
+  if (gate.status === "need_revision") return reject(
+    resultStage(gate),
+    resultStage(gate) === "source_pack" ? source : evidence,
+    gate.diagnostics ?? []
+  );
+  if (!["pre_case_ready", "need_user_answers"].includes(gate.status)) return {
+    kind: "reply",
+    reply: qualityFailure3(
+      runId,
+      "requirements_analysis",
+      gate.reason_code ?? "V4_PRE_CASE_QUALITY_FAILURE",
+      gate.diagnostics?.[0]?.message ?? "The repaired Evidence failed the pre-case quality gate."
+    )
+  };
+  let priorCheckpoint;
+  let clarification;
+  try {
+    priorCheckpoint = await committedSemanticCheckpoint(runDirectory, runId, revision);
+    clarification = compilePreCaseClarification(
+      source,
+      evidence,
+      runId,
+      priorCheckpoint.value,
+      new TextEncoder().encode(priorCheckpoint.text)
+    );
+  } catch (error) {
+    return {
+      kind: "reply",
+      reply: qualityFailure3(
+        runId,
+        "requirements_analysis",
+        error instanceof Error ? error.message : "SEMANTIC_PRESENTATION_INVALID",
+        "Repaired Evidence cannot form a recoverable pre-case checkpoint."
+      )
+    };
+  }
+  try {
+    await commitRevisionTransactionV4WithHeldLock(
+      runDirectory,
+      preCaseTransaction(runId, source, evidence, clarification.checkpoint, revision),
+      lockOwnership
+    );
+    await discardStagingSnapshot(runDirectory, "source_pack", candidate);
+    await discardStagingSnapshot(runDirectory, "evidence_claims", stagedEvidence);
+  } catch (error) {
+    return {
+      kind: "reply",
+      reply: qualityFailure3(
+        runId,
+        "requirements_analysis",
+        error instanceof Error ? error.message : "V4_REVISION_TRANSACTION_FAILED",
+        "Evidence repair revision did not commit atomically."
+      )
+    };
+  }
+  if (clarification.presentation) return {
+    kind: "reply",
+    reply: semanticQuestionReply(runId, clarification.presentation)
+  };
+  return {
+    kind: "advanced",
+    revision: revision + 1,
+    artifacts: { source_pack: source, evidence_claims: evidence },
+    checkpoint: clarification.checkpoint
+  };
 }
 async function consumeSemanticAppend(runDirectory, registry, artifacts, revision, runId, lockOwnership) {
   if (!artifacts.source_pack || !artifacts.evidence_claims || artifacts.behavior_views) {
@@ -58274,7 +58571,16 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
       error instanceof Error ? error.message : "Accepted v4 artifacts failed deterministic replay."
     );
   }
-  if (Object.hasOwn(artifacts, "case_drafts")) {
+  const evidenceRepair = await consumeEvidenceRepair(
+    runDirectory,
+    registry,
+    artifacts,
+    revision,
+    runId,
+    lockOwnership
+  );
+  if (evidenceRepair.kind === "reply") return evidenceRepair.reply;
+  if (evidenceRepair.kind !== "advanced" && Object.hasOwn(artifacts, "case_drafts")) {
     try {
       const verified = await verifyCaseDocumentDeliveryV4(runDirectory);
       if (verified.manifest.revision !== revision || verified.manifest.run_id !== runId) {
@@ -58284,7 +58590,7 @@ async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOw
     } catch {
     }
   }
-  const append3 = artifacts.case_drafts ? await consumePostCaseAppend(
+  const append3 = evidenceRepair.kind === "advanced" ? evidenceRepair : artifacts.case_drafts ? await consumePostCaseAppend(
     runDirectory,
     registry,
     artifacts,

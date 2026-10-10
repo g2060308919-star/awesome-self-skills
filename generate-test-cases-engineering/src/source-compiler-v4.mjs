@@ -44,7 +44,7 @@ export function sourceAcquisitionIdentityDigestV4(source) {
  * artifact (including JSON data keys). Do not silently rewrite Claim meaning.
  * @param {any} value @param {object} registry
  */
-function persistableSourceValues(value, registry) {
+export function persistableSourceValues(value, registry) {
   const pending = [value];
   while (pending.length) {
     const item = pending.pop();

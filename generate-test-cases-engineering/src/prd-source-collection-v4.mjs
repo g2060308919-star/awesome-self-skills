@@ -34,12 +34,25 @@ const stagingPath = runDirectory => path.join(runDirectory, 'staging', 'prd-coll
 /** @param {string} runDirectory */
 const statePath = runDirectory => path.join(runDirectory, 'derived', 'source-acquisition.json');
 
-/** @param {string} runDirectory @param {any} state @param {any} current */
-async function acceptedSourceForLaterRevision(runDirectory, state, current) {
+/** @param {string} runDirectory @param {any} state @param {any} current
+ * @param {any|null} [acquisitionBase] */
+async function acceptedSourceForLaterRevision(runDirectory, state, current, acquisitionBase = null) {
   const target = path.join(runDirectory, 'accepted',
     `r${String(state.committed_revision).padStart(3, '0')}`, 'source-pack.json');
   const prior = (await readJsonIfPresent(runDirectory, target))?.value;
-  if (!prior || valueDigest(prior) !== state.accepted_source_pack_digest
+  if (!prior || (acquisitionBase === null
+    ? valueDigest(prior) !== state.accepted_source_pack_digest
+    : prior.source_revision !== state.committed_revision
+      || prior.run_instance_id !== state.run_id
+      || canonicalStringify(prior.artifact_events) !== canonicalStringify(state.events)
+      || canonicalStringify(prior.run_scope) !== canonicalStringify(acquisitionBase.run_scope)
+      || canonicalStringify(prior.source_policy) !== canonicalStringify(acquisitionBase.source_policy)
+      || canonicalStringify(prior.source_assets) !== canonicalStringify(acquisitionBase.source_assets)
+      || prior.sources.length !== acquisitionBase.sources.length
+      || prior.sources.some((/** @type {any} */ source, /** @type {number} */ index) =>
+        source.source_id !== acquisitionBase.sources[index]?.source_id
+        || sourceAcquisitionIdentityDigestV4(source)
+          !== sourceAcquisitionIdentityDigestV4(acquisitionBase.sources[index])))
     || prior.run_instance_id !== current.run_instance_id
     || canonicalStringify(prior.source_policy) !== canonicalStringify(current.source_policy)
     || canonicalStringify(prior.source_assets) !== canonicalStringify(current.source_assets)
@@ -400,32 +413,53 @@ export async function loadV4SourceReadingSummary(
     }
     return structuredClone(state.summary);
   }
+  const baseStored = state.status === 'acquired' && state.schema_version === '4.3.2'
+    ? await readJsonIfPresent(runDirectory, path.join(runDirectory, 'derived',
+      `source-acquisition-base-r${String(state.committed_revision).padStart(3, '0')}.json`))
+    : null;
+  const base = baseStored?.value;
   if (sourcePack.schema_version !== '4.3.2' || state.status !== 'acquired'
     || state.run_id !== sourcePack.run_instance_id
     || state.committed_revision > sourcePack.source_revision
+    || !base || baseStored.digest !== state.accepted_source_pack_digest.slice(7)
+    || base.run_instance_id !== state.run_id || base.source_revision !== state.committed_revision
+    || canonicalStringify(base.artifact_events) !== canonicalStringify(state.events)
+    || canonicalStringify(base.source_policy) !== canonicalStringify(sourcePack.source_policy)
+    || canonicalStringify(base.source_assets) !== canonicalStringify(sourcePack.source_assets)
+    || base.sources.length !== sourcePack.sources.length
+    || base.sources.some((/** @type {any} */ source, /** @type {number} */ index) =>
+      source.source_id !== sourcePack.sources[index]?.source_id
+      || sourceAcquisitionIdentityDigestV4(source)
+        !== sourceAcquisitionIdentityDigestV4(sourcePack.sources[index]))
     || state.state_digest !== valueDigest(Object.fromEntries(
       Object.entries(state).filter(([key]) => key !== 'state_digest')
     ))
-    || (state.committed_revision === sourcePack.source_revision
-      && state.accepted_source_pack_digest !== valueDigest(sourcePack))
     || !Array.isArray(state.source_receipts) || !Array.isArray(state.events)
     || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1
+    || state.collection_sessions[0]?.session_digest !== valueDigest({
+      version: state.collection_sessions[0]?.version,
+      scope: state.collection_sessions[0]?.scope,
+      channels: state.collection_sessions[0]?.channels,
+      items: state.collection_sessions[0]?.items
+    })
     || state.source_receipts.some((/** @type {any} */ receipt) => {
-      const source = sourcePack.sources.find((/** @type {any} */ value) => value.source_id === receipt.source_id);
+      const source = base.sources.find((/** @type {any} */ value) => value.source_id === receipt.source_id);
       return !source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source)
         || receipt.capture_digest !== source.capture_digest
-        || (state.committed_revision === sourcePack.source_revision
-          && receipt.semantic_digest !== source.semantic_digest)
+        || receipt.semantic_digest !== source.semantic_digest
         || !receipt.artifact_event_ids.every((/** @type {string} */ id) =>
           state.events.some((/** @type {any} */ event) => event.event_id === id));
     })
     ) throw new TypeError('SOURCE_READING_BINDING_INVALID');
-  const boundPack = state.committed_revision === sourcePack.source_revision
-    ? sourcePack : await acceptedSourceForLaterRevision(runDirectory, state, sourcePack);
+  if (state.committed_revision < sourcePack.source_revision) {
+    await acceptedSourceForLaterRevision(runDirectory, state, sourcePack, base);
+  }
   if (canonicalStringify(state.summary) !== canonicalStringify(
-    reboundV4SourceReadingSummary(state.collection_sessions[0], boundPack)
+    reboundV4SourceReadingSummary(state.collection_sessions[0], base)
   )) throw new TypeError('SOURCE_READING_BINDING_INVALID');
-  return structuredClone(state.summary);
+  return state.committed_revision === sourcePack.source_revision
+    ? reboundV4SourceReadingSummary(state.collection_sessions[0], sourcePack)
+    : structuredClone(state.summary);
 }
 
 /** Collection receipts are produced only from a durable, digest-bound

@@ -402,19 +402,13 @@ function presentRoots(roots, compiled, contract, semanticDeliveryGate) {
   });
 }
 
-/**
- * Pure v4 production orchestration. The first argument remains exactly the four
- * Agent-writable artifacts. Raw acquisition material and compiler verification
- * registries are private system state and never enter the semantic Case identity.
- *
- * @param {unknown} submittedArtifacts
- * @param {unknown} submittedSystem
- * @returns {any}
- */
-export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
-  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4
-    || !['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'].every(key => Object.hasOwn(submittedArtifacts, key))) {
-    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly four Agent artifacts are required.' }]);
+/** Validate the complete Source/Evidence phase without manufacturing downstream
+ * Agent artifacts. Both the initial Evidence path and repair path use this gate.
+ * @param {any} submittedArtifacts @param {any} submittedSystem */
+export function compilePreCaseArtifactsV4(submittedArtifacts, submittedSystem) {
+  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 2
+    || !['source_pack', 'evidence_claims'].every(key => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly Source Pack and Evidence Claims are required for pre-case validation.' }]);
   }
   if (!record(submittedSystem) || Object.keys(submittedSystem).some(key => !ALLOWED_SYSTEM_KEYS.has(key))) {
     return qualityFailure('V4_SYSTEM_CONTEXT_INVALID');
@@ -485,6 +479,34 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     status: 'need_user_answers', phase: 'requirements_analysis', semantic_roots: pendingPreCase,
     non_blocking_diagnostics: []
   };
+
+  return { status: 'pre_case_ready', context: {
+    artifacts, system, contract, revision, evidence, semanticEvidence, behaviorEvidence,
+    scope, preCaseRoots
+  } };
+}
+
+/** Pure v4 production orchestration. The first argument remains exactly the
+ * four Agent-writable artifacts; acquisition verification stays private.
+ * @param {any} submittedArtifacts @param {any} submittedSystem */
+export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
+  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4
+    || !['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'].every(key => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly four Agent artifacts are required.' }]);
+  }
+  const preCase = compilePreCaseArtifactsV4({
+    source_pack: submittedArtifacts.source_pack,
+    evidence_claims: submittedArtifacts.evidence_claims
+  }, submittedSystem);
+  if (preCase.status !== 'pre_case_ready') return preCase;
+  const {
+    artifacts: preCaseArtifacts, system, contract, revision, evidence,
+    semanticEvidence, behaviorEvidence, scope, preCaseRoots
+  } = preCase.context;
+  const artifacts = { ...preCaseArtifacts,
+    behavior_views: structuredClone(submittedArtifacts.behavior_views),
+    case_drafts: structuredClone(submittedArtifacts.case_drafts) };
+  const sourcePack = artifacts.source_pack;
 
   for (const stage of ['behavior_views', 'case_drafts']) {
     const artifact = artifacts[stage];
