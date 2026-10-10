@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import crypto from "node:crypto";
-import { chmod, lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -15,13 +15,16 @@ import { assertNoSecrets } from "./lib/redaction.mjs";
 import { readScreenshotSource, writeScreenshotExclusive } from "./lib/evidence-import.mjs";
 import { validateScreenshotBytes } from "./lib/screenshot-validation.mjs";
 import { aggregateCase, buildReport, renderChatTableMarkdown } from "./lib/report.mjs";
-import { buildReportModel } from "./lib/report-model.mjs";
+import { buildReportModel, deriveActivityDurations } from "./lib/report-model.mjs";
+import { mergeRetakeModels, sameCase } from "./lib/retake.mjs";
+import { loadGCaseDocumentHandoff } from "./lib/g-case-document-handoff.mjs";
 import { buildHtmlReport } from "./lib/report-html.mjs";
 import { validateCoverageEvent, validateCoverageLog } from "./lib/execution-coverage.mjs";
 import { validateMockEvent, validateMockLog } from "./lib/mock-fallback.mjs";
 import {
   permissionWorkflowProfile,
   permissionWorkflowProfileV2,
+  permissionWorkflowProfileV3,
   permissionWorkflowProfiles,
   validatePermissionEvent,
   validatePermissionLog
@@ -94,6 +97,43 @@ async function loadRun(runRoot) {
   validateTestCases(testCases);
   validateRunExtensions(log);
   return { snapshotPath, logPath, snapshotHash, logHash: digest(logBytes), testCases, log };
+}
+
+function retakeEvent(log) {
+  return log.events?.find(event => event.type === "retake_link") ?? null;
+}
+
+async function validateRetakeLink(runRoot, run, lineage = []) {
+  const link = retakeEvent(run.log);
+  if (!link) return null;
+  const current = path.resolve(runRoot);
+  if (lineage.includes(current)) throw consistencyError("补测关联形成环");
+  if (![link.parent_run_id, link.root_run_id].every(id => typeof id === "string" && /^[A-Za-z0-9._-]+$/.test(id))
+    || link.parent_run_id === run.log.run.run_id || link.root_run_id === run.log.run.run_id) {
+    throw consistencyError("补测关联指向自身或非法 Run");
+  }
+  const runsRoot = path.dirname(current);
+  const parentRoot = path.join(runsRoot, link.parent_run_id);
+  const rootRoot = path.join(runsRoot, link.root_run_id);
+  if (lineage.includes(parentRoot)) throw consistencyError("补测关联形成环");
+  const parent = await loadRun(parentRoot);
+  const original = await loadRun(rootRoot);
+  if (parent.log.run.run_id !== link.parent_run_id || original.log.run.run_id !== link.root_run_id
+    || parent.logHash !== link.parent_log_sha256 || original.snapshotHash !== link.root_snapshot_sha256
+    || parent.log.run.status !== "completed" || original.log.run.status !== "completed") {
+    throw consistencyError("补测父轮、根快照或读取边界不匹配");
+  }
+  const parentLink = retakeEvent(parent.log);
+  if (parentLink ? parentLink.root_run_id !== link.root_run_id : link.parent_run_id !== link.root_run_id) {
+    throw consistencyError("补测父轮与根任务不一致");
+  }
+  if (!sameCase(original.testCases.suite, run.testCases.suite)
+    || run.testCases.cases.some(testCase => !original.testCases.cases.some(item =>
+      item.case_id === testCase.case_id && sameCase(item, testCase)))) {
+    throw consistencyError("补测用例语义或预期与根快照不兼容");
+  }
+  await validateRun(parentRoot, { checkReport: true, _lineage: [...lineage, current] });
+  return { link, parentRoot, rootRoot };
 }
 
 function consistencyError(message, details = {}) {
@@ -198,9 +238,11 @@ async function scanEvidenceDirectory(runRoot) {
   }
 }
 
-export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId(), workflowProfile, mockFallback }) {
+export async function initializeRun({ workspaceRoot, casesPath, casesInput, runId = createRunId(), workflowProfile, mockFallback }) {
   ensureRuntime();
-  if (!workspaceRoot || !casesPath) throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 必填");
+  if (!workspaceRoot || (casesPath === undefined) === (casesInput === undefined)) {
+    throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 或 casesInput 必填，且只能选择一种");
+  }
   if (workflowProfile !== undefined && !permissionWorkflowProfiles.includes(workflowProfile)) {
     throw runnerError("INPUT_CONTRACT", "未知 workflow profile");
   }
@@ -211,11 +253,13 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
     throw runnerError("INPUT_CONTRACT", "Mock fallback 只允许用于 permission-batches-html-v2");
   }
   if (!/^[A-Za-z0-9._-]+$/.test(runId)) throw runnerError("INPUT_CONTRACT", "Run ID 只能包含字母、数字、点、下划线和连字符");
-  let input;
-  try { input = JSON.parse(await readFile(casesPath, "utf8")); }
-  catch (error) {
-    if (error instanceof SyntaxError) throw runnerError("INPUT_CONTRACT", "测试用例不是合法 JSON");
-    throw error;
+  let input = casesInput;
+  if (casesPath !== undefined) {
+    try { input = JSON.parse(await readFile(casesPath, "utf8")); }
+    catch (error) {
+      if (error instanceof SyntaxError) throw runnerError("INPUT_CONTRACT", "测试用例不是合法 JSON");
+      throw error;
+    }
   }
   const testCases = normalizeTestCases(input);
   assertNoSecrets(testCases);
@@ -322,7 +366,7 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
   }
 }
 
-export async function validateRun(runRoot, { checkReport = true } = {}) {
+export async function validateRun(runRoot, { checkReport = true, _lineage = [] } = {}) {
   const run = await loadRun(path.resolve(runRoot));
   assertNoSecrets(run.testCases);
   assertNoSecrets(run.log);
@@ -374,7 +418,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
   validatePermissionLog(run.testCases, run.log);
   validateCoverageLog(run.testCases, run.log);
   validateMockLog(run.testCases, run.log);
-  if (workflowProfile(run.log) === permissionWorkflowProfileV2 && ["awaiting_user", "completed"].includes(run.log.run.status)) {
+  if ([permissionWorkflowProfileV2, permissionWorkflowProfileV3].includes(workflowProfile(run.log)) && ["awaiting_user", "completed"].includes(run.log.run.status)) {
     const captureEvents = run.log.events.filter(event => event.type === "evidence_capture");
     for (const caseId of run.log.run.actual_case_order) {
       const sourceCase = run.testCases.cases.find(item => item.case_id === caseId);
@@ -416,6 +460,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
     throw consistencyError("清理状态结构无效");
   }
   await scanEvidenceDirectory(path.resolve(runRoot));
+  await validateRetakeLink(runRoot, run, _lineage);
   const reportPath = path.join(path.resolve(runRoot), "report.md");
   const htmlReportPath = path.join(path.resolve(runRoot), "report.html");
   if (checkReport) {
@@ -425,7 +470,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
     ]);
     const profile = workflowProfile(run.log);
     const deliveryState = ["awaiting_user", "completed"].includes(run.log.run.status);
-    if (profile === permissionWorkflowProfileV2) {
+    if ([permissionWorkflowProfileV2, permissionWorkflowProfileV3].includes(profile)) {
       if (reportStats) throw consistencyError("v2 工作流不得生成 report.md");
       if ((deliveryState || htmlStats) && !htmlStats) throw consistencyError("v2 阶段或最终交付必须存在 report.html");
     } else if (profile === permissionWorkflowProfile && (deliveryState || reportStats || htmlStats) && (!reportStats || !htmlStats)) {
@@ -565,6 +610,44 @@ export async function recordEvent(runRoot, event) {
   return { recorded: true, sequence: logged.sequence, runId: run.log.run.run_id };
 }
 
+export async function linkRetake(runRoot, parentRunRoot) {
+  const currentRoot = path.resolve(runRoot);
+  const selectedParentRoot = path.resolve(parentRunRoot);
+  if (path.dirname(currentRoot) !== path.dirname(selectedParentRoot) || currentRoot === selectedParentRoot) {
+    throw consistencyError("补测与父轮必须属于同一工作区且不能指向自身");
+  }
+  const current = await loadRun(currentRoot);
+  if (workflowProfile(current.log) !== permissionWorkflowProfileV3) {
+    throw consistencyError("跨轮补测需要新建 v3 Run");
+  }
+  await validateRun(selectedParentRoot);
+  const parent = await loadRun(selectedParentRoot);
+  if (parent.log.run.status !== "completed") throw consistencyError("补测父轮尚未结束");
+  const rootId = retakeEvent(parent.log)?.root_run_id ?? parent.log.run.run_id;
+  const original = await loadRun(path.join(path.dirname(currentRoot), rootId));
+  if (!sameCase(original.testCases.suite, current.testCases.suite)
+    || current.testCases.cases.some(testCase => !original.testCases.cases.some(item =>
+      item.case_id === testCase.case_id && sameCase(item, testCase)))) {
+    throw consistencyError("补测用例语义或预期与根快照不兼容");
+  }
+  return recordEvent(currentRoot, { type: "retake_link", parent_run_id: parent.log.run.run_id,
+    parent_log_sha256: parent.logHash, root_run_id: rootId,
+    root_snapshot_sha256: original.snapshotHash,
+    case_ids: current.testCases.cases.map(item => item.case_id) });
+}
+
+export async function beginActivity(runRoot) {
+  return recordEvent(runRoot, { type: "activity_start" });
+}
+
+export async function endActivity(runRoot) {
+  return recordEvent(runRoot, { type: "activity_end" });
+}
+
+export async function completeActivity(runRoot) {
+  return recordEvent(runRoot, { type: "activity_complete" });
+}
+
 export async function archiveScreenshot(runRoot, options) {
   const event = structuredClone(options.event);
   assertNoSecrets(event);
@@ -590,7 +673,7 @@ export async function archiveScreenshot(runRoot, options) {
 }
 
 export async function resumeCheck(runRoot) {
-  await validateRun(runRoot);
+  await validateRun(runRoot, { checkReport: false });
   const { log, logPath } = await loadRun(path.resolve(runRoot));
   const confirmed = new Set(log.events
     .filter(event => event.type === "action_confirmed")
@@ -658,12 +741,152 @@ function reportDelivery(log) {
     label: final ? (early ? "用户明确提前结束，未完成范围见报告" : "本轮测试已明确结束") : "阶段记录，测试尚未结束；默认仅内部保存" };
 }
 
+async function linkedRetakes(rootRunRoot) {
+  const root = await loadRun(rootRunRoot);
+  const runsRoot = path.dirname(rootRunRoot);
+  const candidates = [];
+  for (const entry of await readdir(runsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === root.log.run.run_id) continue;
+    const directory = path.join(runsRoot, entry.name);
+    let candidate;
+    try { candidate = await loadRun(directory); }
+    catch (error) { if (error.code === "ENOENT" || error instanceof SyntaxError) continue; throw error; }
+    if (retakeEvent(candidate.log)?.root_run_id !== root.log.run.run_id) continue;
+    await validateRun(directory);
+    candidates.push({ directory, ...candidate, link: retakeEvent(candidate.log) });
+  }
+  const byId = new Map(candidates.map(item => [item.log.run.run_id, item]));
+  const depth = item => {
+    let current = item;
+    let count = 0;
+    const seen = new Set();
+    while (current.link.parent_run_id !== root.log.run.run_id) {
+      if (seen.has(current.log.run.run_id)) throw consistencyError("补测关联形成环");
+      seen.add(current.log.run.run_id);
+      current = byId.get(current.link.parent_run_id);
+      if (!current) throw consistencyError("补测父轮缺失");
+      count += 1;
+    }
+    return count;
+  };
+  candidates.sort((a, b) => depth(a) - depth(b) || a.log.run.run_id.localeCompare(b.log.run.run_id));
+  const ownerByCase = new Map();
+  for (const item of candidates) {
+    for (const testCase of item.testCases.cases) {
+      const prior = ownerByCase.get(testCase.case_id);
+      if (prior) {
+        let parentId = item.link.parent_run_id;
+        while (parentId !== root.log.run.run_id && parentId !== prior) {
+          parentId = byId.get(parentId)?.link.parent_run_id;
+          if (!parentId) throw consistencyError("补测父轮缺失");
+        }
+        if (parentId !== prior) throw consistencyError(`用例 ${testCase.case_id} 存在无法排序的补测候选`);
+      }
+      ownerByCase.set(testCase.case_id, item.log.run.run_id);
+    }
+  }
+  return candidates;
+}
+
+async function generateAggregateReport(rootRunRoot, retakes) {
+  await validateRun(rootRunRoot);
+  const root = await loadRun(rootRunRoot);
+  const sources = [{ directory: rootRunRoot, ...root }, ...retakes];
+  const models = retakes.map(item => ({ runId: item.log.run.run_id,
+    model: buildReportModel(item.testCases, item.log) }));
+  let model;
+  try { model = mergeRetakeModels(buildReportModel(root.testCases, root.log), models); }
+  catch (error) { throw consistencyError(error.message); }
+  model.run.durations = deriveActivityDurations(sources.map(item => item.log));
+  model.overview.execution_duration = model.run.durations.execution_label;
+  model.overview.waiting_duration = model.run.durations.waiting_label;
+  model.case_details = model.case_details.map(detail => ({
+    ...detail, source_run_id: detail.source_run_id ?? root.log.run.run_id,
+    source_kind: detail.source_kind ?? "原轮"
+  }));
+  const selection = Object.fromEntries(model.case_details.map(detail => [detail.case_id, detail.source_run_id]));
+  const sourceHashes = sources.map(item => ({ run_id: item.log.run.run_id,
+    snapshot_sha256: item.snapshotHash, log_sha256: item.logHash }));
+  const manifest = { version: "1.0", root_run_id: root.log.run.run_id,
+    root_snapshot_sha256: root.snapshotHash, source_runs: sourceHashes, selected_case_run: selection };
+  const reportId = digest(JSON.stringify(manifest));
+  const reportsRoot = path.join(path.dirname(rootRunRoot), "..", "b2b-e2e-reports");
+  const reportDirectory = path.join(reportsRoot, reportId);
+  const tempDirectory = `${reportDirectory}.tmp-${crypto.randomUUID()}`;
+  const sourceById = new Map(sources.map(item => [item.log.run.run_id, item]));
+  try {
+    await mkdir(reportsRoot, { recursive: true });
+    await mkdir(tempDirectory, { recursive: false, mode: 0o700 });
+    for (const detail of model.case_details) {
+      for (const step of detail.steps) for (const expected of step.expected) for (const evidence of expected.evidence) {
+        if (!evidence.path) continue;
+        const source = sourceById.get(detail.source_run_id);
+        const original = resolveEvidencePath(source.directory, evidence.path);
+        const rewritten = path.join("evidence", detail.source_run_id, path.relative("evidence", evidence.path));
+        const target = path.join(tempDirectory, rewritten);
+        await mkdir(path.dirname(target), { recursive: true });
+        await copyFile(original, target);
+        if (digest(await readFile(original)) !== digest(await readFile(target))) throw consistencyError("汇总证据复制后摘要不一致");
+        evidence.path = rewritten;
+      }
+    }
+    assertNoSecrets(model);
+    const html = buildHtmlReport(model);
+    const chatTableMarkdown = renderChatTableMarkdown(model);
+    assertNoSecrets(html);
+    assertNoSecrets(chatTableMarkdown);
+    await writeTextAtomic(path.join(tempDirectory, "report.html"), html);
+    await writeJsonAtomic(path.join(tempDirectory, "manifest.json"), manifest);
+    try { await rename(tempDirectory, reportDirectory); }
+    catch (error) {
+      if (error.code !== "EEXIST" && error.code !== "ENOTEMPTY") throw error;
+      await rm(tempDirectory, { recursive: true, force: true });
+    }
+    const persisted = await readFile(path.join(reportDirectory, "report.html"), "utf8");
+    if (persisted !== html) throw consistencyError("汇总报告与已验证来源不一致");
+    const persistedManifest = JSON.parse(await readFile(path.join(reportDirectory, "manifest.json"), "utf8"));
+    if (JSON.stringify(persistedManifest) !== JSON.stringify(manifest)) throw consistencyError("汇总清单被修改");
+    for (const detail of model.case_details) {
+      for (const step of detail.steps) for (const expected of step.expected) for (const evidence of expected.evidence) {
+        if (!evidence.path) continue;
+        const source = sourceById.get(detail.source_run_id);
+        const original = resolveEvidencePath(source.directory,
+          path.join("evidence", path.relative(path.join("evidence", detail.source_run_id), evidence.path)));
+        const target = path.join(reportDirectory, evidence.path);
+        if (digest(await readFile(original)) !== digest(await readFile(target))) {
+          throw consistencyError("汇总证据与来源不一致");
+        }
+      }
+    }
+    for (const item of sources) {
+      if (digest(await readFile(item.logPath)) !== item.logHash) throw consistencyError("汇总期间原轮或补测账本发生变化");
+    }
+    return { deliverable: true, reportFormat: "html-only-v1",
+      reportPath: path.join(reportDirectory, "report.html"), htmlReportPath: path.join(reportDirectory, "report.html"),
+      chatTableMarkdown, snapshotHash: root.snapshotHash, counts: model.counts,
+      runId: root.log.run.run_id, sourceRuns: sourceHashes, delivery: reportDelivery(root.log) };
+  } catch (error) {
+    await rm(tempDirectory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 export async function deliverReport(runRoot, { stageRequested = false } = {}) {
-  const { log } = await loadRun(path.resolve(runRoot));
+  await validateRun(runRoot, { checkReport: false });
+  const selected = await loadRun(path.resolve(runRoot));
+  const { log } = selected;
   const delivery = reportDelivery(log);
   if (!delivery.automaticallyPresent && !stageRequested) {
     return { deliverable: false, runId: log.run.run_id, delivery,
       nextAction: "仅说明当前进度、阻塞与需要用户完成的动作；继续保存内部阶段产物" };
+  }
+  const rootId = retakeEvent(log)?.root_run_id ?? log.run.run_id;
+  const rootRunRoot = path.join(path.dirname(path.resolve(runRoot)), rootId);
+  const retakes = await linkedRetakes(rootRunRoot);
+  if (retakes.length) {
+    if (retakes.some(item => item.log.run.status !== "completed")) return { deliverable: false,
+      runId: rootId, nextAction: "关联补测仍在进行；完成或明确结束后再交付全范围报告" };
+    return generateAggregateReport(rootRunRoot, retakes);
   }
   return { deliverable: true, ...await generateReport(runRoot) };
 }
@@ -683,7 +906,7 @@ export async function generateReport(runRoot) {
   const reportPath = path.join(path.resolve(runRoot), "report.md");
   const htmlReportPath = path.join(path.resolve(runRoot), "report.html");
   const profile = workflowProfile(log);
-  if (profile === permissionWorkflowProfileV2) {
+  if ([permissionWorkflowProfileV2, permissionWorkflowProfileV3].includes(profile)) {
     await writeTextAtomic(htmlReportPath, html);
   } else {
     await writeTextAtomic(reportPath, generated.markdown);
@@ -691,7 +914,7 @@ export async function generateReport(runRoot) {
   }
   const writtenHtml = await readFile(htmlReportPath, "utf8");
   const latestLog = await readFile(loaded.logPath);
-  if (profile !== permissionWorkflowProfileV2) {
+  if (![permissionWorkflowProfileV2, permissionWorkflowProfileV3].includes(profile)) {
     const writtenMarkdown = await readFile(reportPath, "utf8");
     assertNoSecrets(writtenMarkdown);
     if (writtenMarkdown !== generated.markdown) throw consistencyError("报告写入后内容校验失败");
@@ -700,7 +923,7 @@ export async function generateReport(runRoot) {
   if (writtenHtml !== html) throw consistencyError("报告写入后内容校验失败");
   if (digest(latestLog) !== loaded.logHash) throw consistencyError("报告生成期间执行日志发生变化，拒绝交付过期报告");
   await validateRun(runRoot);
-  if (profile === permissionWorkflowProfileV2) {
+  if ([permissionWorkflowProfileV2, permissionWorkflowProfileV3].includes(profile)) {
     return {
       reportFormat: "html-only-v1",
       reportPath: htmlReportPath,
@@ -747,9 +970,37 @@ async function main() {
       workflowProfile: options["workflow-profile"],
       mockFallback: options["mock-fallback"]
     });
+  } else if (command === "init-g") {
+    if (options["workflow-profile"] !== permissionWorkflowProfileV3) {
+      throw runnerError("INPUT_CONTRACT", "init-g 必须使用 permission-batches-html-v3");
+    }
+    if (!options.suite) throw runnerError("INPUT_CONTRACT", "init-g 需要已确认的 suite JSON");
+    let suite;
+    try { suite = JSON.parse(await readFile(options.suite, "utf8")); }
+    catch (error) {
+      if (error instanceof SyntaxError) throw runnerError("INPUT_CONTRACT", "suite 不是合法 JSON");
+      throw error;
+    }
+    const casesInput = await loadGCaseDocumentHandoff({
+      caseManifestPath: options["case-manifest"], planManifestPath: options["plan-manifest"],
+      gCompilerPath: options["g-compiler"], suite
+    });
+    result = await initializeRun({ workspaceRoot: options.workspace, casesInput,
+      workflowProfile: options["workflow-profile"] });
   } else if (command === "record") {
     const event = JSON.parse(await readFile(options.event, "utf8"));
+    if (["activity_start", "activity_end", "activity_complete"].includes(event.type)) {
+      throw runnerError("INPUT_CONTRACT", "活动时间由 activity-start、activity-end、activity-complete 命令记录");
+    }
     result = await recordEvent(options.run, event);
+  } else if (command === "activity-start") {
+    result = await beginActivity(options.run);
+  } else if (command === "activity-end") {
+    result = await endActivity(options.run);
+  } else if (command === "activity-complete") {
+    result = await completeActivity(options.run);
+  } else if (command === "link-retake") {
+    result = await linkRetake(options.run, options.parent);
   } else if (command === "resume-check") {
     result = await resumeCheck(options.run);
   } else if (command === "validate") {
@@ -774,7 +1025,7 @@ async function main() {
     }
     result = await archiveScreenshot(options.run, { event, sourcePath: options.source, allowedSourceRoot: options["source-root"], imageBase64: returned.data, mimeType: returned.mimeType });
   } else {
-    throw runnerError("INPUT_CONTRACT", "命令必须是 init、record、resume-check、validate、report、deliver 或 archive-screenshot");
+    throw runnerError("INPUT_CONTRACT", "命令必须是 init、init-g、record、resume-check、validate、report、deliver、link-retake、activity-start、activity-end、activity-complete 或 archive-screenshot");
   }
   process.stdout.write(JSON.stringify({ ok: true, ...result }) + "\n");
 }

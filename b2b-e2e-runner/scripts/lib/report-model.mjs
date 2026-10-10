@@ -81,7 +81,53 @@ function durationLabel(milliseconds) {
   return [hours ? `${hours} 小时` : null, minutes ? `${minutes} 分钟` : null, `${seconds} 秒`].filter(Boolean).join(" ");
 }
 
-function deriveDurations(executionLog) {
+export function deriveActivityDurations(executionLogs) {
+    const intervals = [];
+    for (const executionLog of executionLogs) {
+      let opened = null;
+      let complete = false;
+      let valid = true;
+      for (const event of executionLog.events ?? []) {
+        if (complete && (!["run_state", "cleanup_state", "proxy_state", "report_context"].includes(event.type)
+          || (event.type === "run_state" && event.status !== "completed"))) {
+          valid = false;
+          break;
+        }
+        if (event.type === "activity_start") {
+          if (opened !== null) valid = false;
+          opened = Date.parse(event.at ?? "");
+        }
+        if (event.type === "activity_end") {
+          const end = Date.parse(event.at ?? "");
+          if (!Number.isFinite(opened) || !Number.isFinite(end) || end < opened) valid = false;
+          if (!valid) break;
+          intervals.push([opened, end]);
+          opened = null;
+        }
+        if (event.type === "activity_complete") complete = true;
+      }
+      if (!valid || !complete || opened !== null) return { accurate: false, execution_ms: null,
+        waiting_ms: null, execution_label: "无法准确计算", waiting_label: "无法准确计算" };
+    }
+    let executionMs = null;
+    if (intervals.length) {
+      intervals.sort((a, b) => a[0] - b[0]);
+      let [start, end] = intervals[0];
+      executionMs = 0;
+      for (const [nextStart, nextEnd] of intervals.slice(1)) {
+        if (nextStart <= end) end = Math.max(end, nextEnd);
+        else { executionMs += end - start; [start, end] = [nextStart, nextEnd]; }
+      }
+      executionMs += end - start;
+    }
+    return { accurate: executionMs !== null, execution_ms: executionMs, waiting_ms: null,
+      execution_label: durationLabel(executionMs), waiting_label: "无法准确计算" };
+}
+
+export function deriveDurations(executionLog) {
+  if (executionLog.events?.[0]?.profile === "permission-batches-html-v3") {
+    return deriveActivityDurations([executionLog]);
+  }
   const start = Date.parse(executionLog.run.started_at ?? "");
   const boundaryValue = executionLog.run.completed_at ?? executionLog.events?.at(-1)?.at;
   const end = Date.parse(boundaryValue ?? "");
@@ -246,9 +292,15 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     action: step.action,
     expected: step.expected.map(oracle => {
       const checkpoint = state.checkpoints[checkpointIndex++];
+      const id = checkpointId(testCase.case_id, step.step_id, oracle.oracle_id);
+      const sourceEvent = [...(executionLog.events ?? [])].reverse().find(event =>
+        event.type === "checkpoint_result" && event.checkpoint_id === id);
+      const controls = (executionLog.events ?? []).filter(event =>
+        event.type === "control_effect" && event.checkpoint_ids.includes(id));
+      const source = sourceEvent?.verification_source ?? "unknown";
       return {
         oracle_id: oracle.oracle_id,
-        checkpoint_id: checkpointId(testCase.case_id, step.step_id, oracle.oracle_id),
+        checkpoint_id: id,
         text: oracle.text,
         status: checkpoint.status,
         result: checkpoint.result,
@@ -257,6 +309,11 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
         observations: checkpoint.observations?.length ? [...checkpoint.observations] : ["未记录"],
         evidence_status: checkpoint.evidence_status,
         evidence_status_label: evidenceStatusLabels[checkpoint.evidence_status] ?? "证据状态未记录",
+        ...(executionLog.events?.[0]?.profile === "permission-batches-html-v3" ? {
+          verification_source_label: source === "real" ? "纯真实" : source === "mock_affected" ? "含模拟" : "来源未确认",
+          verification_source_description: controls.map(event => event.description).join("；") ||
+            (source === "real" ? "未记录影响此检查点的测试控制" : "控制影响范围尚未确认")
+        } : {}),
         evidence: (checkpoint.evidence_refs ?? []).map(id => evidence.get(id)).filter(Boolean),
         blocker: checkpoint.blocker ?? "未记录",
         permission_group_ids: checkpoint.permission_group_ids ? [...checkpoint.permission_group_ids] : []
@@ -404,7 +461,7 @@ export function buildReportModel(testCases, executionLog) {
     run: {
       run_id: executionLog.run.run_id,
       status: executionLog.run.status,
-      status_label: executionLog.run.status === "awaiting_user" && profile === "permission-batches-html-v2"
+      status_label: executionLog.run.status === "awaiting_user" && ["permission-batches-html-v2", "permission-batches-html-v3"].includes(profile)
         ? "未完成，等待用户协作"
         : statusLabels[executionLog.run.status] ?? executionLog.run.status,
       started_at: executionLog.run.started_at,
@@ -482,7 +539,7 @@ export function buildReportModel(testCases, executionLog) {
       checks: [
         { item: "用例范围", outcome: "已核对", description: `${rows.length} 条输入用例均已按原顺序纳入报告` },
         { item: "执行记录", outcome: "完整", description: `执行记录完整，共读取 ${executionLog.events?.length ?? 0} 条连续记录` },
-        profile === "permission-batches-html-v2"
+        ["permission-batches-html-v2", "permission-batches-html-v3"].includes(profile)
           ? { item: "交付来源", outcome: "一致", description: "HTML 与对话全量表由同一份不可变用例快照和执行日志模型生成" }
           : { item: "双报告来源", outcome: "一致", description: "HTML 与 Markdown 由同一份不可变用例快照和执行日志生成" },
         { item: "证据状态", outcome: "已汇总", description: evidenceSummary(evidenceCounts) },

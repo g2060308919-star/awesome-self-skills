@@ -6,6 +6,8 @@
 
 `init` 排他创建 `<WORKSPACE_ROOT>/b2b-e2e-runs/<timestamp-random>/`，写入 `test-cases.json`、`execution-log.json` 和 `evidence/`。快照写入后以 SHA-256 固化；随后不得修改。源文件变化不影响 Run，重跑必须新建 Run。
 
+G 4.x 正式交接使用 `init-g`。它读取 Case Document 和已完成、`runner_ready=true` 的 Execution Plan 的各自 `output/current.json`，先调用 G 编译器导出的只读正式交付校验，再核对版本配对、产物摘要、不可变 `case_document_ref`、执行投影顺序和每条 Grounded/Execute 用例，在内存中映射到同一 R 2.0 输入校验与 `init` 路径。仅有自洽的手写哈希文件不能绕过 G 的语义、Schema 和交付门槛。`expected[].text` 等于 G 原 Oracle `expected`；原始 Case、测试值来源和 Claim ID 保留在冻结快照中。没有对应 Oracle 的步骤不能被擅自补写预期，交接会拒绝。`suite` 仅记录已确认的非生产目标，不改变 Case 语义，也不替代 G 的 Execution Plan。
+
 ## execution-log.json
 
 日志只引用用例 ID，不复制正文。它保存 schema、Run ID/状态/时间、快照哈希、MCP 预检、Target 所有权、角色观察、代理状态/验证、证据与清理总态，以及有序关键事件。检查点事件至少包含 checkpoint ID、状态、四态结果、语义原因、实际观察、证据状态、证据引用、阻塞和时间。还要记录实际执行顺序、动态样本锁定/替换、用户协助和清理事实。
@@ -22,6 +24,8 @@
 - `data_gap` 记录真实 blocker/探索、缺失条件、已知请求事实和未开始步骤的依赖。普通 `undetermined` 可用 `data_gap_ref` 支撑未开始依赖步骤，不再伪造 `resolution_ref`，但必须保留探索引用、`not_attempted_reason` 且没有开放协作。
 
 Mock 层事件包括不可覆盖/可撤回的 `mock_policy`、从合法数据缺口派生的 `mock_candidate`、版本化 `mock_attempt`、去重请求事实 `mock_observation`、不覆盖原检查点的 `mock_checkpoint` 和候选收尾 `mock_disposition`。场景/状态/回执是运行资产，不是第二份产品结果；代理不得直接覆盖 `execution-log.json`，Runner 通过既有 `record` 导入。重复回执幂等，跨 Run、未知证据、过期上下文和无效顺序同时在 record 与重放校验中拒绝。
+新建 v3 Run 使用 profile `permission-batches-html-v3`，首个事件同样为 `workflow_profile`；在业务开始前记录一次 `permission_plan`。v3 不启用 v2 的执行覆盖或 Mock 扩展。历史 v1/v2/无 profile Run 保持原校验、恢复和报告语义，禁止原地迁移；未知 profile 或扩展拒绝。
+
 
 权限计划契约保持不变：
 
@@ -45,6 +49,14 @@ v2 `assistance` 使用 `assistance_id`、`phase`（`requested` / `resolved` / `u
 
 v2 `evidence_capture` 记录精确 `checkpoint_ids`、固定 `capture_kind: screenshot`、`outcome`（`captured` / `failed` / `unavailable`）、上下文 `description` 与真实 `attempts`。成功必须注册真实图片 `evidence`；失败/不可用必须有 `reason` 且不能引用模拟图片。实际执行用例在阶段或最终交付前必须有成功或明确缺失的截图采集记录；证据状态与产品结果分开。
 
+v3 `evidence_capture` 增加 `capture_scope: page|request_details`。页面截图不能代替原契约要求的请求详情截图；最后一次必要范围采集失败或不可用时，完整性不得写为完整。无法核实齐全时记录已存材料和未知范围，不把未知当作零缺口。证据归档失败不自动改写已观察的产品结果；关键业务事实未观察到不能判通过。
+
+v3 `control_effect` 记录实际生效的控制，精确关联 `checkpoint_ids`、`attempt_id`、Target、请求或响应阶段、匹配事实和描述。v3 `checkpoint_result.verification_source` 为 `real`、`mock_affected` 或 `unknown`：记录到影响时不能声明纯真实，配置但未证明生效不能声明含模拟或纯真实。含模拟结果仍按原 `expected[].text` 判断；前端模拟成功不证明真实后端持久化。报告须写出被模拟的步骤、真实观察和未证实范围。同 Run 内重复写同一检查点结果会被拒绝；合法后续重测使用关联的新 Run。
+
+v3 活动区段由 `activity-start`、`activity-end`、`activity-complete` 命令记录，时间由 Runner 生成。完整覆盖且区段成对时用区间并集计算执行耗时；未证明覆盖或边界缺失时显示“无法准确计算”，不由任务自然跨度减去部分等待推算。旧 Run 不补造时间。
+
+v3 补测先用原确认用例的未修改子集初始化新 Run，再调用 `link-retake --run <NEW_RUN> --parent <PRIOR_RUN>`。父轮须已完成；关联验证同 workspace、根任务、完整用例语义和无环。仅支持整条用例替换，部分检查点补测不完整时拒绝。对根 Run 调用 `deliver`，官方汇总按根输入顺序保留未补测项、取合法后续结果和对应证据，且每条恰好一行；原轮与补测轮账本不改写。冲突候选、未完成补测、来源日志变化或报告被手改时不交付最终汇总。
+
 v2 可用 `report_context` 记录经允许展示的 `prd_links`、`environment_description`、`display_timezone` 和来源 `description`，不修改目标或预期。链接只允许无认证信息的 HTTP(S)。
 
 v2 最终 `undetermined` 的 `checkpoint_result` 必须在 `exploration_summary` 和 `exploration_ref` 中恰选一个。摘要字段为精确 `checkpoint_ids`、`missing_fact`、`known_facts`、真实 `attempts`，没有尝试时的 `not_attempted_reason`，以及 `cannot_continue_reason`。`exploration_ref` 只能引用本 Run 先前带合法摘要的 blocker。未开始检查点还须满足原权限终结路径或用 `resolution_ref` 引用先前的合法协作解决/结束事件；开放协作未结束时拒绝终结。
@@ -61,7 +73,13 @@ v2 最终 `undetermined` 的 `checkpoint_result` 必须在 `exploration_summary`
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --workflow-profile permission-batches-html-v2
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --workflow-profile permission-batches-html-v2 --mock-fallback allowed|declined
+node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --workflow-profile permission-batches-html-v3
+node <SKILL_ROOT>/scripts/run-artifacts.mjs init-g --workspace <WORKSPACE_ROOT> --case-manifest <CASE_RUN>/output/current.json --plan-manifest <EXECUTION_RUN>/output/current.json --g-compiler <G_SKILL_ROOT>/scripts/test-compiler.mjs --suite <CONFIRMED_SUITE_JSON> --workflow-profile permission-batches-html-v3
 node <SKILL_ROOT>/scripts/run-artifacts.mjs record --run <RUN_ROOT> --event <EVENT_JSON>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs activity-start --run <RUN_ROOT>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs activity-end --run <RUN_ROOT>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs activity-complete --run <RUN_ROOT>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs link-retake --run <NEW_RUN_ROOT> --parent <PRIOR_RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs resume-check --run <RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs validate --run <RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs report --run <RUN_ROOT>

@@ -250,7 +250,9 @@ function v2CaseDetail(detail) {
       `<div class="comparison"><div class="comparison-row expected"><span>预期结果</span><p>${escapeHtml(item.text)}</p></div>` +
       `<div class="comparison-row observed"><span>实际观察</span><div>${list(item.observations)}</div></div></div>` +
       `<dl class="checkpoint-meta"><dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
-      `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd><dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
+      `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd>` +
+      (item.verification_source_label ? `<dt>验证来源</dt><dd>${escapeHtml(item.verification_source_label)}；${escapeHtml(item.verification_source_description)}</dd>` : "") +
+      `<dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
       (item.evidence.length ? `<ul class="evidence">${item.evidence.map(v2EvidenceItem).join("")}</ul>` : "<p class=\"evidence-gap\">未关联可展示的关键图片。</p>") +
       `</article>`).join("")}</div></div></li>`).join("");
   const actual = detail.actual_records.length
@@ -274,6 +276,7 @@ function v2CaseDetail(detail) {
       `<p class="evidence-gap">结论边界：该结果只补充真实前端行为，不证明真实后端已创建、修改或持久化业务数据。</p></article>`).join("")
     : "";
   return `<div class="case-detail"><section class="detail-outcome ${escapeHtml(detail.result)}"><div class="outcome-heading"><span class="status ${escapeHtml(detail.result)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(detail.result_label)}</span><strong>${escapeHtml(detail.title)}</strong></div><p>${escapeHtml(detail.reason)}</p></section>` +
+    (detail.source_run_id ? `<p>当前采用：${escapeHtml(detail.source_kind)} ${escapeHtml(detail.source_run_id)}；其他轮次记录仍保存在原 Run。</p>` : "") +
     `<div class="detail-context"><span class="context-chip neutral-chip">${escapeHtml(detail.display_id)}</span><span class="context-chip neutral-chip">模块 · ${escapeHtml(detail.module)}</span>${v2PermissionChips(detail)}</div>` +
     `<details class="full-id"><summary>查看完整原始用例 ID</summary><p>${escapeHtml(detail.case_id)}</p></details>` +
     `<div class="detail-flow"><section class="detail-section"><h3>测试前提</h3>${list(detail.preconditions)}</section>` +
@@ -482,5 +485,5 @@ table:not(.case-table) th,table:not(.case-table) td{border-bottom:1px solid var(
 }
 
 export function buildHtmlReport(model) {
-  return model.run.workflow_profile === "permission-batches-html-v2" ? buildV2HtmlReport(model) : buildLegacyHtmlReport(model);
+  return ["permission-batches-html-v2", "permission-batches-html-v3"].includes(model.run.workflow_profile) ? buildV2HtmlReport(model) : buildLegacyHtmlReport(model);
 }

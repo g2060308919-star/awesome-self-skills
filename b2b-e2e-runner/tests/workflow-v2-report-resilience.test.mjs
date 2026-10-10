@@ -106,6 +106,20 @@ test("AC-09: a missing timing boundary is shown as not accurately calculable", a
   }
 });
 
+test("P11 new profile does not infer execution time from task span minus waits", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner-v3-duration-"));
+  try {
+    const { casesPath } = await writeCases(root, 1);
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v3" });
+    await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE-1"] });
+    const generated = await generateReport(run.runRoot);
+    const html = await readFile(generated.htmlReportPath, "utf8");
+    assert.match(html, /执行耗时<\/span><strong>无法准确计算<\/strong>/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("AC-10/25/29: a stage report stays pending and same-Run recovery preserves a later failure", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-stage-resume-"));
   try {
