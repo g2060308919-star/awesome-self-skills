@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { prepareV4Source, validateV4SourcePackBeforeStaging } from '../../src/entry.mjs';
+import { discoverV4Topology, prepareV4Source, validateV4SourcePackBeforeStaging } from '../../src/entry.mjs';
 import { advanceStrict } from '../../src/advance-strict.mjs';
 import { canonicalStringify, digest } from '../../src/canonical.mjs';
 import { stageV4PrdCollectionObservation, loadV4SourceReadingSummary } from '../../src/prd-source-collection-v4.mjs';
@@ -275,7 +275,7 @@ test('initial CLI request and safe source_assets enter existing pending and resu
         reviewer: 'operator', method: 'inspection', evidence: 'Referenced image has not been acquired'
       }, canonical_uri: safe
     }];
-    const discovery = discoverV4Topology(pack);
+    const discovery = discoverV4Topology(pack, fixture.artifacts.evidence_claims.claims);
     assert.deepEqual(discovery.topology_candidates.map((/** @type {any} */ item) => item.candidate_id),
       fixture.artifacts.evidence_claims.topology_discovery.topology_candidates.map(
         (/** @type {any} */ item) => item.candidate_id
