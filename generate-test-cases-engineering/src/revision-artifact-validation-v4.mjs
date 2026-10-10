@@ -105,6 +105,7 @@ export function validateRevisionArtifactsV4(input) {
     decisions: values.source_pack.decision_records
   });
   requireExactKeys(values.fact_ledger, ['schema_version', 'source_revision', 'facts']);
+  if (validateUniqueStableIds(values.fact_ledger).length) throw new TypeError('REVISION_ARTIFACT_SCHEMA_INVALID');
   requireSame(values.fact_ledger, {
     schema_version: contract.schema_version, source_revision: input.revision,
     facts: values.evidence_claims.fact_ledger

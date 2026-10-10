@@ -178,8 +178,19 @@ function decodeHtmlEntities(value, strict = true) {
 function urlDestinations(content) {
   /** @type {Array<{start:number,end:number,html:boolean}>} */
   const ranges = [];
+  /** @type {Array<{start:number,end:number}>} */
+  const labels = [];
   let cursor = 0;
   while ((cursor = content.indexOf('](', cursor)) >= 0) {
+    let labelStart = cursor - 1;
+    let bracketDepth = 0;
+    for (; labelStart >= 0; labelStart -= 1) {
+      if (content[labelStart] === ']' && content[labelStart - 1] !== '\\') bracketDepth += 1;
+      if (content[labelStart] === '[' && content[labelStart - 1] !== '\\') {
+        if (bracketDepth === 0) break;
+        bracketDepth -= 1;
+      }
+    }
     let position = cursor + 2;
     while (/\s/u.test(content[position] ?? '') && position < content.length) position += 1;
     const angle = content[position] === '<';
@@ -207,10 +218,25 @@ function urlDestinations(content) {
     }
     if (content[position] !== ')') throw new Error('SOURCE_URL_MALFORMED');
     ranges.push({ start, end, html: false });
+    if (labelStart >= 0) {
+      const label = content.slice(labelStart + 1, cursor);
+      for (const match of label.matchAll(/https?:\/\/[^\s\]]+/giu)) {
+        let url;
+        try { url = new URL(match[0]); } catch { throw new Error('SOURCE_URL_MALFORMED'); }
+        if (url.username || url.password || [...url.searchParams.keys()].some(credentialLike)) {
+          throw new Error('SOURCE_URL_MALFORMED');
+        }
+      }
+      labels.push({ start: labelStart + 1, end: cursor });
+    }
     cursor = position + 1;
   }
   const tags = /<[A-Za-z][A-Za-z0-9:-]*(?=[\s/>])/gu;
   for (const match of content.matchAll(tags)) {
+    // A Markdown <destination> is already parsed above. Its opening bracket
+    // must not be reinterpreted as the start of an HTML element.
+    if (ranges.some(range => range.start === match.index + 1
+      && content[range.end] === '>')) continue;
     let position = match.index + match[0].length;
     let quote = '';
     for (; position < content.length; position += 1) {
@@ -248,9 +274,22 @@ function urlDestinations(content) {
       else if (/https?:\/\//iu.test(decodeHtmlEntities(content.slice(start, end), false))) throw new Error('SOURCE_URL_MALFORMED');
     }
   }
-  for (const match of content.matchAll(/https?:\/\/[^\s<>"']+/giu)) {
+  for (const match of content.matchAll(/https?:\/\/[^\s<>"'，。；！？）】》]+/giu)) {
     if (ranges.some((range) => match.index >= range.start && match.index < range.end)) continue;
-    ranges.push({ start: match.index, end: match.index + match[0].length, html: false });
+    if (labels.some((label) => match.index >= label.start && match.index < label.end)) continue;
+    let end = match.index + match[0].length;
+    while (end > match.index) {
+      const trailing = content[end - 1];
+      if (/[.,;!?，。；！？]/u.test(trailing)) { end -= 1; continue; }
+      const opening = { ')': '(', ']': '[', '}': '{' }[trailing];
+      if (opening) {
+        const candidate = content.slice(match.index, end);
+        if ([...candidate].filter(char => char === trailing).length
+          > [...candidate].filter(char => char === opening).length) { end -= 1; continue; }
+      }
+      break;
+    }
+    ranges.push({ start: match.index, end, html: false });
   }
   return ranges.sort((left, right) => left.start - right.start);
 }

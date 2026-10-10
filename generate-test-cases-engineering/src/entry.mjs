@@ -12,13 +12,15 @@ import { createV4RunDirectory } from './run-bootstrap-v4.mjs';
 import { stageV4PrdCollectionObservation } from './prd-source-collection-v4.mjs';
 import { discoverV4Topology, constructV4TopologyEvidence } from './topology-adapter-v4.mjs';
 import { prepareV4Source, validateV4SourcePackBeforeStaging } from './source-preparation-v4.mjs';
+import { verifyCaseDocumentDeliveryV4, verifyExecutionPlanDeliveryV4 } from './canonical-delivery-v4.mjs';
 
 export {
   advanceStrict, constructIndependentReviewCompletionV4, constructV4Action,
   constructV4TopologyEvidence,
   createV4RunDirectory, sourceAcquisitionMaterialPathV4,
   stageV4SourceAcquisitionAction, stageV4PrdCollectionObservation,
-  discoverV4Topology, prepareV4Source, validateV4SourcePackBeforeStaging
+  discoverV4Topology, prepareV4Source, validateV4SourcePackBeforeStaging,
+  verifyCaseDocumentDeliveryV4, verifyExecutionPlanDeliveryV4
 };
 
 /** @param {string} code @param {string} message */
@@ -32,7 +34,7 @@ function fatalReply(code, message) {
 async function main() {
   try {
     const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
-    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.8.1';
+    const compilerVersion = typeof __COMPILER_VERSION__ === 'string' ? __COMPILER_VERSION__ : '0.8.2';
     const userArguments = process.argv.slice(2);
     const reply = userArguments.length !== 1
       ? fatalReply(

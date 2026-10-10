@@ -141,6 +141,21 @@ test('one append may answer multiple question parts from the same presented batc
   assert.deepEqual(conflicting.checkpoint, initial.checkpoint);
 });
 
+test('P16 one natural message binds distinct answers to their own question parts', () => {
+  const initial = baseCheckpoint();
+  const presentation = initial.presentation;
+  const parts = presentation.question_parts.slice(0, 2);
+  const message = `第一项：${parts[0].answer_options[0]}；第二项：${parts[1].answer_options[0]}。`;
+  const events = parts.map((/** @type {any} */ part) =>
+    answerEvent(presentation, part, message, part.answer_options[0]));
+  const result = apply(initial.checkpoint, events, [], [presentation], [message]);
+  assert.equal(result.commit_required, true);
+  assert.equal(result.decisions.length, 2);
+  assert.equal(result.decisions[0].answer_origin.message_digest, result.decisions[1].answer_origin.message_digest);
+  assert.notDeepEqual(result.decisions[0].answer_origin.answer_span, result.decisions[1].answer_origin.answer_span);
+  assert.notEqual(result.decisions[0].target.root_issue_id, result.decisions[1].target.root_issue_id);
+});
+
 test('blank, unparseable and no-information-gain input preserve exact checkpoint and revision', () => {
   const initial = baseCheckpoint();
   for (const events of [[], [{ event_type: 'answer_question_part', answer: '   ' }]]) {

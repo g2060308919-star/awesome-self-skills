@@ -5,7 +5,7 @@ description: Use when a PRD, module description, module-description, 需求文�
 
 # Generate Test Cases
 
-Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. New runs use the exact schema/compiler pair `4.3.1/0.8.1`; exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, and `4.3.0/0.8.0` runs retain their bound behavior. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
+Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. New runs use the exact schema/compiler pair `4.3.2/0.8.2`; exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, `4.3.0/0.8.0`, and `4.3.1/0.8.1` runs retain their bound behavior. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
 
 The compiler owns validation, stable identity, Facts, scope topology, formal Test Points, semantic roots, classification, coverage, ordering, checkpoints, canonical results, and rendering. The Agent writes only the four requested semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
 
@@ -27,6 +27,8 @@ For ordinary requests to generate test Cases, test points, or a test document, u
 Use `delivery_intent=execution_plan` only when the user explicitly asks to select or confirm an execution list. An execution plan is a separate downstream run bound to an immutable `case_document_ref` containing the exact `manifest_digest` and `bundle_digest`. Only this path checks current execution capabilities and dispositions. Do not ask for execution resources or an execution-plan preference during ordinary Case generation.
 
 This Skill creates and, when explicitly requested, confirms an execution plan. It does not automatically start E2E, invoke a browser or API runner, generate automation code, or record execution results.
+
+For an explicitly authorized downstream handoff, provide the two immutable `output/current.json` paths and this installed compiler path to R's `init-g` entry. Its read-only verifier exports check both formal deliveries before R freezes a 2.0 snapshot. The Case Document alone is not an execution-ready input; never handwrite a ready plan or change the Case bundle to fit R.
 
 ## Gate and freeze input
 

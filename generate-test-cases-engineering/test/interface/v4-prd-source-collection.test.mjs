@@ -56,7 +56,7 @@ function observation(status = 'exhausted') {
 /** @param {string} runId @param {string} [sourceVersion] */
 function sourcePack(runId, sourceVersion = '17') {
   return {
-    schema_version: '4.3.1', source_revision: 0, run_instance_id: runId,
+    schema_version: '4.3.2', source_revision: 0, run_instance_id: runId,
     sources: [
       { source_id: 'SRC-prd', version: sourceVersion, capture_digest: byteDigest(CAPTURE.body), semantic_projection: { structure: [{ unit_id: 'UNIT-body' }, { unit_id: 'UNIT-image' }] } },
       { source_id: 'SRC-thread', version: sourceVersion, capture_digest: byteDigest(CAPTURE.comment), semantic_projection: { structure: [{ unit_id: 'UNIT-comment' }, { unit_id: 'UNIT-reply' }] } }
@@ -82,8 +82,8 @@ async function setup() {
 test('D2 new bootstrap uses general-quality identity while an existing legacy identity remains legacy', async () => {
   const { run } = await setup();
   const identity = JSON.parse(await readFile(path.join(run.run_directory, 'run-instance.json'), 'utf8'));
-  assert.equal(identity.schema_version, '4.3.1');
-  assert.equal(identity.compiler_version, '0.8.1');
+  assert.equal(identity.schema_version, '4.3.2');
+  assert.equal(identity.compiler_version, '0.8.2');
 });
 
 test('A01/A02 collection stages actual body/image/comment/reply bytes and binds reviewed source units', async () => {

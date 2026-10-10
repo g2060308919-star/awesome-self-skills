@@ -224,9 +224,12 @@ function applyArtifactEvents(pack, system, acquired) {
 function verifiedReceiptMap(pack, system) {
   const receipts = system.verified_source_receipts;
   const records = system.verified_acquisition_records;
+  const collectionReceipts = system.verified_collection_receipts ?? [];
   if (receipts === undefined && records === undefined) return new Map();
   if (!Array.isArray(receipts) || !Array.isArray(records)
+    || !Array.isArray(collectionReceipts)
     || new Set(receipts.map((/** @type {any} */ item) => item?.source_id)).size !== receipts.length
+    || new Set(collectionReceipts.map((/** @type {any} */ item) => item?.source_id)).size !== collectionReceipts.length
     || records.length !== pack.artifact_events.length) throw new TypeError('SOURCE_ACQUISITION_RECEIPT_INVALID');
   const eventIds = new Set(pack.artifact_events.map((/** @type {any} */ event) => event.event_id));
   if (eventIds.size !== pack.artifact_events.length
@@ -259,6 +262,23 @@ function verifiedReceiptMap(pack, system) {
     mapped.set(receipt.source_id, receipt);
   }
   if (covered.size !== eventIds.size) throw new TypeError('SOURCE_ACQUISITION_RECEIPT_INVALID');
+  for (const receipt of collectionReceipts) {
+    if (!hasOnly(receipt, [
+      'source_id', 'source_artifact_digest', 'capture_digest', 'semantic_digest',
+      'collection_session_digest'
+    ]) || Object.keys(receipt).length !== 5 || mapped.has(receipt.source_id)
+      || typeof receipt.collection_session_digest !== 'string'
+      || !/^sha256:[0-9a-f]{64}$/u.test(receipt.collection_session_digest)) {
+      throw new TypeError('SOURCE_COLLECTION_RECEIPT_INVALID');
+    }
+    const source = pack.sources.find((/** @type {any} */ item) => item.source_id === receipt.source_id);
+    if (!source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source)
+      || receipt.capture_digest !== source.capture_digest
+      || receipt.semantic_digest !== source.semantic_digest) {
+      throw new TypeError('SOURCE_COLLECTION_RECEIPT_INVALID');
+    }
+    mapped.set(receipt.source_id, receipt);
+  }
   return mapped;
 }
 
@@ -280,7 +300,7 @@ export function compileSourceEvidence(artifacts, system) {
       return evidence.diagnostics.length ? { status: 'rejected', diagnostics: evidence.diagnostics }
         : { status: 'accepted', source_pack: structuredClone(pack), evidence, acquisitions: [], diagnostics: [] };
     }
-    if (!hasOnly(system, ['provider_registry', 'expiry_registry', 'subject_registry', 'acquisitions', 'artifact_context', 'artifact_bindings', 'read_artifact_bytes', 'non_normative_asset_proofs', 'verified_source_receipts', 'verified_acquisition_records'])
+    if (!hasOnly(system, ['provider_registry', 'expiry_registry', 'subject_registry', 'acquisitions', 'artifact_context', 'artifact_bindings', 'read_artifact_bytes', 'non_normative_asset_proofs', 'verified_source_receipts', 'verified_acquisition_records', 'verified_collection_receipts'])
       || !Array.isArray(system.acquisitions)) return rejected('SOURCE_COMPILER_STATE_INVALID');
     if (system.artifact_context && system.artifact_context.run_id !== pack.run_instance_id) return rejected('ARTIFACT_RUN_MISMATCH');
     if (validateUniqueStableIds(pack).length || validateUniqueStableIds(claims).length) return rejected('SOURCE_DUPLICATE_ID');

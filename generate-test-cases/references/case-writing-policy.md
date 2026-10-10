@@ -79,6 +79,12 @@ Each `test_values` item identifies `value_id`, semantic `subject_ref`, business 
 
 Never mix fields from different branches, relabel an example as a requirement, or treat a derived result as an authorized rule. `used_by_refs` may name only an existing precondition, condition, step, oracle, or semantic effect in this Case. An E1 or temporary-assumption input caps the Case at Conditional even if its Oracle is stronger.
 
+For a required fixed number, file, or sample, preserve the exact value and Claim. For a replaceable example, write the sourced type, range, relationship to discriminating samples, and lookup action into existing data conditions and steps. A name lookup with a prefix-similar distractor remains a name lookup after data binding; an ID search or an all-population substitute does not satisfy it. If the source does not support replacement, do not mark the value replaceable. These conditions and `test_values.value_origin` must survive every formal output projection.
+
+Write message expectations at the owning step. When the source fixes the exact text, say that it must match verbatim and preserve the required words and punctuation. When the source permits wording variation, state every invariant business fact and behavior, such as the exact 5MB limit, allowed formats, and rejection; say that wording may vary. A rejection with a wrong required message is not an overall pass when the Case requires both. An unclear comparison mode or missing essential fact goes through the existing clarification path before delivery, never through an execution-time relaxation.
+
+Before finalizing each action, distinguish a user-editable control, a system-populated read-only field, and an external data prerequisite. A source-backed non-editable expiry belongs in the sample condition and an observe/query step, not a fabricated edit step. If the source requires editing, retain the requirement even if a later environment shows a read-only UI. If editability is unresolved and material, keep a precise gap or ask through the existing clarification stage. This review uses source facts and does not require logging into a business page.
+
 ## Preserve evidence and risk boundaries
 
 Every expected value/state and every optional semantic field needs direct accepted Claim evidence or a legal replayable E2 derivation. Run a read-only source rebuttal pass before submission: try to disprove every proposed fact, condition, action, and Oracle. The review must never introduce a new business fact. Contradicted or uncertain semantics remain a gap; do not invent an assumption to rescue them.
@@ -95,7 +101,7 @@ Apply an explicit user priority policy when one exists. Otherwise use a stable f
 
 ## Complete the 4.3 source-first review in the same stage
 
-For schema `4.3.0` or `4.3.1`, `case_drafts.independent_review` is required. It is review
+For schema `4.3.0`, `4.3.1`, or `4.3.2`, `case_drafts.independent_review` is required. It is review
 metadata inside the existing fourth artifact, not business evidence, a fifth
 truth ledger, or another workflow stage.
 

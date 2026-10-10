@@ -32,7 +32,7 @@ below. The separately retained single-system release benchmark is not a v4
 development prerequisite and makes no comparator-superiority, external-expert,
 or platform-signed Agent identity claim.
 
-## v4 architecture (latest compiler 0.8.1 / schema 4.3.1)
+## v4 architecture (latest compiler 0.8.2 / schema 4.3.2)
 
 The v4 development track keeps one private module entry point, `advanceStrict(absoluteRunDirectory)`, and exactly four Agent-writable artifacts:
 
@@ -57,6 +57,10 @@ independent review. The review reuses `case_drafts`: a valid pending submission
 causes the compiler to issue the authoritative target inventory and digest, and
 a completed submission repeats the same generated content with an assessment
 bound to that digest. It is not a fifth artifact or public stage.
+
+The new `4.3.2/0.8.2` pair keeps those quality gates and binds collection
+receipts separately from normalized source text. It carries reviewed resource
+acquisition through the source reading summary and canonical delivery.
 
 Exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, and `4.3.0/0.8.0` runs keep their original contracts and
 bytes. Mixed or unknown version pairs fail closed; old runs are never silently

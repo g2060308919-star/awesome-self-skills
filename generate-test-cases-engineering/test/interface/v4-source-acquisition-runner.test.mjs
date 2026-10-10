@@ -353,6 +353,7 @@ test('BR-13 acquired capture receipts allow only verified user-statement append 
     const initial = /** @type {any} */ (await advanceStrict(directory));
     const runId = initial.scope.run_instance_id;
     const fixture = await bendReviewJourneyFixture(runId);
+    fixture.artifacts.evidence_claims.fact_ledger.reverse();
     const unsafeSource = structuredClone(fixture.artifacts.source_pack);
     unsafeSource.sources[0].content +=
       '\nhttps://unknown.example.invalid/prd?id=31&signature=ACQUIRED_APPEND_SECRET';

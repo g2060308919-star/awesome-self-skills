@@ -8,14 +8,15 @@ import { fileURLToPath } from 'node:url';
 
 import { prepareV4Source, validateV4SourcePackBeforeStaging } from '../../src/entry.mjs';
 import { advanceStrict } from '../../src/advance-strict.mjs';
-import { canonicalStringify } from '../../src/canonical.mjs';
-import { stageV4PrdCollectionObservation } from '../../src/prd-source-collection-v4.mjs';
+import { canonicalStringify, digest } from '../../src/canonical.mjs';
+import { stageV4PrdCollectionObservation, loadV4SourceReadingSummary } from '../../src/prd-source-collection-v4.mjs';
 import { createV4RunDirectory } from '../../src/run-bootstrap-v4.mjs';
 import { stageV4SourceAcquisitionAction } from '../../src/source-acquisition-v4.mjs';
 import { compileCanonicalSourceStructure } from '../../src/source-locators-v4.mjs';
 import { canonicalizeSourceUrl, sourceByteDigest } from '../../src/source-canonicalization.mjs';
 import { createCompilerSourceRuntimeV4 } from '../../src/source-runtime-registry-v4.mjs';
 import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
+import { bindGeneralQualityFixture, v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 const encoder = new TextEncoder();
 const metadata = {
@@ -113,6 +114,44 @@ test('preparation is deterministic and input is closed', () => {
   assert.equal(prepare('规则', { unexpected: true }).status, 'source_diagnostic');
 });
 
+test('P14 Markdown URL labels remain text while only destinations are parsed as URLs', () => {
+  for (const content of [
+    '[https://example.com/page](https://example.com/page)',
+    '[document](https://example.com/page), [https://example.com/other](https://example.com/other).'
+  ]) {
+    const result = prepare(content);
+    assert.equal(result.status, 'prepared', JSON.stringify(result));
+    assert.equal(result.source.content, content);
+  }
+});
+
+test('P14 a credential-bearing URL label remains quarantined', () => {
+  const signed = '[https://example.com/page?token=TEST_ONLY_SECRET](https://example.com/page)';
+  const result = prepare(signed);
+  assert.notEqual(result.status, 'prepared');
+  assert.doesNotMatch(JSON.stringify(result), /TEST_ONLY_SECRET/u);
+});
+
+test('P14 escaped destinations, adjacent links and punctuation retain URL boundaries', () => {
+  const content = '[a](https://example.com/a\\(b\\)),[b](https://example.com/b).';
+  const result = prepare(content);
+  assert.equal(result.status, 'prepared', JSON.stringify(result));
+  assert.equal(result.source.content, '[a](https://example.com/a(b)),[b](https://example.com/b).');
+});
+
+test('P14 angle-bracket Markdown destination with balanced path parentheses is a URL, not an HTML tag', () => {
+  const result = prepare('[规则](<https://example.com/a(b)>)');
+  assert.equal(result.status, 'prepared', JSON.stringify(result));
+  assert.equal(result.source.content, '[规则](<https://example.com/a(b)>)');
+});
+
+test('P14 bare URL does not absorb adjacent closing punctuation but keeps balanced path parentheses', () => {
+  const result = prepare('说明（https://example.com/page）。另见 https://example.com/a(b)。');
+  assert.equal(result.status, 'prepared', JSON.stringify(result));
+  assert.equal(result.source.content,
+    '说明（https://example.com/page）。另见 https://example.com/a(b)。');
+});
+
 test('actual Cooper attachment host removes only controlled signing keys', () => {
   const signed = 'https://s3-ep-inter.didistatic.com/doc/image.png?variant=cover&tag=a&X-Amz-Signature=TEST_ONLY_CANARY&tag=b';
   const result = prepare(`![流程](${signed})`, {
@@ -179,22 +218,56 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     const directory = (await createV4RunDirectory(catalog, 'case_document')).run_directory;
     const initial = await advanceStrict(directory);
     assert.equal(initial.stage, 'source_pack');
-    const pack = v4PipelineFixture().artifacts.source_pack;
+    const fixture = v4GeneralQualityFixture('4.3.2');
+    fixture.artifacts.evidence_claims.fact_ledger.push({
+      ...structuredClone(fixture.artifacts.evidence_claims.fact_ledger[0]),
+      fact_id: 'fact_checkout_context', statement: 'checkout 是订单验收的业务模块',
+      acceptance_role: 'context_only'
+    });
+    fixture.artifacts.evidence_claims.fact_ledger.reverse();
+    assert.equal(canonicalStringify({ facts: fixture.artifacts.evidence_claims.fact_ledger }),
+      canonicalStringify({ facts: [...fixture.artifacts.evidence_claims.fact_ledger].reverse() }));
+    bindGeneralQualityFixture(fixture, '4.3.2');
+    const pack = fixture.artifacts.source_pack;
     pack.run_instance_id = initial.scope.run_instance_id;
-    pack.schema_version = '4.3.1';
+    pack.schema_version = '4.3.2';
     pack.source_revision = initial.scope.source_revision;
     const source = pack.sources[0];
     const signed = 'https://s3-ep-inter.didistatic.com/doc/diagram.png?variant=cover&X-Amz-Signature=TEST_ONLY_CANARY';
     const safe = 'https://s3-ep-inter.didistatic.com/doc/diagram.png?variant=cover';
-    const capture = encoder.encode(source.content);
-    const prepared = prepare(source.content, {
+    const combinedContent = `${source.content}\n\n## 附注（非执行环境）\n` +
+      '参考 [https://example.com/page](https://example.com/page)。\n\n' +
+      '| 字段 | 示例 |\n| --- | --- |\n| 图示 | 非业务规则 |\n\n' +
+      '评论：图示仅解释布局。\n\n回复：同意上述说明。';
+    const capture = encoder.encode(`\ufeff${combinedContent.replace(/\n/gu, '\r\n')}`);
+    const prepared = prepare(combinedContent, {
       metadata: Object.fromEntries(['source_id', 'kind', 'version', 'status', 'authority', 'title', 'scope', 'domain']
         .filter(key => source[key] !== undefined).map(key => [key, source[key]])),
-      raw_response_bytes: encoder.encode(`{"image":"${signed}","body":"${source.content}"}`),
+      raw_response_bytes: encoder.encode(`{"image":"${signed}","body":"${combinedContent}"}`),
       capture_bytes: capture
     });
     assert.equal(prepared.status, 'prepared', JSON.stringify(prepared));
     pack.sources[0] = prepared.source;
+    pack.locators[0].semantic_digest = prepared.source.semantic_digest;
+    pack.source_reviews[0].semantic_digest = prepared.source.semantic_digest;
+    pack.source_reviews[0].units = prepared.units.map((/** @type {any} */ unit, /** @type {number} */ index) => ({
+      unit_id: unit.unit_id, content_digest: sourceByteDigest(encoder.encode(unit.text)),
+      classification: index === 0 ? 'normative' : 'non_normative'
+    }));
+    for (const [index, unit] of prepared.units.entries()) {
+      if (index === 0) continue;
+      pack.locators.push({
+        locator_id: `LOC-combined-${index}`, source_id: source.source_id,
+        semantic_digest: prepared.source.semantic_digest,
+        type: unit.type === 'table_cell' ? 'table_cell' : 'text_block_range',
+        unit_id: unit.unit_id, excerpt: unit.text,
+        excerpt_digest: sourceByteDigest(encoder.encode(unit.text)),
+        domain: 'business', field_path: `/non_normative/${index}`,
+        ...(unit.type === 'table_cell'
+          ? { table_id: unit.table_id, row: unit.row, column: unit.column }
+          : { section_id: unit.section_id, range: { start: 0, end: Array.from(unit.text).length } })
+      });
+    }
     pack.source_assets = [{
       asset_id: 'ASSET-diagram', source_id: source.source_id,
       locator_id: pack.locators[0].locator_id, status: 'unavailable',
@@ -202,7 +275,23 @@ test('initial CLI request and safe source_assets enter existing pending and resu
         reviewer: 'operator', method: 'inspection', evidence: 'Referenced image has not been acquired'
       }, canonical_uri: safe
     }];
-    const bodyUnit = prepared.units[0];
+    const discovery = discoverV4Topology(pack);
+    assert.deepEqual(discovery.topology_candidates.map((/** @type {any} */ item) => item.candidate_id),
+      fixture.artifacts.evidence_claims.topology_discovery.topology_candidates.map(
+        (/** @type {any} */ item) => item.candidate_id
+      ));
+    fixture.artifacts.evidence_claims.topology_discovery = discovery;
+    fixture.artifacts.evidence_claims.topology_review = {
+      ...fixture.artifacts.evidence_claims.topology_review,
+      ...discovery.scanned_units
+    };
+    const tableUnits = prepared.units.filter((/** @type {any} */ unit) => unit.type === 'table_cell');
+    const commentUnit = prepared.units.find((/** @type {any} */ unit) => unit.text.startsWith('评论：'));
+    const replyUnit = prepared.units.find((/** @type {any} */ unit) => unit.text.startsWith('回复：'));
+    assert.ok(commentUnit && replyUnit && tableUnits.length > 0);
+    const bodyUnits = prepared.units.filter((/** @type {any} */ unit) =>
+      unit.type !== 'table_cell' && unit.unit_id !== commentUnit.unit_id
+        && unit.unit_id !== replyUnit.unit_id);
     await stageV4PrdCollectionObservation(directory, initial, {
       version: '1.0.0', scope: {
         mode: 'online_document', root_ref: 'cooper:document/offline-fixture',
@@ -210,19 +299,31 @@ test('initial CLI request and safe source_assets enter existing pending and resu
         collection_window: { started_at: '2026-10-08T00:00:00.000Z', ended_at: '2026-10-08T00:00:01.000Z' }
       },
       channels: ['body', 'table', 'image', 'comment', 'reply'].map(channel => ({
-        channel, enumeration_status: ['body', 'table', 'image'].includes(channel) ? 'exhausted' : 'not_applicable',
-        page_count: ['body', 'table', 'image'].includes(channel) ? 1 : 0,
-        terminal_page_observed: ['body', 'table', 'image'].includes(channel), diagnostic_code: null
+        channel, enumeration_status: 'exhausted', page_count: 1,
+        terminal_page_observed: true, diagnostic_code: null
       })),
       items: [
         { item_id: 'body', parent_item_id: null, channel: 'body', source_id: source.source_id,
-          asset_id: null, unit_ids: [bodyUnit.unit_id], acquisition_status: 'acquired',
+          asset_id: null, unit_ids: bodyUnits.map((/** @type {any} */ unit) => unit.unit_id),
+          acquisition_status: 'acquired',
           review_status: 'reviewed', unavailable_reason: null },
+        { item_id: 'table', parent_item_id: null, channel: 'table', source_id: source.source_id,
+          asset_id: null, unit_ids: tableUnits.map((/** @type {any} */ unit) => unit.unit_id),
+          acquisition_status: 'acquired', review_status: 'reviewed', unavailable_reason: null },
         { item_id: 'image', parent_item_id: null, channel: 'image', source_id: source.source_id,
           asset_id: 'ASSET-diagram', unit_ids: [], acquisition_status: 'unavailable',
-          review_status: 'unread', unavailable_reason: 'IMAGE_MATERIAL_PENDING' }
+          review_status: 'unread', unavailable_reason: 'IMAGE_MATERIAL_PENDING' },
+        { item_id: 'comment', parent_item_id: null, channel: 'comment', source_id: source.source_id,
+          asset_id: null, unit_ids: [commentUnit.unit_id], acquisition_status: 'acquired',
+          review_status: 'reviewed', unavailable_reason: null },
+        { item_id: 'reply', parent_item_id: 'comment', channel: 'reply', source_id: source.source_id,
+          asset_id: null, unit_ids: [replyUnit.unit_id], acquisition_status: 'acquired',
+          review_status: 'reviewed', unavailable_reason: null }
       ]
-    }, [{ item_id: 'body', raw_response_bytes: encoder.encode(`{"image":"${signed}"}`), capture_bytes: capture }]);
+    }, ['body', 'table', 'comment', 'reply'].map(item_id => ({
+      item_id, raw_response_bytes: encoder.encode(`{"image":"${signed}","channel":"${item_id}"}`),
+      capture_bytes: capture
+    })));
     await mkdir(path.join(directory, 'staging'), { recursive: true });
     await writeFile(path.join(directory, 'staging/source-pack.json'), `${canonicalStringify(pack)}\n`);
     const pending = await advanceStrict(directory);
@@ -231,6 +332,14 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     assert.equal(pending.incomplete_reason.code, 'SOURCE_ASSET_UNAVAILABLE');
     assert.equal(pending.artifact_requests.length, 1);
     const image = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/GZkAAAAASUVORK5CYII=', 'base64'));
+    const changed = structuredClone(pack);
+    changed.sources[0].title = '同身份下不同来源';
+    await assert.rejects(stageV4SourceAcquisitionAction(directory, pending, changed, [{
+      artifact_request_id: pending.artifact_requests[0].artifact_request_id,
+      input: { kind: 'safe_upload_ref', upload_id: 'UPLOAD-offline-diagram', media_type: 'image/png',
+        byte_length: image.byteLength, content_digest: sourceByteDigest(image) },
+      material: image
+    }]), /ARTIFACT_SOURCE_CANDIDATE_INVALID/u);
     await stageV4SourceAcquisitionAction(directory, pending, pack, [{
       artifact_request_id: pending.artifact_requests[0].artifact_request_id,
       input: { kind: 'safe_upload_ref', upload_id: 'UPLOAD-offline-diagram', media_type: 'image/png',
@@ -257,6 +366,41 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     const resumed = JSON.parse(restarted.stdout);
     assert.equal(resumed.stage, 'evidence_claims', JSON.stringify(resumed));
     assert.doesNotMatch(JSON.stringify(resumed), /TEST_ONLY_CANARY/u);
+    let final = resumed;
+    for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) {
+      await writeFile(path.join(directory, `staging/${stage.replaceAll('_', '-')}.json`),
+        `${canonicalStringify(fixture.artifacts[stage])}\n`);
+      final = await advanceStrict(directory);
+    }
+    assert.equal(final.status, 'finished', JSON.stringify(final));
+    const manifest = JSON.parse(await readFile(path.join(directory, 'output/current.json'), 'utf8'));
+    assert.equal(manifest.schema_version, '4.3.2');
+    assert.ok(manifest.source_reading?.path);
+    const reading = JSON.parse(await readFile(path.join(directory, manifest.source_reading.path), 'utf8'));
+    assert.equal(reading.status, 'complete_within_scope');
+    assert.deepEqual(reading.items.map((/** @type {any} */ item) => item.channel),
+      ['body', 'table', 'image', 'comment', 'reply']);
+    assert.equal(reading.items.find((/** @type {any} */ item) => item.channel === 'reply').parent_item_id,
+      'comment');
+    const accepted = JSON.parse(await readFile(path.join(directory, 'accepted/r000/source-pack.json'), 'utf8'));
+    const statePath = path.join(directory, 'derived/source-acquisition.json');
+    const beforeRead = await readFile(statePath, 'utf8');
+    assert.deepEqual(await loadV4SourceReadingSummary(directory, accepted), reading);
+    assert.equal(await readFile(statePath, 'utf8'), beforeRead);
+    const clarified = structuredClone(accepted);
+    clarified.source_revision = 1;
+    clarified.sources[0].semantic_projection.structure.push({
+      unit_id: 'UNIT-test-answer', type: 'user_statement', text: '仅用于版本绑定的测试确认',
+      presentation_id: 'PRES-test-answer', message_digest: sourceByteDigest(encoder.encode('仅用于版本绑定的测试确认')),
+      answer_span: { start: 0, end: Array.from('仅用于版本绑定的测试确认').length }
+    });
+    clarified.sources[0].semantic_digest = `sha256:${digest(clarified.sources[0].semantic_projection)}`;
+    assert.deepEqual(await loadV4SourceReadingSummary(directory, clarified), reading);
+    const tampered = structuredClone(accepted);
+    tampered.sources[0].semantic_projection.content = '改写后的正文';
+    await assert.rejects(loadV4SourceReadingSummary(directory, tampered), /SOURCE_READING_BINDING_INVALID/u);
+    const repeated = await advanceStrict(directory);
+    assert.equal(repeated.status, 'finished');
     /** @param {string} root @returns {Promise<string[]>} */
     async function storedFiles(root) {
       const result = [];

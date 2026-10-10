@@ -7,6 +7,7 @@ import {
 } from './run-store.mjs';
 import { v4ContractForIdentity } from './v4-contract.mjs';
 import { sourceRuntimeRegistryVersionV4 } from './source-runtime-registry-v4.mjs';
+import { sourceAcquisitionIdentityDigestV4 } from './source-compiler-v4.mjs';
 
 const CHANNELS = Object.freeze(['body', 'table', 'image', 'comment', 'reply']);
 const ENUMERATION = new Set(['exhausted', 'partial', 'unsupported', 'not_applicable']);
@@ -32,6 +33,23 @@ const valueDigest = value => `sha256:${digest(value)}`;
 const stagingPath = runDirectory => path.join(runDirectory, 'staging', 'prd-collection.json');
 /** @param {string} runDirectory */
 const statePath = runDirectory => path.join(runDirectory, 'derived', 'source-acquisition.json');
+
+/** @param {string} runDirectory @param {any} state @param {any} current */
+async function acceptedSourceForLaterRevision(runDirectory, state, current) {
+  const target = path.join(runDirectory, 'accepted',
+    `r${String(state.committed_revision).padStart(3, '0')}`, 'source-pack.json');
+  const prior = (await readJsonIfPresent(runDirectory, target))?.value;
+  if (!prior || valueDigest(prior) !== state.accepted_source_pack_digest
+    || prior.run_instance_id !== current.run_instance_id
+    || canonicalStringify(prior.source_policy) !== canonicalStringify(current.source_policy)
+    || canonicalStringify(prior.source_assets) !== canonicalStringify(current.source_assets)
+    || prior.sources.length !== current.sources.length
+    || prior.sources.some((/** @type {any} */ source) => {
+      const next = current.sources.find((/** @type {any} */ item) => item.source_id === source.source_id);
+      return !next || sourceAcquisitionIdentityDigestV4(source) !== sourceAcquisitionIdentityDigestV4(next);
+    })) throw new TypeError('SOURCE_READING_BINDING_INVALID');
+  return prior;
+}
 
 /** The collection remains valid across append-only clarification revisions.
  * Bind only the immutable acquired/reviewed source surface, never workflow events. */
@@ -252,6 +270,27 @@ function summaryFor(session, sourcePack) {
   };
 }
 
+/** Resource review advances the reading view without mutating the original
+ * collection session or inventing capture bytes for an unavailable image. */
+/** @param {any} session @param {any} sourcePack */
+export function reboundV4SourceReadingSummary(session, sourcePack) {
+  const view = structuredClone(session);
+  for (const item of view.items) {
+    if (item.asset_id === null || item.acquisition_status === 'acquired') continue;
+    const asset = sourcePack.source_assets.find((/** @type {any} */ value) =>
+      value.source_id === item.source_id && value.asset_id === item.asset_id);
+    const source = sourcePack.sources.find((/** @type {any} */ value) => value.source_id === item.source_id);
+    if (asset?.status === 'reviewed' && asset.asset_digest
+      && source?.semantic_projection?.assets?.some((/** @type {any} */ value) =>
+        value.asset_digest === asset.asset_digest && value.canonical_uri === asset.canonical_uri)) {
+      item.acquisition_status = 'acquired';
+      item.review_status = 'reviewed';
+      item.unavailable_reason = null;
+    }
+  }
+  return summaryFor(view, sourcePack);
+}
+
 /**
  * Stage safe digests for a collection observation bound to the runner's current
  * source request. Raw response/capture bytes are verified in memory and never
@@ -331,9 +370,97 @@ export async function loadV4SourceReadingSummary(
   /** @type {Record<string,any>} */ sourcePack
 ) {
   const stored = await readJsonIfPresent(runDirectory, statePath(runDirectory));
-  if (!stored || stored.value.status !== 'collected'
-    || stored.value.source_material_digest !== sourceMaterialDigest(sourcePack)) {
-    throw new TypeError('SOURCE_READING_BINDING_INVALID');
+  if (!stored) throw new TypeError('SOURCE_READING_BINDING_INVALID');
+  const state = stored.value;
+  if (state.status === 'collected') {
+    if (state.run_id !== sourcePack.run_instance_id
+      || state.committed_revision > sourcePack.source_revision
+      || (state.committed_revision === sourcePack.source_revision
+        ? state.source_material_digest !== sourceMaterialDigest(sourcePack)
+          || state.accepted_source_pack_digest !== valueDigest(sourcePack)
+        : sourcePack.schema_version !== '4.3.2')) {
+      throw new TypeError('SOURCE_READING_BINDING_INVALID');
+    }
+    const boundPack = state.committed_revision < sourcePack.source_revision
+      ? await acceptedSourceForLaterRevision(runDirectory, state, sourcePack) : sourcePack;
+    if (sourcePack.schema_version === '4.3.2') {
+      const session = state.collection_sessions?.[0];
+      if (state.state_digest !== valueDigest(Object.fromEntries(
+        Object.entries(state).filter(([key]) => key !== 'state_digest')
+      )) || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1
+        || !session || session.session_digest !== valueDigest({
+          version: session.version, scope: session.scope,
+          channels: session.channels, items: session.items
+        })
+        || state.source_material_digest !== sourceMaterialDigest(boundPack)
+        || state.accepted_source_pack_digest !== valueDigest(boundPack)
+        || canonicalStringify(state.summary) !== canonicalStringify(summaryFor(session, boundPack))) {
+        throw new TypeError('SOURCE_READING_BINDING_INVALID');
+      }
+    }
+    return structuredClone(state.summary);
   }
-  return structuredClone(stored.value.summary);
+  if (sourcePack.schema_version !== '4.3.2' || state.status !== 'acquired'
+    || state.run_id !== sourcePack.run_instance_id
+    || state.committed_revision > sourcePack.source_revision
+    || state.state_digest !== valueDigest(Object.fromEntries(
+      Object.entries(state).filter(([key]) => key !== 'state_digest')
+    ))
+    || (state.committed_revision === sourcePack.source_revision
+      && state.accepted_source_pack_digest !== valueDigest(sourcePack))
+    || !Array.isArray(state.source_receipts) || !Array.isArray(state.events)
+    || !Array.isArray(state.collection_sessions) || state.collection_sessions.length !== 1
+    || state.source_receipts.some((/** @type {any} */ receipt) => {
+      const source = sourcePack.sources.find((/** @type {any} */ value) => value.source_id === receipt.source_id);
+      return !source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source)
+        || receipt.capture_digest !== source.capture_digest
+        || (state.committed_revision === sourcePack.source_revision
+          && receipt.semantic_digest !== source.semantic_digest)
+        || !receipt.artifact_event_ids.every((/** @type {string} */ id) =>
+          state.events.some((/** @type {any} */ event) => event.event_id === id));
+    })
+    ) throw new TypeError('SOURCE_READING_BINDING_INVALID');
+  const boundPack = state.committed_revision === sourcePack.source_revision
+    ? sourcePack : await acceptedSourceForLaterRevision(runDirectory, state, sourcePack);
+  if (canonicalStringify(state.summary) !== canonicalStringify(
+    reboundV4SourceReadingSummary(state.collection_sessions[0], boundPack)
+  )) throw new TypeError('SOURCE_READING_BINDING_INVALID');
+  return structuredClone(state.summary);
+}
+
+/** Collection receipts are produced only from a durable, digest-bound
+ * technical observation and its accepted Source Pack. They never reconstruct
+ * raw bytes from normalized content. */
+/** @param {string} runDirectory @param {any} sourcePack */
+export async function loadV4CollectionSourceReceipts(runDirectory, sourcePack) {
+  const stored = await readJsonIfPresent(runDirectory, statePath(runDirectory));
+  if (!stored || stored.value.status !== 'collected'
+    || stored.value.run_id !== sourcePack.run_instance_id
+    || stored.value.committed_revision > sourcePack.source_revision
+    || (stored.value.committed_revision === sourcePack.source_revision
+      && stored.value.source_material_digest !== sourceMaterialDigest(sourcePack))
+    || (stored.value.committed_revision === sourcePack.source_revision
+      && stored.value.accepted_source_pack_digest !== valueDigest(sourcePack))) {
+    throw new TypeError('SOURCE_COLLECTION_BINDING_INVALID');
+  }
+  if (stored.value.committed_revision < sourcePack.source_revision) {
+    await acceptedSourceForLaterRevision(runDirectory, stored.value, sourcePack);
+  }
+  const session = stored.value.collection_sessions?.[0];
+  if (!session || session.session_digest !== valueDigest({
+    version: session.version, scope: session.scope, channels: session.channels, items: session.items
+  })) throw new TypeError('SOURCE_COLLECTION_SESSION_INVALID');
+  return sourcePack.sources.flatMap((/** @type {any} */ source) => {
+    const items = session.items.filter((/** @type {any} */ item) => item.source_id === source.source_id
+      && item.asset_id === null && item.acquisition_status === 'acquired'
+      && item.review_status === 'reviewed' && item.capture_digest === source.capture_digest);
+    if (!items.length) return [];
+    return [{
+      source_id: source.source_id,
+      source_artifact_digest: sourceAcquisitionIdentityDigestV4(source),
+      capture_digest: source.capture_digest,
+      semantic_digest: source.semantic_digest,
+      collection_session_digest: session.session_digest
+    }];
+  });
 }

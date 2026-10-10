@@ -82,7 +82,7 @@ export function buildCaseDocumentPresentationV4(bundle, renderOptions = { includ
   if (!resultCopy || !record(renderOptions) || typeof renderOptions.include_audit_appendix !== 'boolean') {
     throw new TypeError('CASE_DOCUMENT_INVALID');
   }
-  const generalQuality = ['4.3.0', '4.3.1'].includes(bundle.schema_version);
+  const generalQuality = ['4.3.0', '4.3.1', '4.3.2'].includes(bundle.schema_version);
   if (generalQuality && (!record(bundle.design_assurance_summary)
     || !record(bundle.independent_review_summary))) throw new TypeError('CASE_DOCUMENT_INVALID');
   const modules = new Map(bundle.scope_manifest.modules.map((/** @type {any} */ item) => [item.module_id, item.name]));
@@ -244,7 +244,7 @@ function tableExpectations(row) {
 /** @param {ReturnType<typeof buildCaseDocumentPresentationV4>} presentation */
 function tableContext(presentation) {
   const lines = ['', `结果状态：${tableUserText(presentation.title)}`];
-  if (['4.3.0', '4.3.1'].includes(presentation.schema_version)) {
+  if (['4.3.0', '4.3.1', '4.3.2'].includes(presentation.schema_version)) {
     const design = presentation.design_assurance_summary;
     const review = presentation.independent_review_summary;
     lines.push('', '设计保障与独立审查：',
@@ -336,7 +336,7 @@ function htmlCoverage(presentation) {
 
 /** @param {ReturnType<typeof buildCaseDocumentPresentationV4>} presentation */
 function htmlQualityAssurance(presentation) {
-  if (!['4.3.0', '4.3.1'].includes(presentation.schema_version)) return '';
+  if (!['4.3.0', '4.3.1', '4.3.2'].includes(presentation.schema_version)) return '';
   const design = presentation.design_assurance_summary;
   const review = presentation.independent_review_summary;
   return `<section class="panel"><h2>设计保障与独立审查</h2><ul><li>设计保障：计划修订 ${design.plan_revision}；${design.batch_count} 个批次、${design.rule_group_count} 个规则组、${design.candidate_responsibility_count} 项候选验证责任均已处置。</li><li>独立审查：${review.source_first_target_count} 个来源优先目标均已评估；确认发现 ${review.finding_counts.confirmed} 项，驳回发现 ${review.finding_counts.rejected} 项。</li></ul><p class="meta">上述记录用于过程审计，不提升业务证据等级。</p></section>`;
@@ -347,7 +347,7 @@ function htmlAudit(presentation) {
   if (!presentation.render_options.include_audit_appendix) return '';
   const cases = presentation.rows.map(row => `<li><code>${html(row.case_id)}</code> · Test Point <code>${html(row.primary_test_point_id)}</code>${row.business_flow_ref ? ` · Flow <code>${html(row.business_flow_ref)}</code>` : ''}</li>`).join('');
   const roots = presentation.semantic_roots.map((/** @type {any} */ root) => `<li><code>${html(root.root_issue_id)}</code></li>`).join('');
-  const review = ['4.3.0', '4.3.1'].includes(presentation.schema_version)
+  const review = ['4.3.0', '4.3.1', '4.3.2'].includes(presentation.schema_version)
     ? `<h3>独立审查目标</h3><p><code>${html(presentation.independent_review_summary.review_target_digest)}</code></p>` : '';
   return `<details class="panel audit"><summary>审计标识</summary><p class="meta">以下标识仅用于机器追踪，不属于业务执行正文。</p><h3>Case</h3><ul>${cases}</ul><h3>Semantic root</h3><ul>${roots}</ul>${review}</details>`;
 }
@@ -386,9 +386,9 @@ export function matchCasePresentationFamilyV42(presentation, sourceReading, arti
   }
   if (renderBusinessHtmlV4(presentation, sourceReading) === artifacts.html
     && renderCaseTableV4(presentation) === artifacts.table) {
-    return ['4.3.0', '4.3.1'].includes(presentation.schema_version) ? 'current-4.3' : 'current-4.2';
+    return ['4.3.0', '4.3.1', '4.3.2'].includes(presentation.schema_version) ? 'current-4.3' : 'current-4.2';
   }
-  if (['4.3.0', '4.3.1'].includes(presentation.schema_version)) throw new TypeError('CASE_PRESENTATION_FAMILY_INVALID');
+  if (['4.3.0', '4.3.1', '4.3.2'].includes(presentation.schema_version)) throw new TypeError('CASE_PRESENTATION_FAMILY_INVALID');
   if (renderLegacyBusinessHtmlV42(presentation, sourceReading) === artifacts.html
     && renderLegacyCaseTableV42(presentation) === artifacts.table) return 'legacy-4.2';
   throw new TypeError('CASE_PRESENTATION_FAMILY_INVALID');

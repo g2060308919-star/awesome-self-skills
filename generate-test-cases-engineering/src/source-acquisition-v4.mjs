@@ -29,7 +29,8 @@ import {
 } from './source-runtime-registry-v4.mjs';
 import { isCandidateV4SchemaVersion } from './v4-contract.mjs';
 import {
-  bindV4PrdCollectionObservation, loadV4SourceReadingSummary
+  bindV4PrdCollectionObservation, loadV4SourceReadingSummary, loadV4CollectionSourceReceipts,
+  reboundV4SourceReadingSummary
 } from './prd-source-collection-v4.mjs';
 import { v4ContractForIdentity, v4ContractForSchema } from './v4-contract.mjs';
 
@@ -276,7 +277,8 @@ function validateStateShape(state) {
     return { state, checkpointBytes: null };
   }
   const keys = contract?.candidate
-    ? [...legacyKeys.slice(0, -1), 'collection_sessions', 'summary', 'state_digest']
+    ? [...legacyKeys.slice(0, -1), 'collection_sessions', 'summary',
+      ...(contract.schema_version === '4.3.2' ? ['base_source_pack_digest'] : []), 'state_digest']
     : legacyKeys;
   if (!only(state, keys) || !contract
     || state.registry_version !== sourceRuntimeRegistryVersionV4(state.schema_version)
@@ -292,6 +294,7 @@ function validateStateShape(state) {
     || (contract.candidate && (!Array.isArray(state.collection_sessions)
       || state.collection_sessions.length !== 1
       || validateAgainstSchema(state.summary, sourceReadingSchema).length))
+    || (contract.schema_version === '4.3.2' && !HASH.test(state.base_source_pack_digest))
     || !HASH.test(state.state_digest) || state.state_digest !== hash(stateBody(state))) {
     throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
   }
@@ -386,11 +389,29 @@ function sourceMetadata(source) {
     .map(key => [key, source[key]]));
 }
 
-/** Verify all short-lived bytes against the exact canonical Source Pack and
- * return only safe, digest-bound receipts. No capture or asset bytes leave this
- * function. @param {any} sourcePack @param {any[]} bindings
- * @param {any[]} events @param {Map<string,Uint8Array>} material */
-function verifyCandidateSources(sourcePack, bindings, events, material) {
+/** @param {any} source @param {any} recomputed @param {any[]} bindings
+ * @param {any[]} sessions @param {string} schemaVersion */
+function preserveCapturedSource(source, recomputed, bindings, sessions, schemaVersion) {
+  if (schemaVersion !== '4.3.2' || bindings.some((/** @type {any} */ item) => item.target === 'capture')) {
+    return recomputed;
+  }
+  const captured = sessions?.[0]?.items?.some((/** @type {any} */ item) =>
+    item.source_id === source.source_id && item.asset_id === null
+      && item.acquisition_status === 'acquired' && item.review_status === 'reviewed'
+      && item.capture_digest === source.capture_digest);
+  if (!captured || source.capture_audit?.semantic_exclusions?.length) {
+    throw new TypeError('SOURCE_COLLECTION_CAPTURE_BINDING_INVALID');
+  }
+  // The accepted collection observation proves the original capture digest.
+  // Recompilation proves the semantic projection; neither substitutes for the other.
+  return { ...recomputed, capture_digest: source.capture_digest,
+    capture_audit: structuredClone(source.capture_audit) };
+}
+
+/** Verify short-lived bytes against the exact canonical Source Pack.
+ * @param {any} sourcePack @param {any[]} bindings @param {any[]} events
+ * @param {Map<string,Uint8Array>} material @param {any[]} [sessions] */
+function verifyCandidateSources(sourcePack, bindings, events, material, sessions = []) {
   const runtime = createCompilerSourceRuntimeV4(sourcePack.schema_version);
   const eventByRequest = new Map(events.map((/** @type {any} */ event) => [
     event.artifact_request_id, event
@@ -464,8 +485,10 @@ function verifyCandidateSources(sourcePack, bindings, events, material) {
       provider_registry: runtime.provider_registry,
       expiry_registry: runtime.expiry_registry
     });
-    if (result.status !== 'canonical'
-      || canonicalStringify(result.source) !== canonicalStringify(source)) {
+    const recomputed = result.status === 'canonical'
+      ? preserveCapturedSource(source, result.source, sourceBindings, sessions, sourcePack.schema_version)
+      : null;
+    if (!recomputed || canonicalStringify(recomputed) !== canonicalStringify(source)) {
       throw new TypeError('ARTIFACT_SOURCE_BINDING_INVALID');
     }
     return {
@@ -483,7 +506,9 @@ function verifyCandidateSources(sourcePack, bindings, events, material) {
 /** @param {any} source @param {any[]} sourceBindings
  * @param {Map<string,any>} eventByRequest @param {Map<string,Uint8Array>} material
  * @param {any} sourcePack */
-function compileResumedSource(source, sourceBindings, eventByRequest, material, sourcePack) {
+/** @param {any} source @param {any[]} sourceBindings @param {Map<string,any>} eventByRequest
+ * @param {Map<string,Uint8Array>} material @param {any} sourcePack @param {any[]} [sessions] */
+function compileResumedSource(source, sourceBindings, eventByRequest, material, sourcePack, sessions = []) {
   const runtime = createCompilerSourceRuntimeV4(sourcePack.schema_version);
   const captureBindings = sourceBindings.filter((/** @type {any} */ item) => item.target === 'capture');
   /** @type {any} */
@@ -554,7 +579,7 @@ function compileResumedSource(source, sourceBindings, eventByRequest, material, 
     !== canonicalStringify(acquiredReviewedSemantics)) {
     throw new TypeError('ARTIFACT_SOURCE_REVIEW_REQUIRED');
   }
-  return result.source;
+  return preserveCapturedSource(source, result.source, sourceBindings, sessions, sourcePack.schema_version);
 }
 
 /**
@@ -587,6 +612,7 @@ export async function stageV4SourceAcquisitionAction(
     || sourcePack.source_revision !== state.committed_revision
     || !Array.isArray(sourcePack.artifact_events)
     || canonicalStringify(sourcePack.artifact_events) !== canonicalStringify(state.events)
+    || (state.schema_version === '4.3.2' && state.base_source_pack_digest !== hash(sourcePack))
     || !Array.isArray(submittedArtifacts)
     || submittedArtifacts.length !== state.artifact_requests.length) {
     throw new TypeError('ARTIFACT_SOURCE_CANDIDATE_INVALID');
@@ -655,7 +681,7 @@ export async function stageV4SourceAcquisitionAction(
     const nextSource = compileResumedSource(
       candidate.sources[index],
       state.bindings.filter((/** @type {any} */ item) => item.source_id === sourceId),
-      eventByRequest, material, candidate
+      eventByRequest, material, candidate, state.collection_sessions
     );
     candidate.sources[index] = nextSource;
     for (const locator of candidate.locators) {
@@ -672,7 +698,7 @@ export async function stageV4SourceAcquisitionAction(
   if (validateAgainstSchema(candidate, sourcePackSchema).length) {
     throw new TypeError('ARTIFACT_SOURCE_CANDIDATE_INVALID');
   }
-  verifyCandidateSources(candidate, state.bindings, events, material);
+  verifyCandidateSources(candidate, state.bindings, events, material, state.collection_sessions);
   if (discoverRequests(candidate, {
     run_id: state.run_id, committed_revision: state.committed_revision,
     checkpoint_bytes: encoder.encode(state.checkpoint_text)
@@ -729,7 +755,7 @@ async function acquireCandidate(state, candidate, runDirectory) {
     return { kind: 'need_artifact', reply: stopReply(state) };
   }
   const currentReceipts = verifyCandidateSources(
-    candidate, state.bindings, submittedEvents, material
+    candidate, state.bindings, submittedEvents, material, state.collection_sessions
   );
   const currentAcquisitions = submittedEvents.map((/** @type {any} */ event) => acceptProvidedArtifact(
     context, event, material.get(event.artifact_request_id), registry
@@ -754,7 +780,10 @@ async function acquireCandidate(state, candidate, runDirectory) {
   const body = {
     ...stateBody(state), status: 'acquired', events: structuredClone(candidate.artifact_events),
     acquisitions, source_receipts: sourceReceipts,
-    accepted_source_pack_digest: hash(candidate)
+    accepted_source_pack_digest: hash(candidate),
+    ...(state.schema_version === '4.3.2' ? {
+      summary: reboundV4SourceReadingSummary(state.collection_sessions[0], candidate)
+    } : {})
   };
   const acquired = { ...body, state_digest: hash(body) };
   await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), acquired);
@@ -837,7 +866,10 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       accepted_source_pack_digest: null,
       ...(contract.candidate ? {
         collection_sessions: structuredClone(existing.collection_sessions),
-        summary: structuredClone(existing.summary)
+        summary: structuredClone(existing.summary),
+        ...(contract.schema_version === '4.3.2' ? {
+          base_source_pack_digest: hash(sourcePack)
+        } : {})
       } : {})
     };
     const state = { ...body, state_digest: hash(body) };
@@ -921,6 +953,8 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     }
     return {
       verified_source_receipts: [], verified_acquisition_records: [],
+      verified_collection_receipts: sourcePack.schema_version === '4.3.2'
+        ? await loadV4CollectionSourceReceipts(runDirectory, sourcePack) : [],
       source_reading_summary: structuredClone(state.summary)
     };
   }
@@ -965,6 +999,8 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     const source = sourcePack.sources.find((/** @type {any} */ item) => item.source_id === receipt.source_id);
     if (!source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source)
       || receipt.capture_digest !== source.capture_digest
+      || (state.committed_revision === sourcePack.source_revision
+        && receipt.semantic_digest !== source.semantic_digest)
       || receipt.artifact_event_ids.some((/** @type {string} */ eventId) =>
         !state.events.some((/** @type {any} */ event) => event.event_id === eventId)
       )) throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
@@ -972,7 +1008,10 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
   return {
     verified_source_receipts: structuredClone(state.source_receipts),
     verified_acquisition_records: structuredClone(state.acquisitions),
+    verified_collection_receipts: [],
     ...(isCandidateV4SchemaVersion(state.schema_version)
-      ? { source_reading_summary: structuredClone(state.summary) } : {})
+      ? { source_reading_summary: state.schema_version === '4.3.2'
+        ? await loadV4SourceReadingSummary(runDirectory, sourcePack)
+        : structuredClone(state.summary) } : {})
   };
 }

@@ -147,7 +147,8 @@ export function canonicalTopologyStructure(pack) {
       )?.classification ?? 'uncertain';
       const locators = (/** @type {any} */ unit) => pack.locators.filter(
         (/** @type {any} */ locator) => locator.source_id === source.source_id && locator.unit_id === unit.unit_id
-      );
+      ).sort((/** @type {any} */ left, /** @type {any} */ right) =>
+        compare(left.locator_id, right.locator_id));
       /** @type {any[]} */
       const units = [];
       const tableGroups = new Map();
@@ -156,6 +157,8 @@ export function canonicalTopologyStructure(pack) {
         // Feeding them back into discovery would let a clarification silently
         // change Scope and would make every answer invalidate the PRD review.
         if (unit.type === 'user_statement') continue;
+        // Topology needs one stable unit anchor; Claim support is checked using
+        // its complete locator set and must not inherit this representative.
         const locator = locators(unit)[0];
         if (unit.type === 'table_cell') {
           const key = unit.table_id;
@@ -678,10 +681,14 @@ export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, s
   if (sourceAcquisition !== null && (!record(sourceAcquisition)
     || !Array.isArray(sourceAcquisition.verified_source_receipts)
     || !Array.isArray(sourceAcquisition.verified_acquisition_records)
+    || !Array.isArray(sourceAcquisition.verified_collection_receipts)
     || Object.keys(sourceAcquisition).some(key => ![
-      'verified_source_receipts', 'verified_acquisition_records', 'source_reading_summary'
+      'verified_source_receipts', 'verified_acquisition_records', 'verified_collection_receipts', 'source_reading_summary'
     ].includes(key)))) throw new TypeError('V4_SOURCE_ACQUISITION_CONTEXT_INVALID');
-  const receipts = sourceAcquisition?.verified_source_receipts ?? [];
+  const receipts = [
+    ...(sourceAcquisition?.verified_source_receipts ?? []),
+    ...(sourceAcquisition?.verified_collection_receipts ?? [])
+  ];
   const canonical_source_structure = canonicalTopologyStructure(pack);
   const topology = topologySystem(evidence, canonical_source_structure);
   const source = {
@@ -691,7 +698,8 @@ export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, s
     acquisitions: reconstructibleAcquisitions(pack, registries, receipts),
     ...(sourceAcquisition ? {
       verified_source_receipts: structuredClone(sourceAcquisition.verified_source_receipts),
-      verified_acquisition_records: structuredClone(sourceAcquisition.verified_acquisition_records)
+      verified_acquisition_records: structuredClone(sourceAcquisition.verified_acquisition_records),
+      verified_collection_receipts: structuredClone(sourceAcquisition.verified_collection_receipts)
     } : {})
   };
   const claim_assessments = claimAssessmentSystem(evidence);

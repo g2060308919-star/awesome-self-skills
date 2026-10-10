@@ -112,9 +112,9 @@ function validateCanonicalCase(candidate) {
 /** @param {unknown} raw */
 function validateProjection(raw) {
   if (!record(raw)) throw new TypeError('MARKDOWN_PROJECTION_INVALID');
-  const generalQuality = ['4.3.0', '4.3.1'].includes(raw.schema_version);
+  const generalQuality = ['4.3.0', '4.3.1', '4.3.2'].includes(raw.schema_version);
   closed(raw, generalQuality ? GENERAL_QUALITY_ROOT_KEYS : ROOT_KEYS);
-  if (generalQuality && (raw.compiler_version !== (raw.schema_version === '4.3.1' ? '0.8.1' : '0.8.0')
+  if (generalQuality && (raw.compiler_version !== (raw.schema_version === '4.3.2' ? '0.8.2' : raw.schema_version === '4.3.1' ? '0.8.1' : '0.8.0')
     || !record(raw.design_assurance_summary) || !record(raw.independent_review_summary))) {
     throw new TypeError('MARKDOWN_PROJECTION_INVALID');
   }
@@ -329,7 +329,7 @@ function renderCaseSection(lines, title, cases, modules) {
 
 /** @param {string[]} lines @param {ReturnType<typeof validateProjection>} view */
 function renderQualityAssurance(lines, view) {
-  if (!['4.3.0', '4.3.1'].includes(view.raw.schema_version)) return;
+  if (!['4.3.0', '4.3.1', '4.3.2'].includes(view.raw.schema_version)) return;
   const design = view.raw.design_assurance_summary;
   const review = view.raw.independent_review_summary;
   lines.push('## 设计保障与独立审查', '');
@@ -361,7 +361,7 @@ function renderAudit(lines, view) {
   lines.push('### 排除与探索追踪');
   for (const item of view.raw.not_applicable) lines.push(`- NotApplicable：\`${item.not_applicable_record_id}\``);
   for (const item of view.raw.exploratory) lines.push(`- Exploratory：\`${item.exploratory_id}\``);
-  if (['4.3.0', '4.3.1'].includes(view.raw.schema_version)) {
+  if (['4.3.0', '4.3.1', '4.3.2'].includes(view.raw.schema_version)) {
     lines.push(`- 当前独立审查目标：\`${view.raw.independent_review_summary.review_target_digest}\``);
   }
   lines.push('');

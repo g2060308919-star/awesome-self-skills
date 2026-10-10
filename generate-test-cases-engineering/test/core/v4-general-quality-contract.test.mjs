@@ -5,6 +5,7 @@ import {
   CANDIDATE_V4_CONTRACT,
   GENERAL_QUALITY_V4_CONTRACT,
   SOURCE_RELIABILITY_V4_CONTRACT,
+  SOURCE_BINDING_V4_CONTRACT,
   LEGACY_V4_CONTRACT,
   isGeneralQualityV4Contract,
   latestV4Contract,
@@ -13,22 +14,28 @@ import {
   v4ContractForSchema
 } from '../../src/v4-contract.mjs';
 
-test('4.3.1 source-reliability contract is latest while 4.3 remains exact', () => {
+test('4.3.2 source-binding contract is latest while earlier 4.3 pairs remain exact', () => {
   assert.deepEqual(GENERAL_QUALITY_V4_CONTRACT, {
     schema_version: '4.3.0',
     compiler_version: '0.8.0',
     candidate: true,
     strict_semantic_delivery: true
   });
-  assert.equal(latestV4Contract(), SOURCE_RELIABILITY_V4_CONTRACT);
+  assert.equal(latestV4Contract(), SOURCE_BINDING_V4_CONTRACT);
   assert.deepEqual(SOURCE_RELIABILITY_V4_CONTRACT, {
     schema_version: '4.3.1', compiler_version: '0.8.1', candidate: true,
+    strict_semantic_delivery: true
+  });
+  assert.deepEqual(SOURCE_BINDING_V4_CONTRACT, {
+    schema_version: '4.3.2', compiler_version: '0.8.2', candidate: true,
     strict_semantic_delivery: true
   });
   assert.equal(v4ContractForSchema('4.3.0'), GENERAL_QUALITY_V4_CONTRACT);
   assert.equal(v4ContractForIdentity({ schema_version: '4.3.0', compiler_version: '0.8.0' }), GENERAL_QUALITY_V4_CONTRACT);
   assert.equal(isGeneralQualityV4Contract(GENERAL_QUALITY_V4_CONTRACT), true);
   assert.equal(isGeneralQualityV4Contract(SOURCE_RELIABILITY_V4_CONTRACT), true);
+  assert.equal(isGeneralQualityV4Contract(SOURCE_BINDING_V4_CONTRACT), true);
+  assert.equal(v4ContractForIdentity({ schema_version: '4.3.2', compiler_version: '0.8.1' }), null);
   assert.equal(isGeneralQualityV4Contract({ schema_version: '4.3.0', compiler_version: '0.7.0' }), false);
 });
 

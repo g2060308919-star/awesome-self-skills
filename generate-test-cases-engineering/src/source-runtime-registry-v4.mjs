@@ -30,13 +30,13 @@ export const SOURCE_RUNTIME_REGISTRY_VERSION_V4 = 'source-runtime-v2';
 
 /** @param {string} schemaVersion */
 export function sourceRuntimeRegistryVersionV4(schemaVersion) {
-  if (schemaVersion === '4.3.1') return 'source-runtime-v2';
+  if (schemaVersion === '4.3.1' || schemaVersion === '4.3.2') return 'source-runtime-v2';
   if (['4.0.0', '4.2.0', '4.3.0'].includes(schemaVersion)) return 'source-runtime-v1';
   throw new TypeError('SOURCE_RUNTIME_SCHEMA_UNSUPPORTED');
 }
 
 /** Return fresh opaque registries backed only by the frozen compiler table. */
-export function createCompilerSourceRuntimeV4(schemaVersion = '4.3.1') {
+export function createCompilerSourceRuntimeV4(schemaVersion = '4.3.2') {
   const registryVersion = sourceRuntimeRegistryVersionV4(schemaVersion);
   return {
     registry_version: registryVersion,

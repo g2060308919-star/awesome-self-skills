@@ -86,7 +86,7 @@ test('AT23/AT24: strict runner retries a pending review without accepting it, th
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v43-independent-review-'));
   t.after(() => rm(catalog, { recursive: true, force: true }));
   const run = await createV4RunDirectory(catalog, 'case_document');
-  const fixture = v4GeneralQualityFixture('4.3.1');
+  const fixture = v4GeneralQualityFixture('4.3.2');
   fixture.artifacts.source_pack.run_instance_id = run.run_id;
   const baselineClaim = fixture.artifacts.evidence_claims.claims[0];
   baselineClaim.semantic_value.relative_baseline_assertions = [{
