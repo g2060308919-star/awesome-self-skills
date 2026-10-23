@@ -5,7 +5,7 @@ description: Use when a PRD, module description, module-description, 需求文�
 
 # Generate Test Cases
 
-Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. New runs use the exact schema/compiler pair `4.3.2/0.8.2`; exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, `4.3.0/0.8.0`, and `4.3.1/0.8.1` runs retain their bound behavior. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
+Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. New runs and upgraded continuations use `4.3.3/0.8.3`. Historical v4 runs retain their immutable bytes; continue them through the compiler-created `version_upgrade` successor described in `references/run-management.md`. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
 
 The compiler owns validation, stable identity, Facts, scope topology, formal Test Points, semantic roots, classification, coverage, ordering, checkpoints, canonical results, and rendering. The Agent writes only the four requested semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
 

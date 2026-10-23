@@ -8,7 +8,7 @@ import {
   compileSemanticClarificationCheckpointV4,
   validateSemanticClarificationCheckpointV4
 } from './clarification.mjs';
-import { canonicalStringify, digest } from './canonical.mjs';
+import { canonicalArtifactSnapshot, canonicalStringify, digest, evidenceComponentDigests } from './canonical.mjs';
 import { appendedRepair, repairDiagnostics } from './artifact-repair.mjs';
 import {
   finalAuthorityWarningV4, normalizeDecisionMessageV4
@@ -26,7 +26,8 @@ import {
   replaySourceAcquisitionStopV4, sourceAcquisitionStatePathV4
 } from './source-acquisition-v4.mjs';
 import {
-  commitRevisionTransactionV4WithHeldLock, ensureV4RunInstanceWithHeldLock
+  commitRevisionTransactionV4WithHeldLock, ensureV4RunInstanceWithHeldLock,
+  recoverMaterializedRevisionV4WithHeldLock
 } from './revision-transaction-v4.mjs';
 import { sourceByteDigest } from './source-canonicalization.mjs';
 import {
@@ -39,9 +40,11 @@ import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
 import {
-  isCandidateV4SchemaVersion, isV4SchemaVersion, v4ContractForSchema
+  isCandidateV4SchemaVersion, isV4SchemaVersion, latestV4Contract, v4ContractForSchema
 } from './v4-contract.mjs';
 import { loadV4SourceReadingSummary } from './prd-source-collection-v4.mjs';
+import { DiagnosticErrorV4, safeDiagnosticsV4 } from './diagnostic-error-v4.mjs';
+import { applyVersionUpgradeAnswersV4 } from './version-upgrade-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
 
@@ -91,12 +94,12 @@ function revisionReply(
   nonBlockingDiagnostics = [], reviewRequest = null
 ) {
   const route = routeGapCategoryV4('adapter_revision', { delivery_intent: 'case_document' });
-  const stable = diagnostics.map(item => ({
+  const stable = safeDiagnosticsV4(diagnostics.map(item => ({
     category: String(item.category ?? 'adapter_revision'),
     code: String(item.code ?? 'ARTIFACT_INVALID'),
     ...(typeof item.path === 'string' ? { path: item.path } : {}),
     message: String(item.message ?? 'The submitted v4 artifact failed deterministic validation.')
-  }));
+  })));
   return {
     status: route.status, stage, schema_ref: AGENT_STAGE_SCHEMA[stage], source_revision: sourceRevision,
     artifact_path: stagingPath(runDirectory, stage), artifact_digest: digest(artifact),
@@ -170,8 +173,7 @@ function compilePreCaseClarification(
     run_id: runId, committed_revision: sourcePack.source_revision,
     committed_checkpoint_bytes: committedCheckpointBytes ?? genesis, discovery_phase: 'pre_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
-    fact_ledger_digest: `sha256:${digest(evidence.fact_ledger)}`,
-    scope_manifest_digest: `sha256:${digest(evidence.scope_manifest)}`,
+    ...evidenceComponentDigests(evidence),
     behavior_views_digest: null, case_drafts_digest: null,
     facts: evidence.fact_ledger, claims: evidence.claims,
     diagnostic_candidates: evidence.semantic_gaps.filter(
@@ -202,8 +204,7 @@ function compilePostCaseClarification(
     run_id: runId, committed_revision: sourcePack.source_revision,
     committed_checkpoint_bytes: committedCheckpointBytes, discovery_phase: 'post_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
-    fact_ledger_digest: `sha256:${digest(evidence.fact_ledger)}`,
-    scope_manifest_digest: `sha256:${digest(evidence.scope_manifest)}`,
+    ...evidenceComponentDigests(evidence),
     behavior_views_digest: `sha256:${digest(behaviorViews)}`,
     case_drafts_digest: `sha256:${digest(caseDrafts)}`,
     facts: evidence.fact_ledger, claims: evidence.claims,
@@ -226,12 +227,13 @@ function semanticRevisionDigest(sourcePack, evidence, checkpoint) {
     source_semantic_digests: sourcePack.sources.map(
       (/** @type {any} */ source) => source.semantic_digest
     ),
-    evidence, clarification_state: checkpoint.clarification_state
+    evidence: canonicalArtifactSnapshot(evidence), clarification_state: checkpoint.clarification_state
   })}`;
 }
 
 /** @param {string} runId @param {any} sourcePack @param {any} evidence @param {any} checkpoint */
 function baseRevisionArtifacts(runId, sourcePack, evidence, checkpoint) {
+  evidence = canonicalArtifactSnapshot(evidence);
   const revision = sourcePack.source_revision;
   if (checkpoint.run_id !== runId || checkpoint.revision !== revision) {
     throw new TypeError('V4_CHECKPOINT_BINDING_INVALID');
@@ -757,7 +759,7 @@ async function consumeEvidenceRepair(
   runDirectory, registry, artifacts, revision, runId, lockOwnership
 ) {
   if (!artifacts.source_pack || !artifacts.evidence_claims) return { kind: 'none' };
-  if (artifacts.source_pack.schema_version !== '4.3.2') return { kind: 'none' };
+  if (!['4.3.2', '4.3.3'].includes(artifacts.source_pack.schema_version)) return { kind: 'none' };
   const candidate = await stagedArtifact(runDirectory, 'source_pack');
   if (!candidate) return { kind: 'none' };
   if (candidate.parse_diagnostics.length) return {
@@ -1577,6 +1579,9 @@ export async function advanceStrictV4Locked(
   if (runInstance.delivery_intent === 'execution_plan') {
     return advanceExecutionRunV4Locked(runDirectory, registry, runInstance, lockOwnership);
   }
+  if (runInstance.schema_version === latestV4Contract().schema_version) {
+    await recoverMaterializedRevisionV4WithHeldLock(runDirectory, lockOwnership);
+  }
   const revisions = await acceptedSourceRevisions(runDirectory);
   if (revisions.some((revision, index) => revision !== index)) {
     return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
@@ -1729,6 +1734,7 @@ export async function advanceStrictV4Locked(
         run_id: runId, delivery_intent: candidate.value.delivery_intent
       }, lockOwnership);
     } catch (error) {
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
         error instanceof Error ? error.message : 'The v4 durable run identity could not be established.');
     }
@@ -1762,6 +1768,7 @@ export async function advanceStrictV4Locked(
         runDirectory, candidate.value, runId
       );
     } catch (error) {
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'source_acquisition',
         error instanceof Error ? error.message : 'SOURCE_ACQUISITION_STATE_INVALID',
         '来源获取状态无法通过确定性完整性校验。', advancedDiagnostics);
@@ -1779,7 +1786,8 @@ export async function advanceStrictV4Locked(
   }
 
   const prospective = /** @type {Record<string, any>} */ ({
-    ...artifacts, [nextStage]: candidate.value
+    ...artifacts, [nextStage]: nextStage === 'evidence_claims'
+      ? canonicalArtifactSnapshot(candidate.value) : candidate.value
   });
   if (nextStage === 'evidence_claims') {
     const probe = {
@@ -1817,7 +1825,11 @@ export async function advanceStrictV4Locked(
         prospective.source_pack, prospective.evidence_claims, runId,
         null, null, migrationSeed
       );
+      clarification = await applyVersionUpgradeAnswersV4(
+        runDirectory, prospective.source_pack, prospective.evidence_claims, clarification
+      );
     } catch (error) {
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'requirements_analysis',
         error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
         '业务语义状态无法形成可提交的 pre-case 检查点。', advancedDiagnostics);
@@ -1831,7 +1843,7 @@ export async function advanceStrictV4Locked(
     );
     // The transaction persisted canonical accepted bytes. Claim and remove
     // only the exact staging snapshot that was compiled.
-    await promoteArtifact(runDirectory, revision, nextStage, candidate.value, candidate);
+    await promoteArtifact(runDirectory, revision, nextStage, prospective.evidence_claims, candidate);
     if (clarification.presentation) {
       return semanticQuestionReply(runId, clarification.presentation, advancedDiagnostics);
     }
@@ -1887,6 +1899,7 @@ export async function advanceStrictV4Locked(
       );
       await discardStagingSnapshot(runDirectory, 'case_drafts', candidate);
     } catch (error) {
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'case_design',
         error instanceof Error ? error.message : 'V4_POST_CASE_TRANSACTION_FAILED',
         'Case 分析结果和 post-case 澄清状态未能完整原子提交。', advancedDiagnostics);

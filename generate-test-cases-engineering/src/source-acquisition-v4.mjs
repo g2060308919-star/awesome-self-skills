@@ -69,7 +69,7 @@ export function sourceAcquisitionBasePathV4(runDirectory, revision) {
 
 /** @param {string} runDirectory @param {any} state */
 async function acquiredBase(runDirectory, state) {
-  if (state.schema_version !== '4.3.2') return null;
+  if (!['4.3.2', '4.3.3'].includes(state.schema_version)) return null;
   const stored = await readJsonIfPresent(
     runDirectory, sourceAcquisitionBasePathV4(runDirectory, state.committed_revision)
   );
@@ -335,7 +335,7 @@ function validateStateShape(state) {
   }
   const keys = contract?.candidate
     ? [...legacyKeys.slice(0, -1), 'collection_sessions', 'summary',
-      ...(contract.schema_version === '4.3.2' ? ['base_source_pack_digest'] : []), 'state_digest']
+      ...(['4.3.2', '4.3.3'].includes(contract.schema_version) ? ['base_source_pack_digest'] : []), 'state_digest']
     : legacyKeys;
   if (!only(state, keys) || !contract
     || state.registry_version !== sourceRuntimeRegistryVersionV4(state.schema_version)
@@ -351,7 +351,7 @@ function validateStateShape(state) {
     || (contract.candidate && (!Array.isArray(state.collection_sessions)
       || state.collection_sessions.length !== 1
       || validateAgainstSchema(state.summary, sourceReadingSchema).length))
-    || (contract.schema_version === '4.3.2' && !HASH.test(state.base_source_pack_digest))
+    || (['4.3.2', '4.3.3'].includes(contract.schema_version) && !HASH.test(state.base_source_pack_digest))
     || !HASH.test(state.state_digest) || state.state_digest !== hash(stateBody(state))) {
     throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
   }
@@ -449,7 +449,7 @@ function sourceMetadata(source) {
 /** @param {any} source @param {any} recomputed @param {any[]} bindings
  * @param {any[]} sessions @param {string} schemaVersion */
 function preserveCapturedSource(source, recomputed, bindings, sessions, schemaVersion) {
-  if (schemaVersion !== '4.3.2' || bindings.some((/** @type {any} */ item) => item.target === 'capture')) {
+  if (!['4.3.2', '4.3.3'].includes(schemaVersion) || bindings.some((/** @type {any} */ item) => item.target === 'capture')) {
     return recomputed;
   }
   const captured = sessions?.[0]?.items?.some((/** @type {any} */ item) =>
@@ -669,7 +669,7 @@ export async function stageV4SourceAcquisitionAction(
     || sourcePack.source_revision !== state.committed_revision
     || !Array.isArray(sourcePack.artifact_events)
     || canonicalStringify(sourcePack.artifact_events) !== canonicalStringify(state.events)
-    || (state.schema_version === '4.3.2' && state.base_source_pack_digest !== hash(sourcePack))
+    || (['4.3.2', '4.3.3'].includes(state.schema_version) && state.base_source_pack_digest !== hash(sourcePack))
     || !Array.isArray(submittedArtifacts)
     || submittedArtifacts.length !== state.artifact_requests.length) {
     throw new TypeError('ARTIFACT_SOURCE_CANDIDATE_INVALID');
@@ -841,12 +841,12 @@ async function acquireCandidate(state, candidate, runDirectory) {
     ...stateBody(state), status: 'acquired', events: structuredClone(candidate.artifact_events),
     acquisitions, source_receipts: sourceReceipts,
     accepted_source_pack_digest: hash(candidate),
-    ...(state.schema_version === '4.3.2' ? {
+    ...(['4.3.2', '4.3.3'].includes(state.schema_version) ? {
       summary: reboundV4SourceReadingSummary(state.collection_sessions[0], candidate)
     } : {})
   };
   const acquired = { ...body, state_digest: hash(body) };
-  if (state.schema_version === '4.3.2') {
+  if (['4.3.2', '4.3.3'].includes(state.schema_version)) {
     const basePath = sourceAcquisitionBasePathV4(runDirectory, state.committed_revision);
     const previous = await readJsonIfPresent(runDirectory, basePath);
     if (previous && previous.digest !== digest(candidate)) {
@@ -895,7 +895,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
   const continuingPending = existing?.status === 'pending'
     && existing.run_id === runId && existing.committed_revision === revision;
   const sameRevisionAcquired = existing?.status === 'acquired'
-    && existing.schema_version === '4.3.2'
+    && ['4.3.2', '4.3.3'].includes(existing.schema_version)
     && existing.run_id === runId && existing.committed_revision === revision;
   if (sameRevisionAcquired) {
     const { provider_registry: registry } = createCompilerSourceRuntimeV4(sourcePack.schema_version);
@@ -960,7 +960,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       ...(contract.candidate ? {
         collection_sessions: structuredClone(existing.collection_sessions),
         summary: structuredClone(existing.summary),
-        ...(contract.schema_version === '4.3.2' ? {
+        ...(['4.3.2', '4.3.3'].includes(contract.schema_version) ? {
           base_source_pack_digest: hash(sourcePack)
         } : {})
       } : {})
@@ -993,7 +993,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
   }
   if (existing.status === 'acquired') {
     if (existing.committed_revision === revision
-      && existing.schema_version !== '4.3.2'
+      && !['4.3.2', '4.3.3'].includes(existing.schema_version)
       && existing.accepted_source_pack_digest !== hash(sourcePack)) {
       return { kind: 'rejected', code: 'ARTIFACT_IDEMPOTENCY_CONFLICT' };
     }
@@ -1031,8 +1031,8 @@ export async function replaySourceAcquisitionStopV4(runDirectory, runId) {
 }
 
 /** Load compiler-private byte/binding state for all later deterministic replays. */
-/** @param {string} runDirectory @param {any} sourcePack */
-export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack) {
+/** @param {string} runDirectory @param {any} sourcePack @param {{read_only?:boolean}} [options] */
+export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack, { read_only = false } = {}) {
   const state = await loadState(runDirectory);
   if (!state) return null;
   if (state.status === 'collected') {
@@ -1047,7 +1047,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     }
     return {
       verified_source_receipts: [], verified_acquisition_records: [],
-      verified_collection_receipts: sourcePack.schema_version === '4.3.2'
+      verified_collection_receipts: ['4.3.2', '4.3.3'].includes(sourcePack.schema_version)
         ? await loadV4CollectionSourceReceipts(runDirectory, sourcePack) : [],
       source_reading_summary: structuredClone(state.summary)
     };
@@ -1058,7 +1058,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     && !acquiredCandidateMatchesBase(base, sourcePack)) {
     throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
   }
-  if (state.status !== 'acquired'
+  if (state.status !== 'acquired' || state.run_id !== sourcePack?.run_instance_id
     || !Number.isSafeInteger(sourcePack?.source_revision)
     || sourcePack.source_revision < state.committed_revision
     || state.events.length !== packEvents.length
@@ -1087,7 +1087,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     const replay = validateProvideArtifactEvent(contextForEvent(event), event, registry);
     if (replay.status !== 'replayed') throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
   }
-  await discardAllMaterial(runDirectory);
+  if (!read_only) await discardAllMaterial(runDirectory);
   const verified = state.events.map((/** @type {any} */ event) => acceptProvidedArtifact(
     contextForEvent(event), event, undefined, registry
   ));
@@ -1110,7 +1110,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     verified_acquisition_records: structuredClone(state.acquisitions),
     verified_collection_receipts: [],
     ...(isCandidateV4SchemaVersion(state.schema_version)
-      ? { source_reading_summary: state.schema_version === '4.3.2'
+      ? { source_reading_summary: ['4.3.2', '4.3.3'].includes(state.schema_version)
         ? await loadV4SourceReadingSummary(runDirectory, sourcePack)
         : structuredClone(state.summary) } : {})
   };

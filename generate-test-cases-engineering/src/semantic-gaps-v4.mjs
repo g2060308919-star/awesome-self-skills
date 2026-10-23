@@ -74,7 +74,8 @@ export function compileSemanticGapRootsV4(input) {
     if (claimById.has(claimId)) throw new TypeError('SEMANTIC_GAP_CLAIM_DUPLICATE');
     claimById.set(claimId, {
       claim_id: claimId,
-      value: canonicalTextV4(claim.value, 'SEMANTIC_GAP_CLAIM_INVALID')
+      value: canonicalTextV4(claim.value, 'SEMANTIC_GAP_CLAIM_INVALID'),
+      subject_descriptor: record(claim.subject_descriptor)
     });
   }
   const factById = new Map();
@@ -194,6 +195,22 @@ export function compileSemanticGapRootsV4(input) {
   const riskRank = new Map([['critical', 0], ['high', 1], ['medium', 2], ['low', 3]]);
   const roots = [...byRoot.values()].map((root) => {
     const { _semantic, ...versioned } = root;
+    // Labels are a projection of the complete merged identity set. A label
+    // collision never removes a Fact or a Claim from the semantic root.
+    const statements = root.subject_fact_ids.map((/** @type {string} */ id) => factById.get(id).statement);
+    versioned.affected_facts = [...new Set(root.subject_fact_ids.map((/** @type {string} */ id) => {
+      const fact = factById.get(id);
+      if (statements.filter((/** @type {string} */ statement) => statement === fact.statement).length < 2) return fact.statement;
+      const contexts = fact.claim_ids.map((/** @type {string} */ claimId) => claimById.get(claimId)?.subject_descriptor);
+      if (!contexts.length || contexts.some((/** @type {any} */ context) => !context || typeof context.entity_key !== 'string'
+        || !context.entity_key.trim())) return fact.statement;
+      const first = contexts[0];
+      if (contexts.some((/** @type {any} */ context) => canonicalStringify(context) !== canonicalStringify(first))) return fact.statement;
+      const condition = record(first.condition);
+      const label = first.entity_key.trim() + (condition && Object.keys(condition).length
+        ? `；${canonicalStringify(condition)}` : '');
+      return `${fact.statement}（${label}）`;
+    }))];
     const rootVersionDigest = sha256CanonicalV4(versioned);
     const questionPartId = contentId('QP', {
       root_issue_id: root.root_issue_id,

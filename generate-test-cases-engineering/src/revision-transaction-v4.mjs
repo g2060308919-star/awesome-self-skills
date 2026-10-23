@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readdir, rm } from 'node:fs/promises';
+import { readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import runInstanceSchema from '../skill/generate-test-cases/scripts/schemas/run-instance.schema.json' with { type: 'json' };
@@ -48,7 +48,7 @@ const LEGACY_PROFILE_ARTIFACTS = Object.freeze({
 
 /** @param {string} schemaVersion */
 function profileArtifacts(schemaVersion) {
-  return ['4.2.0', '4.3.0', '4.3.1', '4.3.2'].includes(schemaVersion) ? {
+  return ['4.2.0', '4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(schemaVersion) ? {
     pre_case_pending: BASE_ARTIFACTS,
     post_case_pending: POST_CASE_ARTIFACTS,
     final: CANDIDATE_FINAL_ARTIFACTS
@@ -260,6 +260,74 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
     requireRunInstanceSchema(value, 'IMMUTABLE_V4_RUN_INSTANCE_INVALID');
     await atomicWriteJson(runDirectory, target, value);
     return value;
+  } finally {
+    heldLock.assertHealthy();
+  }
+}
+
+/** Recover only a complete, byte-identical materialized candidate. The normal
+ * transaction path owns all validation and publication; this supplies its
+ * original request after an interruption, without requiring Agent resubmission.
+ * @param {string} runDirectory @param {unknown} ownership */
+export async function recoverMaterializedRevisionV4WithHeldLock(runDirectory, ownership) {
+  const heldLock = requireHeldLock(ownership);
+  try {
+    const snapshot = await readJsonIfPresent(runDirectory, pendingPath(runDirectory));
+    if (!snapshot) return null;
+    const pending = requireRecord(snapshot.value, 'PENDING_REVISION_INVALID');
+    const run = await readV4RunInstance(runDirectory);
+    const required = /** @type {Record<string,readonly string[]>} */ (profileArtifacts(run.schema_version))[pending.commit_profile];
+    if (pending.schema_version !== run.schema_version || pending.compiler_version !== run.compiler_version
+      || pending.transaction_kind !== 'revision_append' || !required
+      || !['reserved', 'artifacts_committed', 'checkpoint_committed', 'delivery_committed'].includes(pending.phase)
+      || !Number.isSafeInteger(pending.candidate_revision) || pending.candidate_revision < 0
+      || !pending.artifact_digests || canonicalStringify(Object.keys(pending.artifact_digests).sort()) !== canonicalStringify([...required].sort())) {
+      throw new RunStoreIntegrityError('PENDING_REVISION_INVALID');
+    }
+    /** @type {Record<string,any>} */ const artifacts = {};
+    for (const key of required) {
+      const target = artifactPath(runDirectory, pending.candidate_revision, key);
+      // Perform the store's path/symlink checks before reading the original bytes.
+      const present = await readTextIfPresent(runDirectory, target);
+      const bytes = present === null ? null : await readFile(target);
+      if (bytes === null || exactDigest(bytes) !== pending.artifact_digests[key]) {
+        if (pending.phase === 'reserved') return null;
+        throw new RunStoreIntegrityError('PENDING_MATERIALIZED_ARTIFACT_INVALID');
+      }
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      artifacts[key] = ['markdown', 'worksheet', 'html', 'table'].includes(key)
+        ? { format: 'text', text } : { format: 'json', value: JSON.parse(text) };
+    }
+    const submitted = { append_id: pending.append_id, append_digest: pending.append_digest,
+      base_revision: pending.base_revision, candidate_revision: pending.candidate_revision,
+      commit_profile: pending.commit_profile, semantic_digest: pending.semantic_digest, artifacts };
+    const request = normalizeRequest(submitted, run);
+    for (const key of /** @type {const} */ (['schema_version', 'compiler_version', 'append_id', 'append_digest', 'append_key',
+      'base_revision', 'candidate_revision', 'commit_mode', 'commit_profile', 'semantic_digest', 'candidate_digest', 'txn_id', 'artifact_digests'])) {
+      if (canonicalStringify(pending[key]) !== canonicalStringify(request[key])) throw new RunStoreIntegrityError('PENDING_CANDIDATE_CONFLICT');
+    }
+    const expectedBase = request.base_revision === null ? exactDigest(genesisCheckpointText(run)) : pending.previous_checkpoint_digest;
+    if (request.artifact_values.checkpoint.base_checkpoint_digest !== expectedBase) throw new RunStoreIntegrityError('PENDING_BASE_INVALID');
+    if (request.base_revision === null) {
+      if (pending.previous_checkpoint_digest !== null || pending.previous_profile !== null
+        || pending.previous_semantic_digest !== null || canonicalStringify(pending.previous_artifact_digests) !== '{}') {
+        throw new RunStoreIntegrityError('PENDING_BASE_INVALID');
+      }
+    } else {
+      const candidates = [];
+      for (const name of await readdir(path.join(runDirectory, 'transactions/revisions'))) {
+        if (!/^TXN-[0-9a-f]{64}\.json$/u.test(name)) continue;
+        const prior = (await readJsonIfPresent(runDirectory, path.join(runDirectory, 'transactions/revisions', name)))?.value;
+        if (prior?.phase === 'complete' && prior.result?.status === 'committed' && prior.candidate_revision === request.base_revision
+          && prior.schema_version === run.schema_version && prior.compiler_version === run.compiler_version
+          && prior.commit_profile === pending.previous_profile && prior.semantic_digest === pending.previous_semantic_digest
+          && prior.artifact_digests?.checkpoint === expectedBase
+          && canonicalStringify(prior.artifact_digests) === canonicalStringify(pending.previous_artifact_digests)) candidates.push(prior);
+      }
+      if (candidates.length !== 1) throw new RunStoreIntegrityError('PENDING_BASE_INVALID');
+      if (request.commit_mode === 'new_revision') await verifyCommittedArtifacts(runDirectory, await readCommittedRecord(runDirectory, request.base_revision));
+    }
+    return await commitRevisionTransactionV4WithHeldLock(runDirectory, submitted, heldLock);
   } finally {
     heldLock.assertHealthy();
   }

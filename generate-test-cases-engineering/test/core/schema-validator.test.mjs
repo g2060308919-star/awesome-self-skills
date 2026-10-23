@@ -246,7 +246,7 @@ test('schema detects duplicate stable IDs only inside definition collections', (
     category: 'schema',
     code: 'DUPLICATE_STABLE_ID',
     path: '/claims/1/claim_id',
-    message: 'duplicate stable ID "claim_same"'
+    message: 'duplicate stable ID in this collection'
   }]);
 });
 
@@ -261,7 +261,7 @@ test('schema detects duplicate fact ledger definition IDs without treating refer
     category: 'schema',
     code: 'DUPLICATE_STABLE_ID',
     path: '/fact_ledger/1/fact_id',
-    message: 'duplicate stable ID "fact_same"'
+    message: 'duplicate stable ID in this collection'
   }]);
 });
 
@@ -337,6 +337,8 @@ test('evidence schema admits every E2 derivation shape and defers semantic matri
   };
   assert.deepEqual(validateAgainstSchema(e0, claimsSchema), [{
     category: 'schema', code: 'ONE_OF_MISMATCH', path: '/claims/0', message: 'must match exactly one schema variant'
+  }, {
+    category: 'schema', code: 'CONST_MISMATCH', path: '/claims/0/level', message: 'must equal the schema constant'
   }]);
 });
 
@@ -458,7 +460,7 @@ test('schema detects duplicate nested definition IDs but excludes reference arra
     ], relations: [] }], interaction_matrix: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] }, interaction_candidates: []
   };
   assert.deepEqual(validateUniqueStableIds(artifact), [{
-    category: 'schema', code: 'DUPLICATE_STABLE_ID', path: '/views/0/elements/1/element_id', message: 'duplicate stable ID "element_same"'
+    category: 'schema', code: 'DUPLICATE_STABLE_ID', path: '/views/0/elements/1/element_id', message: 'duplicate stable ID in this collection'
   }]);
 });
 

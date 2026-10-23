@@ -218,7 +218,7 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     const directory = (await createV4RunDirectory(catalog, 'case_document')).run_directory;
     const initial = await advanceStrict(directory);
     assert.equal(initial.stage, 'source_pack');
-    const fixture = v4GeneralQualityFixture('4.3.2');
+    const fixture = v4GeneralQualityFixture('4.3.3');
     fixture.artifacts.evidence_claims.fact_ledger.push({
       ...structuredClone(fixture.artifacts.evidence_claims.fact_ledger[0]),
       fact_id: 'fact_checkout_context', statement: 'checkout 是订单验收的业务模块',
@@ -227,10 +227,10 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     fixture.artifacts.evidence_claims.fact_ledger.reverse();
     assert.equal(canonicalStringify({ facts: fixture.artifacts.evidence_claims.fact_ledger }),
       canonicalStringify({ facts: [...fixture.artifacts.evidence_claims.fact_ledger].reverse() }));
-    bindGeneralQualityFixture(fixture, '4.3.2');
+    bindGeneralQualityFixture(fixture, '4.3.3');
     const pack = fixture.artifacts.source_pack;
     pack.run_instance_id = initial.scope.run_instance_id;
-    pack.schema_version = '4.3.2';
+    pack.schema_version = '4.3.3';
     pack.source_revision = initial.scope.source_revision;
     const source = pack.sources[0];
     const signed = 'https://s3-ep-inter.didistatic.com/doc/diagram.png?variant=cover&X-Amz-Signature=TEST_ONLY_CANARY';
@@ -374,7 +374,7 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     }
     assert.equal(final.status, 'finished', JSON.stringify(final));
     const manifest = JSON.parse(await readFile(path.join(directory, 'output/current.json'), 'utf8'));
-    assert.equal(manifest.schema_version, '4.3.2');
+    assert.equal(manifest.schema_version, '4.3.3');
     assert.ok(manifest.source_reading?.path);
     const reading = JSON.parse(await readFile(path.join(directory, manifest.source_reading.path), 'utf8'));
     assert.equal(reading.status, 'complete_within_scope');

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import runInstanceSchema from '../skill/generate-test-cases/scripts/schemas/run-instance.schema.json' with { type: 'json' };
-import { canonicalStringify } from './canonical.mjs';
+import { evidenceComponentDigests, canonicalStringify } from './canonical.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import {
   RunStoreIntegrityError,
@@ -556,7 +556,8 @@ export function compileSemanticReopenSiblingCheckpointV4(
     run_id: text(seed.run_id, 'REOPEN_SIBLING_SEED_INVALID'), revision: 0,
     commit_profile: 'pre_case_pending',
     source_review_witness: canonicalClone(parent.source_review_witness),
-    fact_ledger_digest: canonicalDigest(evidence.fact_ledger),
+    fact_ledger_digest: contract.schema_version === '4.3.3'
+      ? evidenceComponentDigests(evidence).fact_ledger_digest : canonicalDigest(evidence.fact_ledger),
     scope_manifest_digest: canonicalDigest(scopeManifest),
     behavior_views_digest: null, case_drafts_digest: null,
     // This is revision zero of a new durable run. The immutable parent

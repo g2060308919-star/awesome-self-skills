@@ -62,6 +62,8 @@ When one user message answers several questions, create a precise answer span fo
 
 For every normative Claim create canonical `subject_descriptor` with `scope_ref`, `module_id`, `entity_type`, NFC `entity_key`, normalized JSON-Pointer `field_path`, and recursively canonical JSON `condition`. Derive `subject_key` only from that descriptor. Never use a natural-language title as subject identity.
 
+Split facts by business proposition, retaining the object, action, condition and result together. Punctuation alone is not a fact boundary. For example, “保存草稿：校验通过后提交表单，状态为草稿” and “保存并生效：校验通过后提交表单，状态为生效” remain separate facts with their respective action and result context. Extracting two contextless “校验通过后提交表单” statements loses meaning even if their IDs differ. If legitimate distinct facts still have identical statements, retain every fact ID and Claim association: the compiler disambiguates readable labels from supported subjects, or deduplicates labels only. Statements need not be globally unique. Submit sets in any order; the compiler owns canonical ordering and digests.
+
 ## Use the closed semantic assertion seam
 
 Only an accepted `domain="business"` Claim may carry compiler inputs under `semantic_value`. These are evidence assertions, not Case/View self-proof. Use only the following field names and exact item shapes; omit a family when the source does not support it:
@@ -112,7 +114,7 @@ A final clarification replaces only the proposition and scope it answers. Preser
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
 
-For exact schema `4.3.0`, `4.3.1`, or `4.3.2`, every semantic-gap input includes the closed
+For exact schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, every semantic-gap input includes the closed
 `acceptance_impact` record described in `clarification-policy.md`. This record is
 analysis metadata, not E3 evidence and not a user answer. It participates in
 the semantic-root version, so changing its classification, criteria, or

@@ -8,9 +8,9 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { advanceStrict } from '../generate-test-cases-engineering/src/advance-strict.mjs';
 import { canonicalStringify } from '../generate-test-cases-engineering/src/canonical.mjs';
-import { constructV4Action, prepareV4Source } from '../generate-test-cases-engineering/src/entry.mjs';
+import { advanceStrict, constructV4Action, prepareV4Source } from '../generate-test-cases-engineering/src/entry.mjs';
+import { latestV4Contract } from '../generate-test-cases-engineering/src/v4-contract.mjs';
 import { stageV4PrdCollectionObservation } from '../generate-test-cases-engineering/src/prd-source-collection-v4.mjs';
 import { createV4RunDirectory } from '../generate-test-cases-engineering/src/run-bootstrap-v4.mjs';
 import { STAGE_FILES } from '../generate-test-cases-engineering/src/run-store.mjs';
@@ -26,7 +26,7 @@ test('official G Case Document and test-confirmed Execution Plan reach R init-g'
   const catalog = path.join(root, 'catalog');
   await mkdir(catalog);
   const g = await createV4RunDirectory(catalog, 'case_document');
-  const fixture = v4GeneralQualityFixture('4.3.2');
+  const fixture = v4GeneralQualityFixture(latestV4Contract().schema_version);
   fixture.artifacts.source_pack.run_instance_id = g.run_id;
   let reply = await advanceStrict(g.run_directory);
   assert.equal(reply.status, 'need_revision');
@@ -75,7 +75,7 @@ test('official G Case Document and test-confirmed Execution Plan reach R init-g'
     manifest_digest: hash(caseManifestBytes), bundle_digest: caseManifest.bundle.digest };
   const execution = await createV4RunDirectory(catalog, 'execution_plan');
   const executionSource = (revision, events) => ({
-    schema_version: '4.3.2', source_revision: revision, run_instance_id: execution.run_id,
+    schema_version: latestV4Contract().schema_version, source_revision: revision, run_instance_id: execution.run_id,
     run_scope: `execution:${g.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: ref, output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },

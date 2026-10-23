@@ -21,17 +21,29 @@ For every recovery or resume, invoke the runner on the same absolute directory f
 
 Treat only compiler-accepted events in the recovered checkpoint as submitted. Preserve accepted answers whose exact root version and scope still apply, preserve every pending part, and leave staging-only attempts unaccepted. If the root version, affected scope, or current presentation changed, retain the older answer for audit but do not replay or silently rebind it. Never submit the same accepted answer again merely because conversation context was lost.
 
-Use the exact schema/compiler pair stored by the run. New runs use
-`4.3.2/0.8.2`; exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, `4.3.0/0.8.0`, and `4.3.1/0.8.1` recovery retains its
-original validation and delivery semantics. Never add 4.3 design/review fields
-to an accepted older artifact, mix versions, or infer capability from a `v4`
-filename. An unsupported pair stops with a supported recovery path rather than
-being migrated in place.
+Use the latest installed compiler. New runs and upgraded continuations use
+`4.3.3/0.8.3`. The formal runner returns `VERSION_UPGRADE_REQUIRED` for exact
+`4.0.0/0.5.0`, `4.2.0/0.7.0`, `4.3.0/0.8.0`, `4.3.1/0.8.1`, and `4.3.2/0.8.2`
+identities. To continue, pass `{ parent_run_id, creation_reason: 'version_upgrade' }`
+to `createV4RunDirectory` using the parent's existing catalog root. Repeating
+that request resumes the same journaled successor. Never handwrite its ID,
+replace version fields in historical files, or use a cancellation reason for
+an upgrade.
 
-The Cooper attachment host contract belongs to `source-runtime-v2` in new
-`4.3.1` and `4.3.2` runs. Older 4.3.0 runs remain bound to `source-runtime-v1`; use their
-original compiler release for replay when its source acquisition requires
-that contract. Do not edit a frozen run to adopt the new host.
+The upgrade helper validates original bytes, committed references and any
+delivery before preserving them in an audit snapshot. It stages source and
+Evidence for fresh validation and recomputes downstream design using the latest
+contract. Incomplete source acquisition may require recollection. Unknown or
+corrupt pairs stop without changing the parent; do not invoke an older generator.
+Completed deliveries can be viewed through `verifyCaseDocumentDeliveryV4` or
+`verifyExecutionPlanDeliveryV4` without creating a successor.
+
+Only the compiler may rebind a historical final answer after proving its
+source authority, business proposition, complete scope and root applicability.
+Temporary, unknown, deferred, or unprovable answers remain audit history and
+require fresh clarification. Do not recreate a user event to make an old answer
+appear current. Frozen source provider contracts remain verification inputs;
+new acquisition uses the latest compiler-owned registry.
 
 ## Preserve append-only revisions
 

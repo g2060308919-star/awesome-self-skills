@@ -8,6 +8,7 @@ import {
   normalizeDecisionMessageV4
 } from './decision-record.mjs';
 import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
+import { DiagnosticErrorV4 } from './diagnostic-error-v4.mjs';
 import {
   canonicalStringSetV4,
   canonicalTextV4,
@@ -235,10 +236,28 @@ function refreshCheckpointPresentation(checkpoint, supersedesPresentationId) {
   return presentation;
 }
 
+/** Reissue presentation bindings after the upgrade adapter has proved each
+ * retained final Decision against immutable parent material. This internal seam
+ * accepts only existing root IDs; it cannot create a root, event or Decision.
+ * @param {unknown} submitted @param {string[]} finalRootIds */
+export function refreshVersionUpgradePresentationV4(submitted, finalRootIds) {
+  const checkpoint = structuredClone(assertCheckpoint(submitted));
+  if (!Array.isArray(finalRootIds) || new Set(finalRootIds).size !== finalRootIds.length
+    || finalRootIds.some(rootId => !checkpoint.semantic_gap_ledger.some(
+      (/** @type {any} */ root) => root.root_issue_id === rootId))) {
+    throw new TypeError('UPGRADE_ROOT_DISPOSITION_INVALID');
+  }
+  for (const state of checkpoint.clarification_state.root_states) {
+    if (finalRootIds.includes(state.root_issue_id)) state.status = 'resolved_final';
+  }
+  refreshCheckpointPresentation(checkpoint, checkpoint.clarification_state.latest_presentation_id);
+  return assertCheckpoint(checkpoint);
+}
+
 /** @param {unknown} checkpoint */
 function assertCheckpoint(checkpoint) {
   const diagnostics = validateSemanticClarificationCheckpointV4(checkpoint);
-  if (diagnostics.length) throw new TypeError(diagnostics[0].code);
+  if (diagnostics.length) throw new DiagnosticErrorV4(diagnostics[0].code, diagnostics);
   return /** @type {any} */ (checkpoint);
 }
 
@@ -406,7 +425,7 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
     }
   };
   const diagnostics = validateSemanticClarificationCheckpointV4(checkpoint);
-  if (diagnostics.length) throw new TypeError(diagnostics[0].code);
+  if (diagnostics.length) throw new DiagnosticErrorV4(diagnostics[0].code, diagnostics);
   return {
     status: presentation ? 'need_user_answers' : 'clarification_complete',
     committed_revision: Number(revision),
@@ -723,7 +742,7 @@ export function applyRequestDeliveryV4(submittedCheckpoint, submittedEvent) {
   const priorPresentationId = applyRequestDeliverySelectionV4(checkpoint, submittedEvent);
   const presentation = refreshCheckpointPresentation(checkpoint, priorPresentationId);
   const diagnostics = validateSemanticClarificationCheckpointV4(checkpoint);
-  if (diagnostics.length) throw new TypeError(diagnostics[0].code);
+  if (diagnostics.length) throw new DiagnosticErrorV4(diagnostics[0].code, diagnostics);
   return {
     status: presentation ? 'need_user_answers' : 'clarification_complete',
     committed_revision: checkpoint.revision,
@@ -1007,7 +1026,7 @@ export function applySemanticClarificationEventsV4(submitted) {
   if (!changed) return noInformationGain();
   refreshCheckpointPresentation(checkpoint, successorBasePresentationId);
   const diagnostics = validateSemanticClarificationCheckpointV4(checkpoint);
-  if (diagnostics.length) throw new TypeError(diagnostics[0].code);
+  if (diagnostics.length) throw new DiagnosticErrorV4(diagnostics[0].code, diagnostics);
   return {
     status: checkpoint.clarification_state.presentation ? 'need_user_answers' : 'clarification_complete',
     commit_required: true,

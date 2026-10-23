@@ -32,7 +32,7 @@ below. The separately retained single-system release benchmark is not a v4
 development prerequisite and makes no comparator-superiority, external-expert,
 or platform-signed Agent identity claim.
 
-## v4 architecture (latest compiler 0.8.2 / schema 4.3.2)
+## v4 architecture (latest compiler 0.8.3 / schema 4.3.3)
 
 The v4 development track keeps one private module entry point, `advanceStrict(absoluteRunDirectory)`, and exactly four Agent-writable artifacts:
 
@@ -46,7 +46,7 @@ The compiler owns semantic-gap/root identities, decisions, scope verification, b
 ```text
 canonical Source → Evidence/Fact/Scope → pre-case clarification
 → sparse Behavior Views + design assurance → business outcomes/formal test points → CaseSpecs
-→ post-case clarification → source-first independent review in the same Case Draft stage
+→ source-first independent review in the same Case Draft stage → post-case clarification
 → canonical JSON + HTML + full Table + compatibility Markdown/CSV
 ```
 
@@ -58,13 +58,17 @@ causes the compiler to issue the authoritative target inventory and digest, and
 a completed submission repeats the same generated content with an assessment
 bound to that digest. It is not a fifth artifact or public stage.
 
-The new `4.3.2/0.8.2` pair keeps those quality gates and binds collection
+The `4.3.2/0.8.2` pair keeps those quality gates and binds collection
 receipts separately from normalized source text. It carries reviewed resource
 acquisition through the source reading summary and canonical delivery.
 
-Exact `4.0.0/0.5.0`, `4.2.0/0.7.0`, and `4.3.0/0.8.0` runs keep their original contracts and
-bytes. Mixed or unknown version pairs fail closed; old runs are never silently
-backfilled with 4.3 metadata.
+The latest `4.3.3/0.8.3` pair preserves these gates, distinguishes colliding
+fact labels using source-backed business context, and hashes Evidence components
+from their canonical artifact snapshot. The formal runner requires a controlled
+upgrade for historical v4 identities; it never continues generation under an
+older pair. Original bytes and manifests remain immutable. See the
+[reliability validation report](docs/reliability-2026-10-22.md) for the support
+matrix, tests and remaining limits.
 
 Missing environment URLs, accounts, sample-data tools, observers, or mocks never block Case Document generation. Execution resources belong only to a separately requested execution-plan run bound to an immutable `case_document_ref`; the Skill prepares a runner projection but never starts E2E execution.
 

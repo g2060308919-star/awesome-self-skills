@@ -261,7 +261,15 @@ function validate(value, schema, path, root, parentEvaluatedProperties) {
     } else {
       const discriminated = filterArray(variants, (child) => matchesDiscriminator(value, child.schema, root));
       if (matching.length === 0 && discriminated.length === 1) pushArray(diagnostics, ...discriminated[0].diagnostics);
-      else pushArray(diagnostics, diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
+      else {
+        pushArray(diagnostics, diagnostic('ONE_OF_MISMATCH', pointer, 'must match exactly one schema variant'));
+        if (matching.length === 0) {
+          const candidates = discriminated.length ? discriminated : variants;
+          const minimum = Math.min(...mapArray(candidates, item => item.diagnostics.length));
+          const closest = filterArray(candidates, item => item.diagnostics.length === minimum)[0];
+          if (closest) pushArray(diagnostics, ...sliceArray(closest.diagnostics, 0, 32));
+        }
+      }
     }
   }
   if (isSchemaObject(schema.not) && validate(value, schema.not, path, root).length === 0) {
@@ -325,7 +333,7 @@ export function validateUniqueStableIds(artifact) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) return;
         const value = /** @type {Record<string, unknown>} */ (item)[id];
         if (typeof value !== 'string') return;
-        if (seen.has(value)) pushArray(diagnostics, diagnostic('DUPLICATE_STABLE_ID', `${pointer}/${index}/${id}`, `duplicate stable ID "${value}"`));
+        if (seen.has(value)) pushArray(diagnostics, diagnostic('DUPLICATE_STABLE_ID', `${pointer}/${index}/${id}`, 'duplicate stable ID in this collection'));
         seen.add(value);
       });
     }

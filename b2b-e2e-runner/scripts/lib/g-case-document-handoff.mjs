@@ -7,7 +7,7 @@ import { validateTestCases } from './contracts.mjs';
 
 const VERSIONS = new Map([
   ['4.0.0', '0.5.0'], ['4.2.0', '0.7.0'], ['4.3.0', '0.8.0'],
-  ['4.3.1', '0.8.1'], ['4.3.2', '0.8.2']
+  ['4.3.1', '0.8.1'], ['4.3.2', '0.8.2'], ['4.3.3', '0.8.3']
 ]);
 
 function fail(message) {

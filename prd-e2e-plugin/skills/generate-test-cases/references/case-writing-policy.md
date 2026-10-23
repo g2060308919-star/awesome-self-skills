@@ -16,11 +16,19 @@ Different enumerations, permission branches, or condition/result branches that c
 
 Use target-discriminating data, not merely data that produces any visible output. For a filter or mapping, include the logical target sample and, when needed to distinguish a plausible false positive, a related nonmatching or differently mapped sample while holding irrelevant conditions stable. Do not assert unknown global counts, ordering, or pagination just to make the counterexample look complete.
 
+## Make every target reachable and decidable
+
+A Case's business preconditions, data conditions, action, and expected result must be simultaneously satisfiable. For a negative target, isolate the relevant invalid dimension while keeping required dependencies valid. For a combination target, provide all required dimensions. Name concrete user actions; do not use “触发校验/触发请求/按正常流程操作” as a substitute, and do not invent blur, Enter, an endpoint, a save mode, or another trigger. Repair contradictions such as a required prerequisite being absent from the test data.
+
+For time, size, order, or numeric behavior, state the tested event/order and the evidenced precision, timezone, or unit when required. If a limit or comparison basis is missing, retain a gap rather than guessing. Choose values with a meaningful margin when testing a sourced boundary; “a large value” is not proof of a maximum.
+
 ## Preserve single points and add a same-object complete path
 
 When accepted flow evidence defines a main closed path, keep every required 单点 Case and add one complete-path Case. 完整流程必须围绕同一业务对象，从证据明确的起点经过所需动作到达证据明确的终点。Refer to continuity in executable terms such as “本用例创建的记录”; do not invent an identifier field the product never provides. A critical stage stays in the steps instead of being moved into a precondition, and the Case must not silently switch objects midway.
 
 完整流程仍是一条普通多步 Case, with one `primary_test_point_id` and one primary business result. Process observations may prove continuity, but unrelated copy, permissions, failures, retries, or fields remain their own single-point outcomes. A flow Case may share the terminal Test Point with a different single-point scenario; preserve both scenarios without increasing the formal denominator. 单点必须保留，不能被完整流程取代。不新增 Case 类型、流程引擎或状态机。
+
+Do not deduplicate Cases by title, copied wording, shared error text, or shared terminal Test Point alone. Apply the semantic comparison in `behavior-views.md`. Preserve distinct object/page, role, state, input partition, action, primary result, observation, and path-history responsibilities. A legal merge retains the stronger sufficient observation, all source bindings, and the design-assurance disposition that explains the merge.
 
 不得新增 Case 类型、流程引擎或状态机。Use only the existing CaseSpec, existing compiler-owned ordering refs, and source-backed views. If the source signals a path but its object linkage, ordering, start, or terminal result is ambiguous, route that business ambiguity through the existing pre-case or post-case clarification phase.
 
@@ -46,6 +54,8 @@ Write a concrete business expectation, not “works”, “normal”, “correct
 
 Separate “input was entered”, “input passed validation”, “request was emitted”, and “business operation succeeded” when the target distinguishes them. Prepare capture before an action that emits a transient request or event. Select only the observation surface needed by the target; lack of a current account, URL, selector, or observer remains execution preparation and does not block logical Case generation. Never invent a field, endpoint, success code, timeout, or persistence rule to fill that gap.
 
+Use an observation contract that can falsify the target. A filter result normally includes a matching and a relevant nonmatching sample. A UI-to-response mapping observes the UI and the response only when the sourced relation requires both. A “no request” rule requires request observation to be ready before the action. Do not add API, storage, event, or UI layers when one evidenced surface is sufficient.
+
 HTML and Markdown place each expected result with its owning step. CSV serializes `steps` as `N. action` and `expected_results` as `步骤N：预期`, using the same step order. The conversation Table preserves every Oracle in deterministic step/observation order. JSON, HTML, Table, Markdown, and CSV derive from one canonical Case document; never edit them independently.
 
 ## Record semantic effects only when real
@@ -69,6 +79,12 @@ Each `test_values` item identifies `value_id`, semantic `subject_ref`, business 
 
 Never mix fields from different branches, relabel an example as a requirement, or treat a derived result as an authorized rule. `used_by_refs` may name only an existing precondition, condition, step, oracle, or semantic effect in this Case. An E1 or temporary-assumption input caps the Case at Conditional even if its Oracle is stronger.
 
+For a required fixed number, file, or sample, preserve the exact value and Claim. For a replaceable example, write the sourced type, range, relationship to discriminating samples, and lookup action into existing data conditions and steps. A name lookup with a prefix-similar distractor remains a name lookup after data binding; an ID search or an all-population substitute does not satisfy it. If the source does not support replacement, do not mark the value replaceable. These conditions and `test_values.value_origin` must survive every formal output projection.
+
+Write message expectations at the owning step. When the source fixes the exact text, say that it must match verbatim and preserve the required words and punctuation. When the source permits wording variation, state every invariant business fact and behavior, such as the exact 5MB limit, allowed formats, and rejection; say that wording may vary. A rejection with a wrong required message is not an overall pass when the Case requires both. An unclear comparison mode or missing essential fact goes through the existing clarification path before delivery, never through an execution-time relaxation.
+
+Before finalizing each action, distinguish a user-editable control, a system-populated read-only field, and an external data prerequisite. A source-backed non-editable expiry belongs in the sample condition and an observe/query step, not a fabricated edit step. If the source requires editing, retain the requirement even if a later environment shows a read-only UI. If editability is unresolved and material, keep a precise gap or ask through the existing clarification stage. This review uses source facts and does not require logging into a business page.
+
 ## Preserve evidence and risk boundaries
 
 Every expected value/state and every optional semantic field needs direct accepted Claim evidence or a legal replayable E2 derivation. Run a read-only source rebuttal pass before submission: try to disprove every proposed fact, condition, action, and Oracle. The review must never introduce a new business fact. Contradicted or uncertain semantics remain a gap; do not invent an assumption to rescue them.
@@ -79,9 +95,13 @@ Examples: “create this record, then locate that same record and observe its so
 
 An unsourced generic risk may become a clearly labelled Exploratory record, never a formal Case or Oracle. Missing formal source behavior remains a semantic gap, not Exploratory. `risk_review_ledger` is compiler-owned from the complete module review; Case drafts must not create or hide its nine mandatory categories.
 
+## Assign priority from business risk
+
+Apply an explicit user priority policy when one exists. Otherwise use a stable fallback: `P0` for a core blocker, severe unauthorized access, or major business/data/benefit loss; `P1` for main business rules and material boundaries; `P2` for lower-impact secondary or presentation behavior. Apply that rationale deterministically and state it when the user or validation report asks for an explanation; do not invent a Case field or persist free-form rationale in a closed artifact. Never assign priority by keyword, quota, source order, Case count, or title wording. Renaming a Case does not change its priority, and priority never changes evidence level, acceptance role, coverage, or criticality.
+
 ## Complete the 4.3 source-first review in the same stage
 
-For schema `4.3.0`, `case_drafts.independent_review` is required. It is review
+For schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, `case_drafts.independent_review` is required. It is review
 metadata inside the existing fourth artifact, not business evidence, a fifth
 truth ledger, or another workflow stage.
 
@@ -90,7 +110,7 @@ First submit `status=pending` with `protocol_version=1.0.0`,
 source-first target inventory derived from accepted Claims/Decisions. Define the
 necessary `business_result`, `condition_distinction`, and `required_relation`
 targets before inspecting the generated Case projection. Do not derive that
-inventory from Case titles or formal-point counts.
+inventory from Case titles or formal-point counts. The reviewer must use a genuinely separate context; a generator's self-check is not independent. If no permitted independent reviewer is available, keep review unfinished rather than marking it verified, empty, or successful. Do not fabricate a reviewer identity.
 
 The compiler returns `need_revision` with `review_request`, compiler-issued
 target IDs, the exact generated-content projection, and `review_target_digest`.
@@ -98,7 +118,7 @@ Use the Adapter helper described in `SKILL.md` to construct `status=completed`;
 do not calculate IDs/digests or copy an old review. Assess every issued target
 with exact affected item and Claim/Decision references. A confirmed omission or
 unsupported assertion must be fixed and rechecked; a rejected reviewer finding
-requires evidence. A Boolean `reviewed` flag or unsupported prose never passes.
+requires evidence. Review concrete conditions and expected results, and do not introduce an unrelated first Case or product rule merely to satisfy the review. Use only the existing finding kinds (`omission` and `unsupported_assertion`); duplication or priority concerns are repaired in their owning design/risk layer, not by inventing a new review enum. A Boolean `reviewed` flag or unsupported prose never passes.
 
 Repeat the same generated content when returning the completed review. Any
 change to Facts, Views, formal Test Points, candidate responsibilities,
@@ -106,6 +126,10 @@ preconditions, data, steps, or Oracles invalidates the prior digest and requires
 a fresh compiler-issued pass. Review identity, rationale, adjudication prose,
 and review-derived summaries are excluded from the digest to prevent
 self-reference, but cannot alter product truth.
+
+Repair a confirmed finding at the earliest owning evidence, view, responsibility, or Case layer, then regenerate and recheck all affected downstream content. If staged review metadata or its digest is stale, repair the current unaccepted staging artifact and obtain a fresh compiler-issued request. Never edit accepted history, rebuild unrelated runs, or reuse an old review digest.
+
+When asked why counts changed or whether Cases are duplicated, compare business semantics rather than IDs or titles and report each actual addition, correction, merge, and removal, its destination mapping, affected scope, and the responsibilities preserved unchanged. Explanation alone is read-only. If the user explicitly requests a supported correction, repair the owning layer and retain a before/after semantic mapping; do not manufacture a change when no duplicate or defect is confirmed.
 
 ## Render a business-first Case Document
 

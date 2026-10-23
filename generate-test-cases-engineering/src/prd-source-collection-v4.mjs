@@ -391,12 +391,12 @@ export async function loadV4SourceReadingSummary(
       || (state.committed_revision === sourcePack.source_revision
         ? state.source_material_digest !== sourceMaterialDigest(sourcePack)
           || state.accepted_source_pack_digest !== valueDigest(sourcePack)
-        : sourcePack.schema_version !== '4.3.2')) {
+        : !['4.3.2', '4.3.3'].includes(sourcePack.schema_version))) {
       throw new TypeError('SOURCE_READING_BINDING_INVALID');
     }
     const boundPack = state.committed_revision < sourcePack.source_revision
       ? await acceptedSourceForLaterRevision(runDirectory, state, sourcePack) : sourcePack;
-    if (sourcePack.schema_version === '4.3.2') {
+    if (['4.3.2', '4.3.3'].includes(sourcePack.schema_version)) {
       const session = state.collection_sessions?.[0];
       if (state.state_digest !== valueDigest(Object.fromEntries(
         Object.entries(state).filter(([key]) => key !== 'state_digest')
@@ -413,12 +413,12 @@ export async function loadV4SourceReadingSummary(
     }
     return structuredClone(state.summary);
   }
-  const baseStored = state.status === 'acquired' && state.schema_version === '4.3.2'
+  const baseStored = state.status === 'acquired' && ['4.3.2', '4.3.3'].includes(state.schema_version)
     ? await readJsonIfPresent(runDirectory, path.join(runDirectory, 'derived',
       `source-acquisition-base-r${String(state.committed_revision).padStart(3, '0')}.json`))
     : null;
   const base = baseStored?.value;
-  if (sourcePack.schema_version !== '4.3.2' || state.status !== 'acquired'
+  if (!['4.3.2', '4.3.3'].includes(sourcePack.schema_version) || state.status !== 'acquired'
     || state.run_id !== sourcePack.run_instance_id
     || state.committed_revision > sourcePack.source_revision
     || !base || baseStored.digest !== state.accepted_source_pack_digest.slice(7)

@@ -73,7 +73,7 @@ function bindFixtureContract(fixture, schemaVersion) {
   for (const artifact of Object.values(fixture.artifacts)) {
     artifact.schema_version = schemaVersion;
   }
-  if (!['4.3.0', '4.3.1', '4.3.2'].includes(schemaVersion)) return fixture;
+  if (!['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(schemaVersion)) return fixture;
   const bound = bindGeneralQualityFixture(fixture, schemaVersion);
   const completed = bound.artifacts.case_drafts.independent_review;
   bound.artifacts.case_drafts.independent_review = {
@@ -94,7 +94,7 @@ async function stageCandidateCollection(installed, directory, reply, fixture) {
   const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
   const schemaVersion = identity.schema_version;
   bindFixtureContract(fixture, schemaVersion);
-  if (!['4.2.0', '4.3.0', '4.3.1', '4.3.2'].includes(schemaVersion)) return schemaVersion;
+  if (!['4.2.0', '4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(schemaVersion)) return schemaVersion;
   const source = fixture.artifacts.source_pack.sources[0];
   const bytes = new TextEncoder().encode(source.content);
   await installed.stageV4PrdCollectionObservation(directory, reply, {
@@ -208,7 +208,7 @@ test('installed ordinary create-run entry resumes a cancelled parent with a comp
 /** @param {string} runId @param {any} caseDocumentRef @param {any[]} events @param {number} revision */
 function executionSourcePack(runId, caseDocumentRef, events, revision) {
   return {
-    schema_version: '4.3.2', source_revision: revision, run_instance_id: runId,
+    schema_version: '4.3.3', source_revision: revision, run_instance_id: runId,
     run_scope: `execution:${caseDocumentRef.run_id}`, delivery_intent: 'execution_plan',
     case_document_ref: structuredClone(caseDocumentRef), output_language: 'zh-CN',
     sources: [], locators: [], source_reviews: [], source_policy: { rules: [] },
@@ -274,15 +274,10 @@ async function deliverInstalledCaseDocument(installed, catalog) {
 
 test('installed private action seam constructs a semantic answer and the installed runner accepts it', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-action-'));
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-action-'));
+  const { run_directory: directory } = await installed.createV4RunDirectory(catalog, 'case_document');
   try {
-    const initial = await installed.advanceStrict(directory);
-    const runId = initial.scope.run_instance_id;
-    const fixture = await bendReviewJourneyFixture(runId);
-    await stage(directory, 'source_pack', fixture.artifacts.source_pack);
-    assert.equal((await installed.advanceStrict(directory)).stage, 'evidence_claims');
-    await stage(directory, 'evidence_claims', fixture.artifacts.evidence_claims);
-    const pending = await installed.advanceStrict(directory);
+    const { runId, reply: pending, schemaVersion } = await pendingSemanticReply(installed, directory);
     assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
     const part = pending.semantic_presentation.question_parts.find(
       (/** @type {any} */ item) => /IP/u.test(item.question)
@@ -306,13 +301,33 @@ test('installed private action seam constructs a semantic answer and the install
     }), []);
     assert.match(event.event_id, /^EVENT-[0-9a-f]{64}$/u);
 
-    const revision1 = await bendReviewJourneyFixture(runId, 1, [event]);
+    const revision1 = bindFixtureContract(await bendReviewJourneyFixture(runId, 1, [event]), schemaVersion);
     await stage(directory, 'source_pack', revision1.artifacts.source_pack);
     const accepted = await installed.advanceStrict(directory);
     assert.equal(accepted.status, 'need_user_answers', JSON.stringify(accepted));
-    assert.equal(accepted.semantic_presentation.question_parts.length, 2);
+    assert.equal(accepted.semantic_presentation.question_parts.length, 3);
+    const retainedPart = accepted.semantic_presentation.question_parts.find(
+      (/** @type {any} */ item) => item.root_issue_id === part.root_issue_id
+    );
+    assert.ok(retainedPart, 'a temporary answer leaves the critical question pending');
+    assert.equal(retainedPart.available_actions.includes('request_delivery'), false);
+    const sourcePack = JSON.parse(await readFile(
+      path.join(directory, 'accepted/r001/source-pack.json'), 'utf8'
+    ));
+    const decisions = sourcePack.decision_records.filter(
+      (/** @type {any} */ decision) => decision.target.root_issue_id === part.root_issue_id
+    );
+    assert.equal(decisions.length, 1);
+    assert.equal(decisions[0].answer, answer);
+    assert.equal(decisions[0].resolution, 'temporary');
+    assert.equal(decisions[0].authority, 'task_scoped');
+    const checkpoint = JSON.parse(await readFile(path.join(directory, 'checkpoint.json'), 'utf8'));
+    assert.equal(checkpoint.clarification_state.root_states.find(
+      (/** @type {any} */ root) => root.root_issue_id === part.root_issue_id
+    )?.status, 'resolved_temporary');
+    await assert.rejects(readFile(path.join(directory, 'output/current.json')), { code: 'ENOENT' });
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(catalog, { recursive: true, force: true });
   }
 });
 
@@ -502,10 +517,12 @@ test('installed private action seam constructs source recovery, cancellation and
 
 test('installed source-action seam alone stages a canonical resumed Source Pack that the installed runner accepts', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-source-action-'));
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-source-action-'));
   try {
+    const { run_directory: directory } = await installed.createV4RunDirectory(catalog, 'case_document');
     const initial = await installed.advanceStrict(directory);
     const fixture = await bendReviewJourneyFixture(initial.scope.run_instance_id);
+    await stageCandidateCollection(installed, directory, initial, fixture);
     const original = structuredClone(fixture.artifacts.source_pack);
     const submitted = structuredClone(original);
     const secret = 'INSTALLED_ACTION_SECRET_MUST_NOT_PERSIST';
@@ -519,7 +536,7 @@ test('installed source-action seam alone stages a canonical resumed Source Pack 
     const staged = await installed.stageV4SourceAcquisitionAction(
       directory,
       blocked,
-      original,
+      submitted,
       [{
         artifact_request_id: blocked.artifact_requests[0].artifact_request_id,
         input: {
@@ -545,16 +562,18 @@ test('installed source-action seam alone stages a canonical resumed Source Pack 
       directory, staged.artifact_events[0].event_id
     )), { code: 'ENOENT' });
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(catalog, { recursive: true, force: true });
   }
 });
 
 test('installed source-action seam derives reviewed asset digests and resumes without private compiler imports', async () => {
   const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-asset-action-'));
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-asset-action-'));
   try {
+    const { run_directory: directory } = await installed.createV4RunDirectory(catalog, 'case_document');
     const initial = await installed.advanceStrict(directory);
     const fixture = await bendReviewJourneyFixture(initial.scope.run_instance_id);
+    await stageCandidateCollection(installed, directory, initial, fixture);
     const sourcePack = /** @type {any} */ (structuredClone(fixture.artifacts.source_pack));
     const source = sourcePack.sources[0];
     const assetUri = 'https://assets.test/review/decorative.png';
@@ -601,7 +620,7 @@ test('installed source-action seam derives reviewed asset digests and resumes wi
     assert.equal(accepted.status, 'need_revision', JSON.stringify(accepted));
     assert.equal(accepted.stage, 'evidence_claims');
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(catalog, { recursive: true, force: true });
   }
 });
 

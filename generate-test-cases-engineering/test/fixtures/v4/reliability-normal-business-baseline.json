@@ -1,0 +1,67 @@
+{
+  "provenance": {
+    "revision": "4beb55f278af1648fbb0afd7c6f71dcefca87d72",
+    "schema_version": "4.3.2",
+    "compiler_version": "0.8.2",
+    "fixture": "v4GeneralQualityFixture",
+    "answers": [],
+    "capture": "Compiled with the unmodified git archive of this revision, before the reliability changes. No legacy generator is shipped or called by this fixture."
+  },
+  "allowed_differences": [
+    "schema_version",
+    "compiler_version",
+    "compiler-issued identities and digests",
+    "trace-only references"
+  ],
+  "business_projection": {
+    "facts": [
+      {
+        "statement": "checkout accepted 订单进入已接受状态",
+        "status": "active",
+        "acceptance_role": "primary_acceptance",
+        "field_path": "/state",
+        "module_refs": [
+          "checkout"
+        ]
+      }
+    ],
+    "gaps": [],
+    "result_kind": "delivered_cases",
+    "coverage": {
+      "primary": {
+        "reviewed_formal_test_point_count": 1,
+        "covered_formal_test_point_count": 1,
+        "not_applicable_formal_test_point_count": 0
+      },
+      "boundary": {
+        "reviewed_formal_test_point_count": 0,
+        "covered_formal_test_point_count": 0,
+        "not_applicable_formal_test_point_count": 0
+      },
+      "semantic_gap_count": 0,
+      "exploratory_count": 9,
+      "not_applicable_count": 0
+    },
+    "cases": [
+      {
+        "title": "提交订单后显示已接受",
+        "module": "checkout",
+        "priority": "P0",
+        "semantic_status": "Grounded",
+        "acceptance_role": "primary_acceptance",
+        "preconditions": [],
+        "data": [],
+        "steps": [
+          "提交符合要求的订单"
+        ],
+        "oracles": [
+          {
+            "after_step": 0,
+            "surface": "ui",
+            "expected": "订单状态显示为已接受"
+          }
+        ]
+      }
+    ]
+  }
+}
