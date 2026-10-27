@@ -51,3 +51,19 @@ test('MCP page mapping rejects wrong or stale page ID even when a CDP marker exi
  assert.throws(()=>verifyMcpPageMapping(pages,'99','about:blank#runner-g'),/pageId/);
  assert.equal(verifyMcpPageMapping(pages,'1','about:blank#runner-g').page_id,'1');
 });
+
+test('A10: unsupported shared connection records a scoped limitation without discovery, profile creation, or blocking independent real facts',async(t)=>{
+ const {mkdtemp,readFile,rm}=await import('node:fs/promises'); const os=await import('node:os'); const path=await import('node:path');
+ const {initializeRun,recordEvent}=await import('../scripts/run-artifacts.mjs'); const {prepareBrowser,discoverBrowser}=await import('../scripts/browser-session.mjs');
+ const root=await mkdtemp(path.join(os.tmpdir(),'unsupported-host-')); t.after(()=>rm(root,{recursive:true,force:true}));
+ const run=await initializeRun({workspaceRoot:root,casesPath:new URL('./fixtures/test-cases.json',import.meta.url).pathname});
+ const prepared=await prepareBrowser({runRoot:run.runRoot,storageContext:'real-only',hostCapability:'pipe-only'});
+ assert.equal(prepared.launch_allowed,false); assert.equal(prepared.mock_available,false);
+ assert.equal(prepared.profile_path,undefined); assert.equal(prepared.session.phase,'unsupported');
+ await assert.rejects(discoverBrowser({runRoot:run.runRoot,storageContext:'real-only'}),/不能扫描端口/);
+ await recordEvent(run.runRoot,{type:'permission_plan',version:'1.0',groups:[],role_independent_case_ids:['CASE-原始-01']});
+ await recordEvent(run.runRoot,{type:'page_observation',description:'Independent real-only fixture observation remains recordable'});
+ const log=JSON.parse(await readFile(path.join(run.runRoot,'execution-log.json'),'utf8'));
+ assert.equal(log.events.some(event=>event.type==='proxy_state'),false);
+ assert.equal(log.events.at(-1).type,'page_observation');
+});
