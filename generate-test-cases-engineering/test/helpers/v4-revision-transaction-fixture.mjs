@@ -144,7 +144,7 @@ export function revisionArtifacts(profile, revision, options = {}) {
       behavior_views: behaviorViews, case_drafts: caseDrafts
     },
     system: fixture.system
-  });
+  }, contract.schema_version);
 
   // Compile the Case Document before the optional semantic-root audit fixture
   // is added. The latter is resolved before final delivery and exists only to

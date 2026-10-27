@@ -113,6 +113,16 @@ test("AC-09: a missing timing boundary is shown as not accurately calculable", a
   }
 });
 
+test("retired independent activity-timing workflow is rejected before initialization", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner-retired-duration-"));
+  try {
+    const { casesPath } = await writeCases(root, 1);
+    await assert.rejects(initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v3" }), error => error.code === "INPUT_CONTRACT");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("AC-10/25/29: a stage report stays pending and same-Run recovery preserves a later failure", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-stage-resume-"));
   try {

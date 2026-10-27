@@ -32,7 +32,7 @@ Converge without erasing uncertainty: preserve accepted answers, keep explicit u
 
 When the user explicitly adopts a recommendation, use `constructV4Action` only if the latest validated compiler presentation contains the exact current semantic-gap question and action binding for that recommendation and scope. If no such binding exists, do not attach the answer to a similar root or forge an event. Treat the explicitly scoped adopted rule as newly authoritative user input and use the existing source-change/new-run path; if the public interface cannot express that path, stop the affected item and report the compatibility limitation without weakening the rule or silently restarting.
 
-For schema `4.3.0`, every in-scope semantic gap also carries the exact closed
+For schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, every in-scope semantic gap also carries the exact closed
 `acceptance_impact` shape from `evidence-claims.schema.json`. Classify it
 `critical` only when an answer changes core acceptance, a required branch, or
 makes a required result undecidable; cite one or more corresponding criteria.
@@ -41,6 +41,23 @@ Classify it `noncritical` only with
 missing execution resources, or the number of affected Cases does not decide
 criticality. If impact cannot yet be classified, fail closed and complete the
 analysis rather than defaulting it to noncritical.
+
+## Keep answer targets separate from known context
+
+`subject_fact_ids` names the Facts an answer will replace. Use only existing
+`ambiguous` or `conflicted` Facts for a new pending question. Keep established
+rules (for example, cancel closes the form or name is required) active; represent
+the independently unknown reopening rule as its own Fact with precise Claim
+support. Known Claims may appear in readonly `source_claim_ids` context.
+
+Validate the effective merged question set before presenting it. Distinct roots
+must own disjoint target Facts and disjoint prior Claims to be superseded.
+Within one root, independent Claim sets or one identical Claim-set group are
+valid; partially overlapping Claim sets are not. Supersession must preserve
+non-target Facts and their source basis. A modeling error is `need_revision` at
+Evidence, not another business question. Repair the modeling through the
+existing artifact-repair route, then use the newly issued bindings. Keep prior
+unaccepted answers as audit only; a revised question does not adopt them.
 
 ## Present business decisions, not protocol
 
@@ -96,6 +113,12 @@ evidence-backed non-applicability/obsolescence basis. Temporary E1 input,
 confirmation, `resolved_temporary`, or an old ready manifest cannot clear it.
 Defer/unknown must still leave a current recoverable question. Noncritical
 Conditional delivery remains available under its existing rules.
+
+Replaying an accepted temporary Decision does not create a new write. A new
+answer to that critical root must still pass the current Fact/Claim target
+check before acquiring material. If its targets are already active, follow the
+returned Evidence repair diagnostic; do not downgrade Facts or force an answer
+upgrade. The diagnostic names the actual roots, Facts, statuses and Claims.
 
 ## Reopen without mutating history
 

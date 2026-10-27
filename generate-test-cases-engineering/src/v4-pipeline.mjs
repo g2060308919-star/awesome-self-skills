@@ -2,7 +2,7 @@ import behaviorSchema from '../skill/generate-test-cases/scripts/schemas/behavio
 import caseDraftsSchema from '../skill/generate-test-cases/scripts/schemas/case-drafts.schema.json' with { type: 'json' };
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 
-import { canonicalStringify, digest } from './canonical.mjs';
+import { canonicalArtifactSnapshot, canonicalStringify, digest } from './canonical.mjs';
 import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
 import {
   compileSemanticCaseDocumentV4,
@@ -402,19 +402,13 @@ function presentRoots(roots, compiled, contract, semanticDeliveryGate) {
   });
 }
 
-/**
- * Pure v4 production orchestration. The first argument remains exactly the four
- * Agent-writable artifacts. Raw acquisition material and compiler verification
- * registries are private system state and never enter the semantic Case identity.
- *
- * @param {unknown} submittedArtifacts
- * @param {unknown} submittedSystem
- * @returns {any}
- */
-export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
-  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4
-    || !['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'].every(key => Object.hasOwn(submittedArtifacts, key))) {
-    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly four Agent artifacts are required.' }]);
+/** Validate the complete Source/Evidence phase without manufacturing downstream
+ * Agent artifacts. Both the initial Evidence path and repair path use this gate.
+ * @param {any} submittedArtifacts @param {any} submittedSystem */
+export function compilePreCaseArtifactsV4(submittedArtifacts, submittedSystem) {
+  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 2
+    || !['source_pack', 'evidence_claims'].every(key => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly Source Pack and Evidence Claims are required for pre-case validation.' }]);
   }
   if (!record(submittedSystem) || Object.keys(submittedSystem).some(key => !ALLOWED_SYSTEM_KEYS.has(key))) {
     return qualityFailure('V4_SYSTEM_CONTEXT_INVALID');
@@ -442,7 +436,7 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   }, system.source ?? {});
   if (source.status === 'need_artifact') return source;
   if (source.status !== 'accepted') return needRevision('evidence_claims', source.diagnostics ?? []);
-  const evidence = artifacts.evidence_claims;
+  const evidence = canonicalArtifactSnapshot(artifacts.evidence_claims);
   const semanticEvidence = system.semantic_evidence ?? {
     baseline_assertions: [], value_claims: [], supported_claim_ids: [], derivations: [],
     risk_review_assertions: [], not_applicable_assertions: [], diagnostics: []
@@ -461,8 +455,9 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     topology_dispositions: evidence.topology_dispositions
   }, system.topology);
   if (scope.diagnostics.length) return needRevision('evidence_claims', scope.diagnostics);
+  const canonicalScope = canonicalArtifactSnapshot({ ...evidence, scope_manifest: scope.scope_manifest }).scope_manifest;
   if (canonicalStringify(scope.discovery) !== canonicalStringify(evidence.topology_discovery)
-    || canonicalStringify(scope.scope_manifest) !== canonicalStringify(evidence.scope_manifest)) {
+    || canonicalStringify(canonicalScope) !== canonicalStringify(evidence.scope_manifest)) {
     return needRevision('evidence_claims', [{
       category: 'adapter_revision', code: 'SCOPE_RECOMPUTATION_MISMATCH', path: '/scope_manifest',
       message: 'The submitted topology discovery and Scope Manifest must equal compiler recomputation.'
@@ -485,6 +480,34 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     status: 'need_user_answers', phase: 'requirements_analysis', semantic_roots: pendingPreCase,
     non_blocking_diagnostics: []
   };
+
+  return { status: 'pre_case_ready', context: {
+    artifacts, system, contract, revision, evidence, semanticEvidence, behaviorEvidence,
+    scope, preCaseRoots
+  } };
+}
+
+/** Pure v4 production orchestration. The first argument remains exactly the
+ * four Agent-writable artifacts; acquisition verification stays private.
+ * @param {any} submittedArtifacts @param {any} submittedSystem */
+export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
+  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4
+    || !['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'].every(key => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly four Agent artifacts are required.' }]);
+  }
+  const preCase = compilePreCaseArtifactsV4({
+    source_pack: submittedArtifacts.source_pack,
+    evidence_claims: submittedArtifacts.evidence_claims
+  }, submittedSystem);
+  if (preCase.status !== 'pre_case_ready') return preCase;
+  const {
+    artifacts: preCaseArtifacts, system, contract, revision, evidence,
+    semanticEvidence, behaviorEvidence, scope, preCaseRoots
+  } = preCase.context;
+  const artifacts = { ...preCaseArtifacts,
+    behavior_views: structuredClone(submittedArtifacts.behavior_views),
+    case_drafts: structuredClone(submittedArtifacts.case_drafts) };
+  const sourcePack = artifacts.source_pack;
 
   for (const stage of ['behavior_views', 'case_drafts']) {
     const artifact = artifacts[stage];
@@ -626,11 +649,6 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   const obligations = assembleObligationsArtifactV4(behavior, risk.ledger, risk.context);
   if (obligations.kind !== 'assembled') return qualityFailure('RISK_REVIEW_FAILED', obligations.diagnostics);
   obligations.artifact.schema_version = contract.schema_version;
-  if (pendingPostCase.length) return {
-    status: 'need_user_answers', phase: 'case_design', semantic_roots: pendingPostCase,
-    obligations: obligations.artifact, non_blocking_diagnostics: []
-  };
-
   let currentIndependentReview = null;
   if (isGeneralQualityV4Contract(contract)) {
     const review = artifacts.case_drafts.independent_review;
@@ -671,6 +689,13 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
     }
     currentIndependentReview = reviewResult.normalized;
   }
+
+  // A post-case checkpoint contains accepted Case Drafts. Close their review
+  // gate before committing that checkpoint, including when questions remain.
+  if (pendingPostCase.length) return {
+    status: 'need_user_answers', phase: 'case_design', semantic_roots: pendingPostCase,
+    obligations: obligations.artifact, non_blocking_diagnostics: []
+  };
 
   let semanticDeliveryGate;
   try {

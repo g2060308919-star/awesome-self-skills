@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { canonicalStringify, digest, stableId } from '../../src/canonical.mjs';
+import { validateUniqueStableIds } from '../../src/schema-validator.mjs';
 
 const signatureA = {
   root_issue_id: 'root_payment_currency',
@@ -24,6 +25,26 @@ test('canonical form sorts object keys and set-like arrays without reordering st
     canonicalStringify({ source_locator_ids: ['z', 'a'], steps: ['second', 'first'], a: 1 }),
     '{"a":1,"source_locator_ids":["a","z"],"steps":["second","first"]}'
   );
+});
+
+test('P13 standalone fact ledger and embedded ledger use the same unordered identity', () => {
+  const facts = ['f100', 'f2', 'f10', 'f1'].map(fact_id => ({ fact_id, statement: fact_id }));
+  assert.equal(
+    canonicalStringify({ facts }),
+    canonicalStringify({ facts: [...facts].reverse() })
+  );
+  assert.equal(
+    digest({ facts }), digest({ facts: [...facts].reverse() })
+  );
+  assert.notEqual(
+    canonicalStringify({ steps: ['first', 'second'] }),
+    canonicalStringify({ steps: ['second', 'first'] })
+  );
+});
+
+test('P13 standalone fact ledger still rejects duplicate IDs before comparing sets', () => {
+  const facts = [{ fact_id: 'f1' }, { fact_id: 'f1' }];
+  assert.ok(validateUniqueStableIds({ facts }).some(item => item.path === '/facts/1/fact_id'));
 });
 
 test('stable id ignores stable-identity volatile revision and timestamp fields', () => {
@@ -95,6 +116,19 @@ test('canonical contracts normalize policy, interaction, and checkpoint unordere
   assert.equal(canonicalStringify(policy), canonicalStringify({ source_policy: { rules: [...policy.source_policy.rules].reverse() } }));
   assert.equal(canonicalStringify(interactions), canonicalStringify({ interaction_matrix: [...interactions.interaction_matrix].reverse() }));
   assert.equal(canonicalStringify(checkpoint), canonicalStringify({ root_issue_dispositions: [...checkpoint.root_issue_dispositions].reverse() }));
+});
+
+test('A01 decision association sets normalize while the decision journal stays ordered', () => {
+  const first = { decision_records: [{ decision_id: 'D1', root_issue_ids: ['f10', 'f2'],
+    affected_obligation_ids: ['O2', 'O1'] }] };
+  const reordered = { decision_records: [{ decision_id: 'D1', root_issue_ids: ['f2', 'f10'],
+    affected_obligation_ids: ['O1', 'O2'] }] };
+  assert.equal(canonicalStringify(first), canonicalStringify(reordered));
+  assert.notEqual(canonicalStringify({ decision_records: [
+    { decision_id: 'D1', clarification_event_seq: 1 }, { decision_id: 'D2', clarification_event_seq: 2 }
+  ] }), canonicalStringify({ decision_records: [
+    { decision_id: 'D2', clarification_event_seq: 2 }, { decision_id: 'D1', clarification_event_seq: 1 }
+  ] }));
 });
 
 test('append-only clarification histories preserve their written order', () => {

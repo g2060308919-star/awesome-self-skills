@@ -21,18 +21,37 @@ For every recovery or resume, invoke the runner on the same absolute directory f
 
 Treat only compiler-accepted events in the recovered checkpoint as submitted. Preserve accepted answers whose exact root version and scope still apply, preserve every pending part, and leave staging-only attempts unaccepted. If the root version, affected scope, or current presentation changed, retain the older answer for audit but do not replay or silently rebind it. Never submit the same accepted answer again merely because conversation context was lost.
 
-Use the exact schema/compiler pair stored by the run. New runs use
-`4.3.0/0.8.0`; exact `4.0.0/0.5.0` and `4.2.0/0.7.0` recovery retains its
-original validation and delivery semantics. Never add 4.3 design/review fields
-to an accepted older artifact, mix versions, or infer capability from a `v4`
-filename. An unsupported pair stops with a supported recovery path rather than
-being migrated in place.
+Use the latest installed compiler. New runs and upgraded continuations use
+`4.3.3/0.8.3`. The formal runner returns `VERSION_UPGRADE_REQUIRED` for exact
+`4.0.0/0.5.0`, `4.2.0/0.7.0`, `4.3.0/0.8.0`, `4.3.1/0.8.1`, and `4.3.2/0.8.2`
+identities. To continue, pass `{ parent_run_id, creation_reason: 'version_upgrade' }`
+to `createV4RunDirectory` using the parent's existing catalog root. Repeating
+that request resumes the same journaled successor. Never handwrite its ID,
+replace version fields in historical files, or use a cancellation reason for
+an upgrade.
+
+The upgrade helper validates original bytes, committed references and any
+delivery before preserving them in an audit snapshot. It stages source and
+Evidence for fresh validation and recomputes downstream design using the latest
+contract. Incomplete source acquisition may require recollection. Unknown or
+corrupt pairs stop without changing the parent; do not invoke an older generator.
+Completed deliveries can be viewed through `verifyCaseDocumentDeliveryV4` or
+`verifyExecutionPlanDeliveryV4` without creating a successor.
+
+Only the compiler may rebind a historical final answer after proving its
+source authority, business proposition, complete scope and root applicability.
+Temporary, unknown, deferred, or unprovable answers remain audit history and
+require fresh clarification. Do not recreate a user event to make an old answer
+appear current. Frozen source provider contracts remain verification inputs;
+new acquisition uses the latest compiler-owned registry.
 
 ## Preserve append-only revisions
 
 Accepted Source Packs, Decisions, semantic controls, execution actions, lifecycle events, presentations, checkpoints, and preview history are append-only. One accepted user response advances the source revision once. Do not edit or delete an accepted revision, reorder events, reuse an event sequence, or combine unrelated user messages into a fabricated event.
 
 A candidate append stays in staging until all schema, presentation/version, digest, sequence, and semantic checks pass. Failure changes no committed revision. Checkpoints are written from validated state and use write-temp-then-rename; their exact canonical bytes are digest-bound recovery material.
+
+For a `4.3.2` acquired resource, the compiler keeps one private, digest-bound acquisition base per revision. Retry an unaccepted semantic candidate in staging; the runner verifies that base, its receipts, events, and source identity before reusing the acquisition. The Agent never creates or edits the base file. A missing or damaged base fails closed.
 
 Before any revision that invalidates ready output, commit a current tombstone/stale state. A higher non-ready revision always dominates an older ready pointer. Crash recovery completes or rolls forward the journaled transition; it never restores old ready/current merely because those files still exist.
 
@@ -48,6 +67,8 @@ disk.
 ## Repair without rewriting history
 
 Fix an unaccepted artifact in staging at the same candidate revision. For an accepted Agent artifact, append a digest-bound `artifact_repairs` record naming `base_source_revision`, semantic `stage`, exact accepted canonical artifact digest, and reason. Increment revision once, let the compiler carry forward safe predecessors, then regenerate the returned downstream stage. Never edit accepted/derived/output files.
+
+For `4.3.2` Case Document Evidence repair, stage the next Source Pack with exactly one `evidence_claims` repair and the next Evidence candidate together. The compiler validates both and commits the revision atomically; it does not require a new clarification answer for this repair.
 
 An original source-byte change, new authoritative source, or material scope change is not a repair; it requires `NEW_RUN_REQUIRED`, preserving the old run and creating a linked sibling. A business answer is a Decision, never an artifact repair.
 
@@ -71,3 +92,29 @@ Never reset, restore, delete, or repurpose another run. Preserve completed, fail
 ## Keep v3 migration read-only
 
 Legacy v3 bytes and digests never change. Migration creates one durable v4 sibling plus a bidirectional index; incomplete, unavailable, ambiguous, or mutated legacy input receives its explicit migration terminal status. A migrated v4 output comes only from that sibling. v3 remains readable for audit but is never a v4 workflow fallback.
+
+
+## Material verification followed by semantic rejection
+
+Invoke the runner on the same run first. It completes any fully materialized
+revision transaction before reconciling material ownership. An `acquired`
+material state proves bytes and receipt bindings, not acceptance of the answer
+or advancement of the formal checkpoint. A verified older material revision
+can legitimately support a later semantic revision.
+
+For a legal Evidence repair, build the next Source Pack from the last accepted
+Source and append the existing digest-bound `artifact_repairs` entry. Include
+only accepted events and Decisions; leave rejected candidate answers in audit.
+The compiler keeps versioned private candidate contexts and immutable material
+bases under `transactions/source-acquisition`. They are not Agent artifacts.
+Same-candidate retries reuse their bound requests/receipts; different candidates
+at the same revision retain separate bases. Keep all historical
+`derived/source-acquisition-base-rNNN.json` files unchanged.
+
+Legacy acquired-but-unaccepted state can be recovered only when accepted
+history, the immutable acquisition base, original request cycles, actual
+acquisition receipts and collection/review bindings uniquely prove the accepted
+material prefix. Missing, altered, cross-run or ambiguous evidence produces an
+integrity diagnostic and preserves the scene. Report that diagnostic and the
+missing proof; do not delete state, edit a revision number, synthesize receipts,
+rebind an old answer, or rewrite accepted history to force progress.

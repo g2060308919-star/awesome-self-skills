@@ -41,7 +41,7 @@ const SET_ARRAY_PATHS = new Set([
   '/conditional/execution_effects', '/conditional/cleanup/resolved_effects', '/conditional/preconditions/setup/mutation_effects', '/conditional/testability_profile/setup_resources',
   '/source_ids', '/supersedes', '/source_locator_ids', '/source_claim_ids', '/parent_claim_ids', '/root_issue_ids', '/affected_obligation_ids', '/module_ids', '/view_element_refs', '/required_oracle_refs', '/required_capabilities', '/obligation_ids', '/case_ids', '/oracle_refs', '/oracle_evidence_refs', '/asked_root_issue_ids',
   '/sources', '/locators', '/source_policy/rules', '/source_policy/rules/source_ids', '/source_policy/rules/supersedes', '/decision_records/root_issue_ids', '/decision_records/affected_obligation_ids', '/clarification_events/root_issue_ids',
-  '/claims', '/claims/source_locator_ids', '/claims/parent_claim_ids', '/claims/closed_world_input/enumerated_values', '/claims/formula_input/inputs', '/claims/rule_input/inputs', '/claims/rule_input/enumerated_values', '/fact_ledger', '/fact_ledger/source_claim_ids',
+  '/claims', '/claims/source_locator_ids', '/claims/parent_claim_ids', '/claims/closed_world_input/enumerated_values', '/claims/formula_input/inputs', '/claims/rule_input/inputs', '/claims/rule_input/enumerated_values', '/fact_ledger', '/facts', '/fact_ledger/source_claim_ids',
   '/views', '/views/elements', '/views/source_claim_ids', '/views/elements/source_claim_ids', '/views/elements/model_refs', '/views/elements/permissions', '/views/elements/conditions', '/views/elements/classes', '/views/elements/side_effects', '/elements/permissions', '/elements/conditions', '/elements/classes', '/elements/side_effects', '/views/relations', '/views/relations/source_claim_ids', '/views/relations/model_refs', '/interaction_matrix', '/interaction_matrix/module_ids', '/interaction_candidates', '/interaction_candidates/module_ids', '/interaction_candidates/source_claim_ids', '/obligation_inputs/combination_requests', '/obligation_inputs/combination_requests/owner/fact_ids', '/obligation_inputs/combination_requests/owner/view_element_refs', '/obligation_inputs/combination_requests/parameters', '/obligation_inputs/combination_requests/parameters/values', '/obligation_inputs/combination_requests/constraints', '/obligation_inputs/combination_requests/constraints/assignments', '/obligation_inputs/combination_requests/constraints/evidence_refs', '/obligation_inputs/combination_requests/interaction_risk/evidence_refs', '/obligation_inputs/combination_requests/vector_oracles', '/obligation_inputs/combination_requests/vector_oracles/assignments', '/obligation_inputs/combination_requests/vector_oracles/required_oracle_refs',
   '/obligations', '/obligations/source_claim_ids', '/obligations/view_element_refs', '/obligations/required_oracle_refs', '/obligations/required_capabilities', '/obligations/combination_vector/owner/fact_ids', '/obligations/combination_vector/owner/view_element_refs', '/obligations/combination_vector/assignments', '/obligations/combination_vector/forbid_evidence_refs', '/fact_routes', '/fact_routes/obligation_ids', '/interaction_routes',
   '/cases', '/cases/obligation_ids', '/cases/source_claim_ids', '/cases/fact_ids', '/cases/evidence_refs', '/cases/preconditions', '/cases/preconditions/source_claim_ids', '/cases/data', '/cases/steps/expectations', '/cases/steps/expectations/oracle_evidence_refs', '/cases/testability_profile/capabilities', '/cases/testability_profile/observers', '/cases/testability_profile/controls', '/cases/execution_signature/oracle_refs',
@@ -54,9 +54,17 @@ const SET_ARRAY_PATHS = new Set([
 ]);
 const ROOT_ISSUE_ASSOCIATIONS = new Set(['case_ids', 'case_id', 'test_point_ids', 'test_point_id', 'obligation_ids', 'obligation_id']);
 const EXECUTION_SIGNATURE_ASSOCIATIONS = new Set(['obligation_ids', 'obligation_id']);
+// Version-scoped Fact/Scope sets; historical serialization and arbitrary
+// business-value arrays retain their existing order semantics.
+const RELIABILITY_EVIDENCE_SET_PATHS = new Set([
+  '/fact_ledger/claim_ids', '/fact_ledger/module_refs',
+  '/scope_manifest/modules', '/scope_manifest/boundaries',
+  '/scope_manifest/modules/claim_ids', '/scope_manifest/boundaries/claim_ids'
+]);
 const COLLECTION_ID_FIELDS = new Map([
+  ['/scope_manifest/modules', 'module_id'],
   ['/source_assets', 'asset_id'], ['/source_reviews', 'source_id'],
-  ['/sources', 'source_id'], ['/locators', 'locator_id'], ['/source_policy/rules', 'rule_id'], ['/decision_records', 'decision_id'], ['/clarification_events', 'event_id'], ['/claims', 'claim_id'], ['/fact_ledger', 'fact_id'], ['/views', 'view_id'], ['/views/elements', 'element_id'], ['/views/elements/classes', 'class_id'], ['/elements', 'element_id'], ['/elements/classes', 'class_id'], ['/views/relations', 'relation_id'], ['/interaction_candidates', 'candidate_id'], ['/obligations', 'obligation_id'], ['/fact_routes', 'fact_id'], ['/interaction_routes', 'candidate_id'],
+  ['/sources', 'source_id'], ['/locators', 'locator_id'], ['/source_policy/rules', 'rule_id'], ['/decision_records', 'decision_id'], ['/clarification_events', 'event_id'], ['/claims', 'claim_id'], ['/fact_ledger', 'fact_id'], ['/facts', 'fact_id'], ['/views', 'view_id'], ['/views/elements', 'element_id'], ['/views/elements/classes', 'class_id'], ['/elements', 'element_id'], ['/elements/classes', 'class_id'], ['/views/relations', 'relation_id'], ['/interaction_candidates', 'candidate_id'], ['/obligations', 'obligation_id'], ['/fact_routes', 'fact_id'], ['/interaction_routes', 'candidate_id'],
   ['/cases', 'case_id'], ['/cases/data', 'name'], ['/cases/steps/expectations', 'expectation_id'], ['/cases/testability_profile/capabilities', 'capability'], ['/cases/testability_profile/observers', 'observer'], ['/cases/testability_profile/controls', 'control'],
   ['/data', 'name'], ['/steps/expectations', 'expectation_id'], ['/testability_profile/capabilities', 'capability'], ['/testability_profile/observers', 'observer'], ['/testability_profile/controls', 'control'],
   ['/obligation_dispositions', 'obligation_id'], ['/exploratory_candidates', 'exploratory_id'], ['/grounded', 'case_id'], ['/grounded/data', 'name'], ['/grounded/steps/expectations', 'expectation_id'], ['/grounded/testability_profile/capabilities', 'capability'], ['/grounded/testability_profile/observers', 'observer'], ['/grounded/testability_profile/controls', 'control'], ['/conditional', 'case_id'], ['/conditional/data', 'name'], ['/conditional/steps/expectations', 'expectation_id'], ['/conditional/testability_profile/capabilities', 'capability'], ['/conditional/testability_profile/observers', 'observer'], ['/conditional/testability_profile/controls', 'control'],
@@ -91,18 +99,19 @@ function stableSemanticKey(path, value) {
     const collectionPath = pathKey(path);
     const idField = COLLECTION_ID_FIELDS.get(collectionPath);
     if (idField && typeof object[idField] === 'string') return `id:${object[idField]}:${JSON.stringify(object)}`;
+    if (collectionPath === '/scope_manifest/boundaries') return `boundary:${JSON.stringify([object.from, object.to, object.channel])}:${JSON.stringify(object)}`;
     if (collectionPath === '/interaction_matrix') return `interaction:${JSON.stringify({ dimension: object.dimension, module_ids: object.module_ids })}:${JSON.stringify(object)}`;
   }
   return JSON.stringify(value);
 }
 
-/** @param {unknown} value @param {string[]} [path] @returns {unknown} */
-function canonicalize(value, path = []) {
+/** @param {unknown} value @param {string[]} [path] @param {Set<string>|null} [additionalSets] @returns {unknown} */
+function canonicalize(value, path = [], additionalSets = null) {
   if (Array.isArray(value)) {
-    const values = mapArray(value, (item) => canonicalize(item, path));
+    const values = mapArray(value, (item) => canonicalize(item, path, additionalSets));
     const currentPath = pathKey(path);
     if (ORDERED_ARRAY_PATHS.has(currentPath)) return values;
-    if (SET_ARRAY_PATHS.has(currentPath)) return sortArray(
+    if (SET_ARRAY_PATHS.has(currentPath) || additionalSets?.has(currentPath)) return sortArray(
       [...values], (left, right) => compareCodePoints(stableSemanticKey(path, left), stableSemanticKey(path, right))
     );
     return values;
@@ -110,7 +119,7 @@ function canonicalize(value, path = []) {
   if (value && typeof value === 'object') {
     return Object.fromEntries(mapArray(
       sortArray(Object.entries(value), ([left], [right]) => compareCodePoints(left, right)),
-      ([key, item]) => [key, canonicalize(item, [...path, key])]
+      ([key, item]) => [key, canonicalize(item, [...path, key], additionalSets)]
     ));
   }
   return value;
@@ -119,6 +128,26 @@ function canonicalize(value, path = []) {
 /** @param {unknown} value @returns {string} */
 export function canonicalStringify(value) {
   return JSON.stringify(canonicalize(value));
+}
+
+/** Preserve artifact-root path semantics before extracting any subcollection.
+ * A fresh snapshot also prevents callers from mutating the input while deriving
+ * hashes and persisted projections. Unknown arrays remain ordered.
+ * @template T @param {T} artifact @returns {T} */
+export function canonicalArtifactSnapshot(artifact) {
+  const latestEvidence = artifact && typeof artifact === 'object'
+    && 'schema_version' in artifact && artifact.schema_version === '4.3.3'
+    && 'fact_ledger' in artifact;
+  return /** @type {T} */ (canonicalize(artifact, [], latestEvidence ? RELIABILITY_EVIDENCE_SET_PATHS : null));
+}
+
+/** @param {any} evidence */
+export function evidenceComponentDigests(evidence) {
+  const snapshot = canonicalArtifactSnapshot(evidence);
+  return {
+    fact_ledger_digest: `sha256:${digest(snapshot.fact_ledger)}`,
+    scope_manifest_digest: `sha256:${digest(snapshot.scope_manifest)}`
+  };
 }
 
 /** @param {unknown} value @returns {string} */

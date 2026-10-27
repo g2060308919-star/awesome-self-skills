@@ -12,15 +12,23 @@ For offline attachments or pasted input, use `provided_materials` and only the s
 
 After the runner requests the first Source Pack, pass the validated request, closed channel/item observation, and exact raw/capture bytes to `stageV4PrdCollectionObservation`. The helper verifies bytes in memory and persists only safe digests and bindings. The采集技术记录不是业务事实、业务证据或业务权威; every acquired canonical unit must still be classified in `source_reviews`, and only accepted Claims or authorized Decisions may enter business truth. Collection, semantic interpretation, and business adoption are three different facts.
 
+Prepare each first Source with the installed `prepareV4Source({metadata, raw_response_bytes, capture_bytes, assets, acquisition, additional_units})`. The fields `raw_response_bytes` and `capture_bytes` are exact `Uint8Array` values from the collection, and may differ when the declared capture is extracted from a tool response. `assets` contains only actually fetched `{retrieval_uri, bytes}` pairs; keep signed retrieval URIs in memory. `additional_units` is empty until an image region or user statement has actually been reviewed under its existing contract. The helper returns a safe `source`, canonical `units`, `review_units` containing mechanical content digests, and safe collection digests. It does not classify any unit. Use each returned `unit_id` and coordinates in locators, including for non-normative retained units that topology discovery must consume, and set each `review_units` entry's `classification` after actual review. Then run `validateV4SourcePackBeforeStaging(sourcePack)` and stage only when its status is `valid`; this check also verifies that topology discovery can consume the reviewed source structure. The CLI still owns final acceptance. A failed local preparation is a diagnostic, not a compiler-issued request or resume reference.
+
+An unavailable image can be inventoried as a safe `source_assets` entry with status `unavailable` and a matching unavailable image observation. Stage the Source Pack with the original `source_pack` reply. The compiler may then issue a real `need_artifact` request from `source_assets`; use its exact request and `stageV4SourceAcquisitionAction` to provide bytes, then actually inspect the image before supplying `asset_review`. A signed URL is never a stable asset ID, and a refreshed signature alone does not imply changed content. Without a platform refresh route, use the advertised safe upload path or report the missing material. Explicit user authorization to exclude images changes only the declared collection scope and does not remove textual image-related business requirements. No authorization means an unavailable image remains unavailable, not excluded.
+
 ## Keep raw capture and semantic identity separate
 
 Every v4 Source retains both `capture_digest` and `semantic_digest`. `capture_digest` binds the raw captured bytes. `semantic_digest` is SHA-256 over canonical JSON of `semantic_projection`; it excludes run/revision/time/path/retrieval metadata and includes only stable source identity/type, normalized semantic content/structure, and stable assets.
 
 Canonicalize in this order: strict UTF-8, remove BOM, convert newlines to LF, normalize text to NFC, parse Markdown/HTML URLs, apply only a registered provider's signed-query allowlist, canonicalize URL scheme/host/default port/percent encoding, preserve ordinary query order unless the provider declares it insensitive, remove HTTP fragments, then remove only versioned provider expiry notices.
 
+For Markdown links, retain displayed text separately from the destination. A displayed URL label is not a second destination; handle escaped delimiters, adjacent links, and punctuation without widening a URL. Classify an unreadable link by its actual role in the accepted requirement: an unrelated background reference records a safe diagnostic while independent analysis continues; a link declared authoritative for a rule leaves that rule as a precise gap until recovered; uncertain acceptance impact goes through existing clarification. Do not ask the user to tag every link, silently downgrade a required dependency, or persist a signed URL to keep working.
+
 Do not broadly strip queries. A credential-like query from an unregistered provider is quarantined and produces `need_artifact + UNSUPPORTED_SIGNED_URL_PROVIDER`; accepted JSON/logs/diagnostics keep only redacted stable host/path/resource identity. A signed retrieval URI exists only in short-lived acquisition context and is never a stable Source or asset identity.
 
 For a displayed source-acquisition action, use the installed `stageV4SourceAcquisitionAction` with the validated reply and the complete request set's exact material bytes, safe input records, and fully reviewed safe Source Pack. The helper derives event IDs, capture/semantic/asset digests and the resumed Source Pack before staging it. A signed retrieval URL must never be copied into the resumed Source Pack, staging JSON, a diagnostic, or any persisted input; only the short-lived resolver context may see it.
+
+The reply Schema accepts the compiler's `quality` diagnostic category for required independent review. This fixes reply validation only; it never waives or weakens the independent review gate.
 
 Every removed provider expiry notice enters `semantic_exclusions` with `capture_unit_id`, exact `capture_locator`, `capture_excerpt_digest`, `reason_code=provider_expiry_banner`, and `matcher_version`, all bound to the `capture_digest`. Raw retained and excluded Unicode-scalar ranges must be ordered, nonempty, nonoverlapping, and conserve every content-bearing range.
 
@@ -50,7 +58,11 @@ Each atomic Claim uses the smallest sufficient `v4SourceLocator`: one canonical 
 
 Multiple unrelated atomic Claims must never reuse a whole-document locator. `document_level_claim=true` is allowed only when all six predicates hold: exactly one nonempty text block, no other structural unit, at most 512 Unicode scalars, at most 2048 UTF-8 bytes, exactly one atomic Claim in the source, and a locator covering that entire block. Otherwise create precise locators or retain a gap.
 
+When one user message answers several questions, create a precise answer span for each independent conclusion and bind it to the original question/presentation. A short “是” must inherit only the question it answers. Keep the span large enough for conditions, negation, and exceptions; genuinely shared wording may support more than one conclusion. Before submitting, compare the candidate references in canonical order and remove whole-message citations that add no support beside precise spans. If two citations provide separate condition and exception support, retain both; if support remains ambiguous, report the exact conclusion and spans instead of selecting the first array element. Repeat the same support check after acceptance.
+
 For every normative Claim create canonical `subject_descriptor` with `scope_ref`, `module_id`, `entity_type`, NFC `entity_key`, normalized JSON-Pointer `field_path`, and recursively canonical JSON `condition`. Derive `subject_key` only from that descriptor. Never use a natural-language title as subject identity.
+
+Split facts by business proposition, retaining the object, action, condition and result together. Punctuation alone is not a fact boundary. For example, “保存草稿：校验通过后提交表单，状态为草稿” and “保存并生效：校验通过后提交表单，状态为生效” remain separate facts with their respective action and result context. Extracting two contextless “校验通过后提交表单” statements loses meaning even if their IDs differ. If legitimate distinct facts still have identical statements, retain every fact ID and Claim association: the compiler disambiguates readable labels from supported subjects, or deduplicates labels only. Statements need not be globally unique. Submit sets in any order; the compiler owns canonical ordering and digests.
 
 ## Use the closed semantic assertion seam
 
@@ -102,7 +114,7 @@ A final clarification replaces only the proposition and scope it answers. Preser
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
 
-For exact schema `4.3.0`, every semantic-gap input includes the closed
+For exact schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, every semantic-gap input includes the closed
 `acceptance_impact` record described in `clarification-policy.md`. This record is
 analysis metadata, not E3 evidence and not a user answer. It participates in
 the semantic-root version, so changing its classification, criteria, or

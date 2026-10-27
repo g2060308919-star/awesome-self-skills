@@ -21,6 +21,24 @@
             "schema_version": { "const": "4.3.0" },
             "compiler_version": { "const": "0.8.0" }
           }
+        },
+        {
+          "properties": {
+            "schema_version": { "const": "4.3.1" },
+            "compiler_version": { "const": "0.8.1" }
+          }
+        },
+        {
+          "properties": {
+            "schema_version": { "const": "4.3.2" },
+            "compiler_version": { "const": "0.8.2" }
+          }
+        },
+        {
+          "properties": {
+            "schema_version": { "const": "4.3.3" },
+            "compiler_version": { "const": "0.8.3" }
+          }
         }
       ]
     },
@@ -263,8 +281,8 @@
         "case_document_ref", "items", "runner_ready", "runner_projection"
       ],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] },
-        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0"] },
+        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0", "4.3.1", "4.3.2", "4.3.3"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0", "0.8.1", "0.8.2", "0.8.3"] },
         "delivery_intent": { "const": "execution_plan" },
         "status": { "const": "need_user_answers" },
         "result_kind": { "type": "null" },
@@ -283,8 +301,8 @@
         "case_document_ref", "items", "runner_ready", "runner_projection"
       ],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] },
-        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0"] },
+        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0", "4.3.1", "4.3.2", "4.3.3"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0", "0.8.1", "0.8.2", "0.8.3"] },
         "delivery_intent": { "const": "execution_plan" },
         "status": { "const": "finished" },
         "result_kind": { "const": "execution_ready" },
@@ -303,8 +321,8 @@
         "case_document_ref", "items", "runner_ready", "runner_projection"
       ],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0"] },
-        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0"] },
+        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0", "4.3.1", "4.3.2", "4.3.3"] },
+        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0", "0.8.1", "0.8.2", "0.8.3"] },
         "delivery_intent": { "const": "execution_plan" },
         "status": { "const": "finished" },
         "result_kind": { "const": "no_execution_selected" },

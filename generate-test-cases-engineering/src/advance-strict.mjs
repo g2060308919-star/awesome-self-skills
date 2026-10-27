@@ -26,7 +26,9 @@ import { appendedRepair, repairDiagnostics, reusableStages, unconfirmedWorkflow 
 import { groupRiskCounts } from './presentation-summary.mjs';
 import { advanceStrictV4Locked, detectV4Run } from './advance-v4.mjs';
 import { verifyResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
+import { verifyVersionUpgradeSiblingV4 } from './version-upgrade-v4.mjs';
 import { isV4SchemaVersion } from './v4-contract.mjs';
+import { DiagnosticErrorV4 } from './diagnostic-error-v4.mjs';
 
 const moduleDirectory = path.dirname(realpathSync(fileURLToPath(import.meta.url)));
 const schemaDirectory = path.resolve(
@@ -1017,6 +1019,10 @@ async function advanceStrictExclusive(runDirectory) {
         await guardedAwait(() => verifyResumeCancelledSiblingV4(
           runDirectory, runInstanceValue
         ));
+      } else if (runInstanceValue?.lineage?.creation_reason === 'version_upgrade') {
+        await guardedAwait(() => verifyVersionUpgradeSiblingV4(
+          runDirectory, runInstanceValue
+        ));
       }
       // A migration sibling is verified before staging recovery or cleanup can
       // mutate even compiler-owned coordination residue in that directory.
@@ -1718,6 +1724,7 @@ async function advanceStrictExclusive(runDirectory) {
       'CORE_INTRINSIC_INVALID',
       'Run-store evaluation requires captured native collection traversal intrinsics.'
     );
+    if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
     return fatalReply('RUN_INTEGRITY_ERROR', errorMessage(error));
   }
 }

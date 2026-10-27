@@ -21,6 +21,8 @@ import {
 } from '../../src/source-capture-audit.mjs';
 import { createSourceProviderRegistry } from '../../src/source-canonicalization.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
+import { bindGeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
+import { stageCollection } from '../helpers/v4-reliability-fixture.mjs';
 
 const transactionModuleUrl = new URL('../../src/revision-transaction-v4.mjs', import.meta.url).href;
 const installedRunnerModuleUrl = new URL(
@@ -132,26 +134,46 @@ async function readVerifiedArtifact(directory, manifest, key) {
 }
 
 test('T09 installed runner rejects a stale answer without turning the recoverable state into fatal', { timeout: 60_000 }, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-task09-stale-answer-'));
-  const runId = 'RUN-19191919-1919-4919-8919-191919191919';
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-task09-stale-answer-'));
   try {
-    const { pending } = await startQuestionJourney(directory, runId, installedAdvanceStrict);
-    const ip = answerEvent(
-      pending.semantic_presentation, /IP/u, '发布者提交评价时的 IP 归属地'
+    const installed = /** @type {any} */ (await import(installedRunnerModuleUrl));
+    const { run_id: runId, run_directory: directory } = await installed.createV4RunDirectory(catalog, 'case_document');
+    const instance = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
+    /** @param {number} revision @param {any[]} [events] */
+    const fixtureAt = async (revision, events = []) => bindGeneralQualityFixture(
+      await bendReviewJourneyFixture(runId, revision, events), instance.schema_version
     );
-    const revision1 = await bendReviewJourneyFixture(runId, 1, [ip.event]);
+    /** @param {any} reply @param {RegExp} pattern @param {string} answer */
+    const finalAnswer = (reply, pattern, answer) => {
+      const part = questionPart(reply.semantic_presentation, pattern);
+      // Explicit synthetic final confirmations; no inferred or temporary authority.
+      return { part, event: installed.constructV4Action(reply, {
+        action: 'answer_question_part', question_part_id: part.question_part_id,
+        answer, user_message: `答复：${answer}`,
+        resolution: 'final', origin_type: 'authorized_confirmation'
+      }) };
+    };
+    const initial = await installed.advanceStrict(directory);
+    const fixture = await fixtureAt(0);
+    await stageCollection(directory, initial, fixture.artifacts.source_pack);
+    await stage(directory, 'source_pack', fixture.artifacts.source_pack);
+    const evidenceRequest = await installed.advanceStrict(directory);
+    assert.equal(evidenceRequest.status, 'need_revision', JSON.stringify(evidenceRequest));
+    assert.equal(evidenceRequest.stage, 'evidence_claims');
+    await stage(directory, 'evidence_claims', fixture.artifacts.evidence_claims);
+    const pending = await installed.advanceStrict(directory);
+    assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
+    assert.equal(pending.semantic_presentation.question_parts.length, 3);
+    const ip = finalAnswer(pending, /IP/u, '发布者提交评价时的 IP 归属地');
+    const revision1 = await fixtureAt(1, [ip.event]);
     await stage(directory, 'source_pack', revision1.artifacts.source_pack);
     const afterIp = /** @type {any} */ (await installedAdvanceStrict(directory));
     assert.equal(afterIp.status, 'need_user_answers', JSON.stringify(afterIp));
     assert.equal(afterIp.semantic_presentation.question_parts.length, 2);
     const pendingCheckpointBytes = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
 
-    const staleIp = answerEvent(
-      pending.semantic_presentation, /IP/u, '评价地点信息'
-    );
-    const staleRevision2 = await bendReviewJourneyFixture(
-      runId, 2, [ip.event, staleIp.event]
-    );
+    const staleIp = finalAnswer(pending, /IP/u, '评价地点信息');
+    const staleRevision2 = await fixtureAt(2, [ip.event, staleIp.event]);
     await stage(directory, 'source_pack', staleRevision2.artifacts.source_pack);
     const staleWhilePending = /** @type {any} */ (await installedAdvanceStrict(directory));
     assert.equal(staleWhilePending.status, 'need_user_answers', JSON.stringify(staleWhilePending));
@@ -167,20 +189,16 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
       pendingCheckpointBytes
     );
 
-    const empty = answerEvent(afterIp.semantic_presentation, /空值/u, '—');
-    const sorting = answerEvent(afterIp.semantic_presentation, /排序/u, '降序');
-    const revision2 = await bendReviewJourneyFixture(
-      runId, 2, [ip.event, empty.event, sorting.event]
-    );
+    const empty = finalAnswer(afterIp, /空值/u, '—');
+    const sorting = finalAnswer(afterIp, /排序/u, '降序');
+    const revision2 = await fixtureAt(2, [ip.event, empty.event, sorting.event]);
     await stage(directory, 'source_pack', revision2.artifacts.source_pack);
     const behaviorRequest = /** @type {any} */ (await installedAdvanceStrict(directory));
     assert.equal(behaviorRequest.status, 'need_revision', JSON.stringify(behaviorRequest));
     assert.equal(behaviorRequest.stage, 'behavior_views');
     const closedCheckpointBytes = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
 
-    const staleRevision3 = await bendReviewJourneyFixture(
-      runId, 3, [ip.event, empty.event, sorting.event, staleIp.event]
-    );
+    const staleRevision3 = await fixtureAt(3, [ip.event, empty.event, sorting.event, staleIp.event]);
     await stage(directory, 'source_pack', staleRevision3.artifacts.source_pack);
     const staleAfterClose = /** @type {any} */ (await installedAdvanceStrict(directory));
     assert.equal(staleAfterClose.status, 'need_revision', JSON.stringify(staleAfterClose));
@@ -198,7 +216,7 @@ test('T09 installed runner rejects a stale answer without turning the recoverabl
     assert.equal(cleanReplay.stage, 'behavior_views');
     assert.deepEqual(cleanReplay.non_blocking_diagnostics, []);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(catalog, { recursive: true, force: true });
   }
 });
 

@@ -69,7 +69,7 @@ async function directorySnapshot(directory, prefix = '') {
   return snapshot;
 }
 
-test('runner entry dynamic import exposes only the private run and action seams with zero side effects', async () => {
+test('runner entry dynamic import exposes run, action and read-only verification seams with zero side effects', async () => {
   const runDirectory = await mkdtemp(path.join(os.tmpdir(), 'g1d-import-run-'));
   const revision = JSON.parse(await readFile(revisionPath, 'utf8'));
   await mkdir(path.join(runDirectory, 'staging'));
@@ -133,9 +133,12 @@ test('runner entry dynamic import exposes only the private run and action seams 
           'advanceStrict', 'constructIndependentReviewCompletionV4',
           'constructV4Action', 'constructV4TopologyEvidence', 'createV4RunDirectory',
           'discoverV4Topology',
+          'prepareV4Source',
           'sourceAcquisitionMaterialPathV4',
           'stageV4PrdCollectionObservation',
-          'stageV4SourceAcquisitionAction'
+          'stageV4SourceAcquisitionAction',
+          'validateV4SourcePackBeforeStaging',
+          'verifyCaseDocumentDeliveryV4', 'verifyExecutionPlanDeliveryV4'
         ], importedStdout: '', importedStderr: '',
         exitCodeBefore: null, exitCodeAfter: null, argvUnchanged: true,
         runEntries: ['staging']

@@ -1,3 +1,7 @@
+import { persistableSourceValues } from './source-compiler-v4.mjs';
+import { createCompilerSourceRuntimeV4 } from './source-runtime-registry-v4.mjs';
+import { prepareSourceAcquisitionCandidateV4, reconcileSourceAcquisitionV4 } from './source-acquisition-v4.mjs';
+import { assertCheckpointAnswerTargetsV4, clarificationTargetDiagnosticV4 } from './clarification-targets-v4.mjs';
 import path from 'node:path';
 
 import {
@@ -8,7 +12,8 @@ import {
   compileSemanticClarificationCheckpointV4,
   validateSemanticClarificationCheckpointV4
 } from './clarification.mjs';
-import { canonicalStringify, digest } from './canonical.mjs';
+import { canonicalArtifactSnapshot, canonicalStringify, digest, evidenceComponentDigests } from './canonical.mjs';
+import { appendedRepair, repairDiagnostics } from './artifact-repair.mjs';
 import {
   finalAuthorityWarningV4, normalizeDecisionMessageV4
 } from './decision-record.mjs';
@@ -18,14 +23,15 @@ import {
   cancelRunV4WithHeldLock, constructCancelRunEventV4,
   replayCancelledRunV4WithHeldLock
 } from './run-cancellation-v4.mjs';
-import { compileCaseDocumentRevisionV4 } from './v4-pipeline.mjs';
+import { compileCaseDocumentRevisionV4, compilePreCaseArtifactsV4 } from './v4-pipeline.mjs';
 import { deriveV4PreCaseSystemContext, deriveV4SystemContext } from './v4-system-context.mjs';
 import {
   advanceSourceAcquisitionV4, loadSourceAcquisitionCompilerStateV4,
   replaySourceAcquisitionStopV4, sourceAcquisitionStatePathV4
 } from './source-acquisition-v4.mjs';
 import {
-  commitRevisionTransactionV4WithHeldLock, ensureV4RunInstanceWithHeldLock
+  commitRevisionTransactionV4WithHeldLock, ensureV4RunInstanceWithHeldLock,
+  recoverMaterializedRevisionV4WithHeldLock
 } from './revision-transaction-v4.mjs';
 import { sourceByteDigest } from './source-canonicalization.mjs';
 import {
@@ -38,9 +44,11 @@ import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
 import { routeGapCategoryV4 } from './gap-kinds-v4.mjs';
 import { sortNonBlockingDiagnosticsV4 } from './non-blocking-diagnostics-v4.mjs';
 import {
-  isCandidateV4SchemaVersion, isV4SchemaVersion, v4ContractForSchema
+  isCandidateV4SchemaVersion, isV4SchemaVersion, latestV4Contract, v4ContractForSchema
 } from './v4-contract.mjs';
 import { loadV4SourceReadingSummary } from './prd-source-collection-v4.mjs';
+import { DiagnosticErrorV4, safeDiagnosticsV4 } from './diagnostic-error-v4.mjs';
+import { applyVersionUpgradeAnswersV4 } from './version-upgrade-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
 
@@ -90,12 +98,12 @@ function revisionReply(
   nonBlockingDiagnostics = [], reviewRequest = null
 ) {
   const route = routeGapCategoryV4('adapter_revision', { delivery_intent: 'case_document' });
-  const stable = diagnostics.map(item => ({
+  const stable = safeDiagnosticsV4(diagnostics.map(item => ({
     category: String(item.category ?? 'adapter_revision'),
     code: String(item.code ?? 'ARTIFACT_INVALID'),
     ...(typeof item.path === 'string' ? { path: item.path } : {}),
     message: String(item.message ?? 'The submitted v4 artifact failed deterministic validation.')
-  }));
+  })));
   return {
     status: route.status, stage, schema_ref: AGENT_STAGE_SCHEMA[stage], source_revision: sourceRevision,
     artifact_path: stagingPath(runDirectory, stage), artifact_digest: digest(artifact),
@@ -169,8 +177,7 @@ function compilePreCaseClarification(
     run_id: runId, committed_revision: sourcePack.source_revision,
     committed_checkpoint_bytes: committedCheckpointBytes ?? genesis, discovery_phase: 'pre_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
-    fact_ledger_digest: `sha256:${digest(evidence.fact_ledger)}`,
-    scope_manifest_digest: `sha256:${digest(evidence.scope_manifest)}`,
+    ...evidenceComponentDigests(evidence),
     behavior_views_digest: null, case_drafts_digest: null,
     facts: evidence.fact_ledger, claims: evidence.claims,
     diagnostic_candidates: evidence.semantic_gaps.filter(
@@ -201,8 +208,7 @@ function compilePostCaseClarification(
     run_id: runId, committed_revision: sourcePack.source_revision,
     committed_checkpoint_bytes: committedCheckpointBytes, discovery_phase: 'post_case',
     source_review_witness: { expected_unit_ids: expected, reviewed_unit_ids: reviewed },
-    fact_ledger_digest: `sha256:${digest(evidence.fact_ledger)}`,
-    scope_manifest_digest: `sha256:${digest(evidence.scope_manifest)}`,
+    ...evidenceComponentDigests(evidence),
     behavior_views_digest: `sha256:${digest(behaviorViews)}`,
     case_drafts_digest: `sha256:${digest(caseDrafts)}`,
     facts: evidence.fact_ledger, claims: evidence.claims,
@@ -225,12 +231,13 @@ function semanticRevisionDigest(sourcePack, evidence, checkpoint) {
     source_semantic_digests: sourcePack.sources.map(
       (/** @type {any} */ source) => source.semantic_digest
     ),
-    evidence, clarification_state: checkpoint.clarification_state
+    evidence: canonicalArtifactSnapshot(evidence), clarification_state: checkpoint.clarification_state
   })}`;
 }
 
 /** @param {string} runId @param {any} sourcePack @param {any} evidence @param {any} checkpoint */
 function baseRevisionArtifacts(runId, sourcePack, evidence, checkpoint) {
+  evidence = canonicalArtifactSnapshot(evidence);
   const revision = sourcePack.source_revision;
   if (checkpoint.run_id !== runId || checkpoint.revision !== revision) {
     throw new TypeError('V4_CHECKPOINT_BINDING_INVALID');
@@ -654,6 +661,7 @@ async function replayPreCasePresentation(
       || validateSemanticClarificationCheckpointV4(checkpoint).length) {
       throw new TypeError('V4_COMMITTED_CHECKPOINT_INVALID');
     }
+    assertCheckpointAnswerTargetsV4(checkpoint, artifacts.evidence_claims);
     return checkpoint.clarification_state.presentation
       ? semanticQuestionReply(
         runId, checkpoint.clarification_state.presentation, nonBlockingDiagnostics
@@ -682,7 +690,10 @@ async function semanticAppendAcquisition(
       runDirectory, candidate.value, runId
     );
   } catch (error) {
-    await discardStagingSnapshot(runDirectory, 'source_pack', candidate).catch(() => {});
+    const { provider_registry: providers } = createCompilerSourceRuntimeV4(candidate.value.schema_version);
+    if (!persistableSourceValues(candidate.value, providers)) {
+      await discardStagingSnapshot(runDirectory, 'source_pack', candidate).catch(() => {});
+    }
     return {
       kind: 'reply', reply: qualityFailure(
         runId, phase,
@@ -746,6 +757,130 @@ async function consumeSemanticAcquisitionCancellation(
       message: 'Source-acquisition cancellation must be the only append and bind the displayed stop.'
     }], runId);
   }
+}
+
+/** Consume only an Evidence generation repair. This dispatch happens before
+ * clarification and before any completed delivery is replayed.
+ * @param {string} runDirectory @param {any} registry @param {Record<string,any>} artifacts
+ * @param {number} revision @param {string} runId @param {unknown} lockOwnership */
+async function consumeEvidenceRepair(
+  runDirectory, registry, artifacts, revision, runId, lockOwnership
+) {
+  if (!artifacts.source_pack || !artifacts.evidence_claims) return { kind: 'none' };
+  if (!['4.3.2', '4.3.3'].includes(artifacts.source_pack.schema_version)) return { kind: 'none' };
+  const candidate = await stagedArtifact(runDirectory, 'source_pack');
+  if (!candidate) return { kind: 'none' };
+  if (candidate.parse_diagnostics.length) return {
+    kind: 'reply', reply: revisionReply(
+      runDirectory, 'source_pack', revision + 1, candidate.value,
+      candidate.parse_diagnostics, runId
+    )
+  };
+  const prior = artifacts.source_pack;
+  const proposedRepairs = candidate.value?.artifact_repairs;
+  const repairChanged = Object.hasOwn(candidate.value ?? {}, 'artifact_repairs')
+    && !same(proposedRepairs, prior.artifact_repairs ?? []);
+  const evidenceRepair = appendedRepair(prior, candidate.value)?.stage === 'evidence_claims'
+    || (repairChanged && (!Array.isArray(proposedRepairs)
+      || proposedRepairs.some((/** @type {any} */ repair) => repair?.stage === 'evidence_claims')));
+  if (!evidenceRepair) {
+    // The previous commit may have completed before staging cleanup.
+    if (candidate.value?.source_revision === revision && same(candidate.value, prior)) {
+      await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+      const stagedEvidence = await stagedArtifact(runDirectory, 'evidence_claims');
+      if (stagedEvidence && stagedEvidence.value?.source_revision === revision
+        && same(stagedEvidence.value, artifacts.evidence_claims)) {
+        await discardStagingSnapshot(runDirectory, 'evidence_claims', stagedEvidence);
+      }
+    }
+    return { kind: 'none' };
+  }
+  const reject = (/** @type {typeof STAGES[number]} */ stage, /** @type {any} */ value, /** @type {any[]} */ issues) => ({
+    kind: 'reply', reply: revisionReply(runDirectory, stage, revision + 1, value, issues, runId)
+  });
+  const sourceIssues = candidate.parse_diagnostics.length
+    ? candidate.parse_diagnostics
+    : diagnostics(candidate.value, registry.schemas.get(AGENT_STAGE_SCHEMA.source_pack));
+  if (sourceIssues.length) return reject('source_pack', candidate.value, sourceIssues);
+  const source = candidate.value;
+  if (source.run_instance_id !== runId || source.source_revision !== revision + 1) return reject(
+    'source_pack', source, [{ category: 'traceability', code: 'SOURCE_REVISION_MISMATCH',
+      path: '/source_revision', message: 'Evidence repair must bind this run and the next revision.' }]
+  );
+  const repairIssues = repairDiagnostics({ source_pack: prior, artifacts }, source);
+  if (repairIssues.length) return reject('source_pack', source, repairIssues);
+  if (appendedRepair(prior, source)?.stage !== 'evidence_claims') return reject(
+    'source_pack', source, [{ category: 'traceability', code: 'ARTIFACT_REPAIR_INVALID',
+      path: '/artifact_repairs', message: 'Exactly one Evidence repair must be appended.' }]
+  );
+  const stablePrior = structuredClone(prior); const stableNext = structuredClone(source);
+  delete stablePrior.source_revision; delete stableNext.source_revision;
+  delete stablePrior.artifact_repairs; delete stableNext.artifact_repairs;
+  if (!same(stablePrior, stableNext)) return reject('source_pack', source, [{
+    category: 'traceability', code: 'V4_SOURCE_APPEND_IMMUTABLE_CHANGED', path: '/',
+    message: 'An Evidence repair must preserve the complete accepted Source Pack except revision and repair history.'
+  }]);
+  const stagedEvidence = await stagedArtifact(runDirectory, 'evidence_claims');
+  if (!stagedEvidence) return {
+    kind: 'reply', reply: artifactRequest(runDirectory, 'evidence_claims', revision + 1, runId)
+  };
+  const evidenceIssues = stagedEvidence.parse_diagnostics.length
+    ? stagedEvidence.parse_diagnostics
+    : diagnostics(stagedEvidence.value, registry.schemas.get(AGENT_STAGE_SCHEMA.evidence_claims));
+  if (evidenceIssues.length) return reject('evidence_claims', stagedEvidence.value, evidenceIssues);
+  const evidence = stagedEvidence.value;
+  if (evidence.schema_version !== source.schema_version || evidence.source_revision !== revision + 1) return reject(
+    'evidence_claims', evidence, [{ category: 'traceability', code: 'SOURCE_REVISION_MISMATCH',
+      path: '/source_revision', message: 'Repaired Evidence must bind the candidate Source revision.' }]
+  );
+  let system;
+  try {
+    await prepareSourceAcquisitionCandidateV4(runDirectory, source);
+    system = await preCaseSystem(runDirectory, source, evidence);
+  }
+  catch (error) { return reject('source_pack', source, [{
+    category: 'traceability', code: error instanceof Error ? error.message : 'V4_PRE_CASE_CONTEXT_INVALID',
+    path: '/', message: 'Evidence repair cannot reproduce the compiler-owned source context.'
+  }]); }
+  const gate = compilePreCaseArtifactsV4({ source_pack: source, evidence_claims: evidence }, system);
+  if (gate.status === 'need_revision') return reject(resultStage(gate),
+    resultStage(gate) === 'source_pack' ? source : evidence, gate.diagnostics ?? []);
+  if (!['pre_case_ready', 'need_user_answers'].includes(gate.status)) return {
+    kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
+      gate.reason_code ?? 'V4_PRE_CASE_QUALITY_FAILURE',
+      gate.diagnostics?.[0]?.message ?? 'The repaired Evidence failed the pre-case quality gate.')
+  };
+  let priorCheckpoint; let clarification;
+  try {
+    priorCheckpoint = await committedSemanticCheckpoint(runDirectory, runId, revision);
+    clarification = compilePreCaseClarification(
+      source, evidence, runId, priorCheckpoint.value, new TextEncoder().encode(priorCheckpoint.text)
+    );
+  } catch (error) {
+      if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return { kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', revision + 1, evidence, [clarificationTargetDiagnosticV4(error)], runId) };
+ return {
+    kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
+      error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
+      'Repaired Evidence cannot form a recoverable pre-case checkpoint.')
+  }; }
+  try {
+    await commitRevisionTransactionV4WithHeldLock(
+      runDirectory, preCaseTransaction(runId, source, evidence, clarification.checkpoint, revision),
+      lockOwnership
+    );
+    await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+    await discardStagingSnapshot(runDirectory, 'evidence_claims', stagedEvidence);
+  } catch (error) { return {
+    kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
+      error instanceof Error ? error.message : 'V4_REVISION_TRANSACTION_FAILED',
+      'Evidence repair revision did not commit atomically.')
+  }; }
+  if (clarification.presentation) return {
+    kind: 'reply', reply: semanticQuestionReply(runId, clarification.presentation)
+  };
+  return { kind: 'advanced', revision: revision + 1,
+    artifacts: { source_pack: source, evidence_claims: evidence },
+    checkpoint: clarification.checkpoint };
 }
 
 /** Consume one append-only clarification revision before replaying the prior
@@ -822,6 +957,16 @@ async function consumeSemanticAppend(
     runDirectory, artifacts.source_pack, candidate, revision + 1, runId, lockOwnership
   );
   if (pendingCancellation) return { kind: 'reply', reply: pendingCancellation };
+  try {
+    const current = await committedSemanticCheckpoint(runDirectory, runId, revision);
+    assertCheckpointAnswerTargetsV4(current.value, artifacts.evidence_claims);
+    assertCheckpointAnswerTargetsV4(current.value, artifacts.evidence_claims,
+      candidate.value.clarification_events.slice(artifacts.source_pack.clarification_events.length),
+      artifacts.source_pack.clarification_events);
+  } catch (error) {
+    return { kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', revision + 1,
+      artifacts.evidence_claims, [clarificationTargetDiagnosticV4(error)], runId) };
+  }
   const acquisition = await semanticAppendAcquisition(
     runDirectory, candidate, revision + 1, runId, 'requirements_analysis'
   );
@@ -942,6 +1087,8 @@ async function consumeSemanticAppend(
       new TextEncoder().encode(committed.text)
     );
   } catch (error) {
+      if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return { kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', revision + 1, nextEvidence, [clarificationTargetDiagnosticV4(error)], runId) };
+
     return {
       kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
         error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
@@ -1053,6 +1200,16 @@ async function consumePostCaseAppend(
     runDirectory, artifacts.source_pack, candidate, revision + 1, runId, lockOwnership
   );
   if (pendingCancellation) return { kind: 'reply', reply: pendingCancellation };
+  try {
+    const current = await committedSemanticCheckpoint(runDirectory, runId, revision);
+    assertCheckpointAnswerTargetsV4(current.value, artifacts.evidence_claims);
+    assertCheckpointAnswerTargetsV4(current.value, artifacts.evidence_claims,
+      candidate.value.clarification_events.slice(artifacts.source_pack.clarification_events.length),
+      artifacts.source_pack.clarification_events);
+  } catch (error) {
+    return { kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', revision + 1,
+      artifacts.evidence_claims, [clarificationTargetDiagnosticV4(error)], runId) };
+  }
   const acquisition = await semanticAppendAcquisition(
     runDirectory, candidate, revision + 1, runId, 'case_design'
   );
@@ -1241,6 +1398,8 @@ async function consumePostCaseAppend(
       runDirectory, 'case_drafts', caseCandidate.snapshot
     );
   } catch (error) {
+      if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return { kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', revision + 1, nextEvidence, [clarificationTargetDiagnosticV4(error)], runId) };
+
     return {
       kind: 'reply', reply: qualityFailure(runId, 'case_design',
         error instanceof Error ? error.message : 'V4_REVISION_TRANSACTION_FAILED',
@@ -1439,7 +1598,7 @@ async function acceptedPrefix(runDirectory, revision, registry, runInstance) {
  * @param {unknown} lockOwnership
  * @param {any|null} migrationSeed
  */
-export async function advanceStrictV4Locked(
+async function advanceStrictV4Operation(
   runDirectory, registry, runInstance, lockOwnership, migrationSeed = null
 ) {
   const runId = runInstance.run_instance_id ?? runInstance.run_id;
@@ -1457,6 +1616,10 @@ export async function advanceStrictV4Locked(
   if (runInstance.delivery_intent === 'execution_plan') {
     return advanceExecutionRunV4Locked(runDirectory, registry, runInstance, lockOwnership);
   }
+  if (runInstance.schema_version === latestV4Contract().schema_version) {
+    await recoverMaterializedRevisionV4WithHeldLock(runDirectory, lockOwnership);
+    await reconcileSourceAcquisitionV4(runDirectory);
+  }
   const revisions = await acceptedSourceRevisions(runDirectory);
   if (revisions.some((revision, index) => revision !== index)) {
     return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
@@ -1473,7 +1636,17 @@ export async function advanceStrictV4Locked(
       error instanceof Error ? error.message : 'Accepted v4 artifacts failed deterministic replay.');
   }
 
-  if (Object.hasOwn(artifacts, 'case_drafts')) {
+  if (runInstance.schema_version === '4.3.3' && !await stagedArtifact(runDirectory, 'source_pack')) {
+    const acquisitionStop = await replaySourceAcquisitionStopV4(runDirectory, runId);
+    if (acquisitionStop) return acquisitionStop;
+  }
+
+  const evidenceRepair = await consumeEvidenceRepair(
+    runDirectory, registry, artifacts, revision, runId, lockOwnership
+  );
+  if (evidenceRepair.kind === 'reply') return evidenceRepair.reply;
+
+  if (evidenceRepair.kind !== 'advanced' && Object.hasOwn(artifacts, 'case_drafts')) {
     try {
       const verified = await verifyCaseDocumentDeliveryV4(runDirectory);
       if (verified.manifest.revision !== revision || verified.manifest.run_id !== runId) {
@@ -1487,7 +1660,7 @@ export async function advanceStrictV4Locked(
   }
 
   /** @type {any} */
-  const append = artifacts.case_drafts
+  const append = evidenceRepair.kind === 'advanced' ? evidenceRepair : artifacts.case_drafts
     ? await consumePostCaseAppend(
       runDirectory, registry, artifacts, revision, runId, lockOwnership
     )
@@ -1529,12 +1702,15 @@ export async function advanceStrictV4Locked(
       if (semanticCheckpoint.commit_profile !== 'post_case_pending') {
         throw new TypeError('V4_POST_CASE_CHECKPOINT_REQUIRED');
       }
+      assertCheckpointAnswerTargetsV4(semanticCheckpoint, artifacts.evidence_claims);
       return semanticQuestionReply(
         runId, semanticCheckpoint.clarification_state.presentation,
         advancedDiagnostics
       );
     }
   } catch (error) {
+    if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return revisionReply(
+      runDirectory, 'evidence_claims', revision + 1, artifacts.evidence_claims, [clarificationTargetDiagnosticV4(error)], runId);
     return qualityFailure(runId, 'requirements_analysis',
       error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
       '已接受的 pre-case 澄清状态无法确定性重放。', advancedDiagnostics);
@@ -1604,6 +1780,7 @@ export async function advanceStrictV4Locked(
         run_id: runId, delivery_intent: candidate.value.delivery_intent
       }, lockOwnership);
     } catch (error) {
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
         error instanceof Error ? error.message : 'The v4 durable run identity could not be established.');
     }
@@ -1637,6 +1814,7 @@ export async function advanceStrictV4Locked(
         runDirectory, candidate.value, runId
       );
     } catch (error) {
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'source_acquisition',
         error instanceof Error ? error.message : 'SOURCE_ACQUISITION_STATE_INVALID',
         '来源获取状态无法通过确定性完整性校验。', advancedDiagnostics);
@@ -1654,7 +1832,8 @@ export async function advanceStrictV4Locked(
   }
 
   const prospective = /** @type {Record<string, any>} */ ({
-    ...artifacts, [nextStage]: candidate.value
+    ...artifacts, [nextStage]: nextStage === 'evidence_claims'
+      ? canonicalArtifactSnapshot(candidate.value) : candidate.value
   });
   if (nextStage === 'evidence_claims') {
     const probe = {
@@ -1692,7 +1871,13 @@ export async function advanceStrictV4Locked(
         prospective.source_pack, prospective.evidence_claims, runId,
         null, null, migrationSeed
       );
+      clarification = await applyVersionUpgradeAnswersV4(
+        runDirectory, prospective.source_pack, prospective.evidence_claims, clarification
+      );
     } catch (error) {
+      if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return revisionReply(runDirectory, 'evidence_claims', revision, prospective.evidence_claims, [clarificationTargetDiagnosticV4(error)], runId);
+
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'requirements_analysis',
         error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
         '业务语义状态无法形成可提交的 pre-case 检查点。', advancedDiagnostics);
@@ -1706,7 +1891,7 @@ export async function advanceStrictV4Locked(
     );
     // The transaction persisted canonical accepted bytes. Claim and remove
     // only the exact staging snapshot that was compiled.
-    await promoteArtifact(runDirectory, revision, nextStage, candidate.value, candidate);
+    await promoteArtifact(runDirectory, revision, nextStage, prospective.evidence_claims, candidate);
     if (clarification.presentation) {
       return semanticQuestionReply(runId, clarification.presentation, advancedDiagnostics);
     }
@@ -1762,6 +1947,9 @@ export async function advanceStrictV4Locked(
       );
       await discardStagingSnapshot(runDirectory, 'case_drafts', candidate);
     } catch (error) {
+      if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return revisionReply(runDirectory, 'evidence_claims', revision, artifacts.evidence_claims, [clarificationTargetDiagnosticV4(error)], runId);
+
+      if (error instanceof DiagnosticErrorV4) return { status: 'fatal', diagnostics: error.diagnostics };
       return qualityFailure(runId, 'case_design',
         error instanceof Error ? error.message : 'V4_POST_CASE_TRANSACTION_FAILED',
         'Case 分析结果和 post-case 澄清状态未能完整原子提交。', advancedDiagnostics);
@@ -1818,4 +2006,14 @@ export async function advanceStrictV4Locked(
     runDirectory, STAGES[STAGES.indexOf(nextStage) + 1], revision, runId,
     advancedDiagnostics
   );
+}
+
+/** The material projection follows the result of the existing semantic revision
+ * transaction. It has no power to accept a Source, Decision or Evidence artifact.
+ * @param {string} runDirectory @param {any} registry @param {any} runInstance
+ * @param {unknown} lockOwnership @param {any|null} [migrationSeed] */
+export async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOwnership, migrationSeed = null) {
+  const reply = await advanceStrictV4Operation(runDirectory, registry, runInstance, lockOwnership, migrationSeed);
+  if (runInstance.schema_version === '4.3.3') await reconcileSourceAcquisitionV4(runDirectory, reply);
+  return reply;
 }

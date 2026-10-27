@@ -86,6 +86,52 @@ const TEXT_TYPES = new Set(['text_block', 'heading', 'list', 'code']);
 const validRange = (range, length) => closed(range, ['start', 'end']) && Number.isSafeInteger(range.start)
   && Number.isSafeInteger(range.end) && range.start >= 0 && range.end > range.start && range.end <= length;
 
+/** Shared coordinate check for pre-staging and Claim validation.
+ * @param {any} locator @param {any} unit @param {any} source
+ */
+function locatorCoordinates(locator, unit, source) {
+  if (!unit || locator.semantic_digest !== source.semantic_digest
+    || locator.domain !== source.domain || locator.excerpt_digest !== textDigest(locator.excerpt)) {
+    return { exact: false, full: false };
+  }
+  let exact = false; let full = false;
+  if (locator.type === 'text_block_range') {
+    const points = Array.from(unit.text);
+    exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'section_id', 'range']) && TEXT_TYPES.has(unit.type)
+      && locator.section_id === unit.section_id && validRange(locator.range, points.length)
+      && locator.excerpt === points.slice(locator.range.start, locator.range.end).join('');
+    full = exact && locator.range.start === 0 && locator.range.end === points.length;
+  } else if (locator.type === 'table_cell') {
+    exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'table_id', 'row', 'column']) && unit.type === 'table_cell'
+      && ['table_id', 'row', 'column'].every(key => locator[key] === unit[key]) && locator.excerpt === unit.text;
+  } else if (locator.type === 'image_region') {
+    exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'asset_digest', 'page_id', 'image_id', 'rect']) && unit.type === 'image_region'
+      && source.semantic_projection.assets.some((/** @type {any} */ asset) => asset.asset_digest === locator.asset_digest)
+      && ['asset_digest', 'page_id', 'image_id', 'rect'].every(key => canonicalStringify(locator[key]) === canonicalStringify(unit[key]))
+      && closed(locator.rect, ['x', 'y', 'width', 'height']) && Object.values(locator.rect).every(value => typeof value === 'number' && Number.isFinite(value))
+      && locator.rect.x >= 0 && locator.rect.y >= 0 && locator.rect.width > 0 && locator.rect.height > 0 && locator.excerpt === unit.text;
+  } else if (locator.type === 'user_statement') {
+    exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'presentation_id', 'message_digest', 'answer_span']) && unit.type === 'user_statement'
+      && ['presentation_id', 'message_digest', 'answer_span'].every(key => canonicalStringify(locator[key]) === canonicalStringify(unit[key]))
+      && validRange(locator.answer_span, Array.from(unit.text).length) && locator.excerpt === Array.from(unit.text).slice(locator.answer_span.start, locator.answer_span.end).join('')
+      && locator.message_digest === textDigest(unit.text);
+  }
+  return { exact, full };
+}
+
+/** @param {any} pack */
+export function validateV4SourceLocators(pack) {
+  const diagnostics = [];
+  for (const [index, locator] of (pack.locators ?? []).entries()) {
+    const source = pack.sources?.find((/** @type {any} */ item) => item.source_id === locator.source_id);
+    const unit = source?.semantic_projection?.structure?.find((/** @type {any} */ item) => item.unit_id === locator.unit_id);
+    if (!source || !unit || !validSource(source) || !locatorCoordinates(locator, unit, source).exact) {
+      diagnostics.push(issue('LOCATOR_PRECISION_INVALID', `/locators/${index}`));
+    }
+  }
+  return diagnostics;
+}
+
 /** @param {any} pack @param {any[]} claims */
 export function validateV4ClaimLocators(pack, claims) {
   /** @type {any[]} */ const diagnostics = [];
@@ -116,28 +162,7 @@ export function validateV4ClaimLocators(pack, claims) {
         || typeof locator.excerpt !== 'string' || locator.excerpt_digest !== textDigest(locator.excerpt)) {
         diagnostics.push(issue('LOCATOR_BINDING_INVALID', path)); continue;
       }
-      let exact = false; let full = false;
-      if (locator.type === 'text_block_range') {
-        const points = Array.from(unit.text);
-        exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'section_id', 'range']) && TEXT_TYPES.has(unit.type)
-          && locator.section_id === unit.section_id && validRange(locator.range, points.length)
-          && locator.excerpt === points.slice(locator.range.start, locator.range.end).join('');
-        full = exact && locator.range.start === 0 && locator.range.end === points.length;
-      } else if (locator.type === 'table_cell') {
-        exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'table_id', 'row', 'column']) && unit.type === 'table_cell'
-          && ['table_id', 'row', 'column'].every(key => locator[key] === unit[key]) && locator.excerpt === unit.text;
-      } else if (locator.type === 'image_region') {
-        exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'asset_digest', 'page_id', 'image_id', 'rect']) && unit.type === 'image_region'
-          && source.semantic_projection.assets.some((/** @type {any} */ asset) => asset.asset_digest === locator.asset_digest)
-          && ['asset_digest', 'page_id', 'image_id', 'rect'].every(key => canonicalStringify(locator[key]) === canonicalStringify(unit[key]))
-          && closed(locator.rect, ['x', 'y', 'width', 'height']) && Object.values(locator.rect).every(value => typeof value === 'number' && Number.isFinite(value))
-          && locator.rect.x >= 0 && locator.rect.y >= 0 && locator.rect.width > 0 && locator.rect.height > 0 && locator.excerpt === unit.text;
-      } else if (locator.type === 'user_statement') {
-        exact = closed(locator, [...COMMON_LOCATOR_KEYS, 'presentation_id', 'message_digest', 'answer_span']) && unit.type === 'user_statement'
-          && ['presentation_id', 'message_digest', 'answer_span'].every(key => canonicalStringify(locator[key]) === canonicalStringify(unit[key]))
-          && validRange(locator.answer_span, Array.from(unit.text).length) && locator.excerpt === Array.from(unit.text).slice(locator.answer_span.start, locator.answer_span.end).join('')
-          && locator.message_digest === textDigest(unit.text);
-      }
+      const { exact, full } = locatorCoordinates(locator, unit, source);
       if (!exact) diagnostics.push(issue('LOCATOR_PRECISION_INVALID', path));
       if (claim.document_level_claim === true) {
         const review = /** @type {Map<string,string>|undefined} */ (reviews.get(claim.source_id));

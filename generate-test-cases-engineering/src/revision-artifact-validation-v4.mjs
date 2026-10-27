@@ -10,7 +10,8 @@ import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-
 import testObligationsSchema from '../skill/generate-test-cases/scripts/schemas/test-obligations.schema.json' with { type: 'json' };
 
 import { validateCaseDocumentArtifactSetV4 } from './canonical-delivery-v4.mjs';
-import { canonicalStringify } from './canonical.mjs';
+import { canonicalArtifactSnapshot, canonicalStringify, evidenceComponentDigests } from './canonical.mjs';
+import { DiagnosticErrorV4 } from './diagnostic-error-v4.mjs';
 import { validateSemanticClarificationCheckpointV4 } from './clarification-v4.mjs';
 import { validateCanonicalManifestRelations } from './contracts.mjs';
 import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
@@ -43,8 +44,9 @@ function parseCanonicalJson(texts, key) {
 
 /** @param {unknown} value @param {unknown} schema */
 function requireSchema(value, schema) {
-  if (validateAgainstSchema(value, schema).length || validateUniqueStableIds(value).length) {
-    throw new TypeError('REVISION_ARTIFACT_SCHEMA_INVALID');
+  const diagnostics = [...validateAgainstSchema(value, schema), ...validateUniqueStableIds(value)];
+  if (diagnostics.length) {
+    throw new DiagnosticErrorV4('REVISION_ARTIFACT_SCHEMA_INVALID', diagnostics);
   }
 }
 
@@ -88,8 +90,9 @@ export function validateRevisionArtifactsV4(input) {
     || values.checkpoint.compiler_version !== contract.compiler_version) {
     throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
   }
-  if (validateSemanticClarificationCheckpointV4(values.checkpoint).length) {
-    throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
+  const checkpointDiagnostics = validateSemanticClarificationCheckpointV4(values.checkpoint);
+  if (checkpointDiagnostics.length) {
+    throw new DiagnosticErrorV4('REVISION_ARTIFACT_RELATION_INVALID', checkpointDiagnostics);
   }
   if (values.source_pack.schema_version !== contract.schema_version
     || values.source_pack.source_revision !== input.revision
@@ -105,6 +108,7 @@ export function validateRevisionArtifactsV4(input) {
     decisions: values.source_pack.decision_records
   });
   requireExactKeys(values.fact_ledger, ['schema_version', 'source_revision', 'facts']);
+  if (validateUniqueStableIds(values.fact_ledger).length) throw new TypeError('REVISION_ARTIFACT_SCHEMA_INVALID');
   requireSame(values.fact_ledger, {
     schema_version: contract.schema_version, source_revision: input.revision,
     facts: values.evidence_claims.fact_ledger
@@ -123,9 +127,25 @@ export function validateRevisionArtifactsV4(input) {
     schema_version: contract.schema_version, source_revision: input.revision,
     ...values.checkpoint.clarification_state
   });
-  if (values.checkpoint.fact_ledger_digest !== canonicalDigest(values.evidence_claims.fact_ledger)
-    || values.checkpoint.scope_manifest_digest !== canonicalDigest(values.evidence_claims.scope_manifest)) {
-    throw new TypeError('REVISION_ARTIFACT_RELATION_INVALID');
+  // Historical relations are verified under their original encoding. Never
+  // normalize old bytes and then re-sign them as though they were original.
+  if (contract.schema_version === '4.3.3'
+    && canonicalStringify(values.evidence_claims) !== canonicalStringify(canonicalArtifactSnapshot(values.evidence_claims))) {
+    throw new DiagnosticErrorV4('REVISION_ARTIFACT_NOT_CANONICAL', [{
+      category: 'reference', code: 'REVISION_ARTIFACT_NOT_CANONICAL', path: '/evidence_claims',
+      message: 'Serialized Evidence must match the latest canonical artifact snapshot.'
+    }]);
+  }
+  const components = contract.schema_version === '4.3.3'
+    ? evidenceComponentDigests(values.evidence_claims) : {
+      fact_ledger_digest: canonicalDigest(values.evidence_claims.fact_ledger),
+      scope_manifest_digest: canonicalDigest(values.evidence_claims.scope_manifest)
+    };
+  for (const field of /** @type {const} */ (['fact_ledger_digest', 'scope_manifest_digest'])) {
+    if (values.checkpoint[field] !== components[field]) throw new DiagnosticErrorV4('REVISION_ARTIFACT_RELATION_INVALID', [{
+      category: 'reference', code: 'REVISION_ARTIFACT_RELATION_INVALID', path: `/checkpoint/${field}`,
+      message: 'Checkpoint digest does not match the serialized Evidence component.'
+    }]);
   }
 
   if (input.profile === 'post_case_pending' || input.profile === 'final') {
