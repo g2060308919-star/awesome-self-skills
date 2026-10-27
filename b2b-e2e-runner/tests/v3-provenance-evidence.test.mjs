@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent } from "../scripts/run-artifacts.mjs";
+import { generateReport, initializeRun, recordEvent as productionRecordEvent } from "../scripts/run-artifacts.mjs";
+import { recordFixtureEvent as recordEvent, recordFixtureScreenshotGaps } from "./test-helpers.mjs";
 
 async function runFor(root) {
   const casesPath = path.join(root, "cases.json");
@@ -13,7 +14,7 @@ async function runFor(root) {
     cases: [{ case_id: "CASE", module: "重试", title: "保存失败后重试", preconditions: [],
       steps: [{ step_id: "s", action: "保存并查询", expected: [{ oracle_id: "o", text: "首次失败后重试成功并回读一致" }] }] }]
   }));
-  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v3" });
+  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE"] });
   await recordEvent(run.runRoot, { type: "target_inventory", owned_target_ids: ["target-1"], preexisting_target_ids: [], attached_preexisting_target_ids: [] });
   await recordEvent(run.runRoot, { type: "case_started", case_id: "CASE" });
@@ -31,14 +32,15 @@ test("P02 applied control is reported as mixed; a configured rule alone is not r
     await recordEvent(run.runRoot, { type: "checkpoint_result", checkpoint_id: "CASE/s/o",
       result: "passed", reason: "首次失败后真实重试并回读一致", observation: "第二次保存和查询为真实观察",
       evidence_status: "partial", verification_source: "mock_affected" });
+    await recordFixtureScreenshotGaps(run.runRoot);
     const report = await generateReport(run.runRoot);
     const html = await readFile(report.htmlReportPath, "utf8");
     assert.match(html, /含模拟/);
     assert.match(html, /第一次保存失败由测试响应注入/);
     assert.match(html, /第二次保存和查询为真实观察/);
-    await assert.rejects(recordEvent(run.runRoot, { type: "checkpoint_result", checkpoint_id: "CASE/s/o",
+    await assert.rejects(productionRecordEvent(run.runRoot, { type: "checkpoint_result", checkpoint_id: "CASE/s/o",
       result: "passed", reason: "纯真实", observation: "保存成功", evidence_status: "partial",
-      verification_source: "real" }), /补测/u);
+      verification_source: "real" }), /补充|不可覆写|已终结|补测/u);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

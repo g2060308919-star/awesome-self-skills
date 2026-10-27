@@ -21,7 +21,7 @@ test("AC-02/03: v2 emits only HTML plus a same-model complete chat table", async
     const run = await initializeRun({
       workspaceRoot: root,
       casesPath: fixture,
-      workflowProfile: "permission-batches-html-v2"
+      workflowProfile: "b2b-e2e-current"
     });
     await recordEvent(run.runRoot, {
       type: "permission_plan",
@@ -49,26 +49,10 @@ test("AC-02/03: v2 emits only HTML plus a same-model complete chat table", async
   }
 });
 
-test("AC-30: v1 continues to generate its historical report pair", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "runner-v1-report-"));
+test("R02: retired report workflow rejects before creating a report pair", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner-retired-report-"));
   try {
-    const run = await initializeRun({
-      workspaceRoot: root,
-      casesPath: fixture,
-      workflowProfile: "permission-batches-html-v1"
-    });
-    await recordEvent(run.runRoot, {
-      type: "permission_plan",
-      version: "1.0",
-      groups: [],
-      role_independent_case_ids: ["CASE-原始-01"]
-    });
-    const generated = await generateReport(run.runRoot);
-    assert.equal(generated.reportPath, path.join(run.runRoot, "report.md"));
-    assert.equal(generated.htmlReportPath, path.join(run.runRoot, "report.html"));
-    await access(generated.reportPath);
-    await access(generated.htmlReportPath);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+    await assert.rejects(initializeRun({ workspaceRoot: root, casesPath: fixture, workflowProfile: "permission-batches-html-v1" }), error => error.code === "INPUT_CONTRACT");
+    await assert.rejects(access(path.join(root, "b2b-e2e-runs")), error => error.code === "ENOENT");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

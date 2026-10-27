@@ -1,11 +1,12 @@
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
+import { recordFixtureScreenshotGaps } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
-import { markAsHistoricalV2 } from "./test-helpers.mjs";
+import { generateReport, initializeRun, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
 
 async function writeCases(root, count = 1, { hostile = false } = {}) {
   const casesPath = path.join(root, "cases.json");
@@ -26,11 +27,11 @@ async function writeCases(root, count = 1, { hostile = false } = {}) {
 
 async function baseRun(root, count = 1, options) {
   const { casesPath, cases } = await writeCases(root, count, options);
-  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-  await markAsHistoricalV2(run.runRoot);
+  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: cases.map(item => item.case_id)
   });
+  await recordFixtureScreenshotGaps(run.runRoot);
   return { run, cases };
 }
 
@@ -76,8 +77,14 @@ test("AC-09: multiple global pauses are deducted once while active assistance ti
     const logPath = path.join(run.runRoot, "execution-log.json");
     const log = JSON.parse(await readFile(logPath, "utf8"));
     log.run.started_at = "2026-09-17T00:00:00.000Z";
-    const times = [0, 1, 5, 10, 10, 20, 20, 25, 30, 30, 35, 35];
-    log.events.forEach((event, index) => { event.at = `2026-09-17T00:00:${String(times[index]).padStart(2, "0")}.000Z`; });
+    let seconds = 0;
+    let pause = 0;
+    log.events.forEach(event => {
+      if (event.type === "assistance" && event.phase === "requested") { pause += 1; seconds = pause === 1 ? 5 : 25; }
+      if (event.type === "run_state" && event.status === "awaiting_user") seconds = pause === 1 ? 10 : 30;
+      if (event.type === "resume_check") seconds = pause === 1 ? 20 : 35;
+      event.at = `2026-09-17T00:00:${String(seconds).padStart(2, "0")}.000Z`;
+    });
     await writeFile(logPath, JSON.stringify(log, null, 2));
 
     const generated = await generateReport(run.runRoot);
@@ -106,15 +113,11 @@ test("AC-09: a missing timing boundary is shown as not accurately calculable", a
   }
 });
 
-test("P11 new profile does not infer execution time from task span minus waits", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "runner-v3-duration-"));
+test("retired independent activity-timing workflow is rejected before initialization", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "runner-retired-duration-"));
   try {
     const { casesPath } = await writeCases(root, 1);
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v3" });
-    await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE-1"] });
-    const generated = await generateReport(run.runRoot);
-    const html = await readFile(generated.htmlReportPath, "utf8");
-    assert.match(html, /执行耗时<\/span><strong>无法准确计算<\/strong>/);
+    await assert.rejects(initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v3" }), error => error.code === "INPUT_CONTRACT");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

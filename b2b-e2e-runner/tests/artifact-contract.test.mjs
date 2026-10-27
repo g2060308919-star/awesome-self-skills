@@ -1,3 +1,5 @@
+import { initializeFixtureRun as initializeRun } from "./test-helpers.mjs";
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -5,8 +7,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  initializeRun,
-  recordEvent,
   resumeCheck,
   validateRun
 } from "../scripts/run-artifacts.mjs";
@@ -35,7 +35,7 @@ test("AC-001: 100 concurrent initializations have unique Run IDs and no overwrit
       assert.equal(log.run.workspace_root, ".");
       assert.equal(log.test_cases.path, "./test-cases.json");
       assert.match(log.test_cases.sha256, /^[a-f0-9]{64}$/);
-      assert.deepEqual(Object.keys(log), ["schema_version", "run", "test_cases", "browser", "proxy", "cases", "events", "cleanup"]);
+      assert.deepEqual(Object.keys(log), ["schema_version", "run", "test_cases", "extensions", "browser", "proxy", "cases", "events", "cleanup"]);
     }
   } finally {
     await rm(workspace, { recursive: true, force: true });
@@ -206,6 +206,7 @@ test("FR-050/083: evidence references stay under evidence/ and must exist", asyn
   const workspace = await tempRoot();
   try {
     const run = await initializeRun({ workspaceRoot: workspace, casesPath: fixturePath });
+    await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "CASE-原始-01/step-001/oracle-001" });
     await writeFile(path.join(run.evidenceRoot, "observation.json"), JSON.stringify({ text: "订单 REQ-9002 可见" }));
     await recordEvent(run.runRoot, {
       type: "checkpoint_result",

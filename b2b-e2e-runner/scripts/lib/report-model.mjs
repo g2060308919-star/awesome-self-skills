@@ -1,3 +1,4 @@
+import { executionProvenance } from "./execution-facts.mjs";
 import { derivePermissionState } from "./permission-batches.mjs";
 import { deriveMockState, projectEffectiveResults } from "./mock-fallback.mjs";
 
@@ -43,7 +44,8 @@ const proxyStateLabels = Object.freeze({
   active: "代理正在生效",
   degraded: "代理运行异常",
   stopped: "代理已停止",
-  cleanup_failed: "代理清理未完成"
+  cleanup_failed: "代理清理未完成",
+  isolation_unknown: "隔离未知，已停止业务操作"
 });
 
 function readableTime(value) {
@@ -81,53 +83,7 @@ function durationLabel(milliseconds) {
   return [hours ? `${hours} 小时` : null, minutes ? `${minutes} 分钟` : null, `${seconds} 秒`].filter(Boolean).join(" ");
 }
 
-export function deriveActivityDurations(executionLogs) {
-    const intervals = [];
-    for (const executionLog of executionLogs) {
-      let opened = null;
-      let complete = false;
-      let valid = true;
-      for (const event of executionLog.events ?? []) {
-        if (complete && (!["run_state", "cleanup_state", "proxy_state", "report_context"].includes(event.type)
-          || (event.type === "run_state" && event.status !== "completed"))) {
-          valid = false;
-          break;
-        }
-        if (event.type === "activity_start") {
-          if (opened !== null) valid = false;
-          opened = Date.parse(event.at ?? "");
-        }
-        if (event.type === "activity_end") {
-          const end = Date.parse(event.at ?? "");
-          if (!Number.isFinite(opened) || !Number.isFinite(end) || end < opened) valid = false;
-          if (!valid) break;
-          intervals.push([opened, end]);
-          opened = null;
-        }
-        if (event.type === "activity_complete") complete = true;
-      }
-      if (!valid || !complete || opened !== null) return { accurate: false, execution_ms: null,
-        waiting_ms: null, execution_label: "无法准确计算", waiting_label: "无法准确计算" };
-    }
-    let executionMs = null;
-    if (intervals.length) {
-      intervals.sort((a, b) => a[0] - b[0]);
-      let [start, end] = intervals[0];
-      executionMs = 0;
-      for (const [nextStart, nextEnd] of intervals.slice(1)) {
-        if (nextStart <= end) end = Math.max(end, nextEnd);
-        else { executionMs += end - start; [start, end] = [nextStart, nextEnd]; }
-      }
-      executionMs += end - start;
-    }
-    return { accurate: executionMs !== null, execution_ms: executionMs, waiting_ms: null,
-      execution_label: durationLabel(executionMs), waiting_label: "无法准确计算" };
-}
-
-export function deriveDurations(executionLog) {
-  if (executionLog.events?.[0]?.profile === "permission-batches-html-v3") {
-    return deriveActivityDurations([executionLog]);
-  }
+function deriveDurations(executionLog) {
   const start = Date.parse(executionLog.run.started_at ?? "");
   const boundaryValue = executionLog.run.completed_at ?? executionLog.events?.at(-1)?.at;
   const end = Date.parse(boundaryValue ?? "");
@@ -168,6 +124,11 @@ function semanticOutcome(value, success = "已完成", failure = "未完成") {
 function semanticEvent(event) {
   const observation = event.observation && typeof event.observation === "object" ? event.observation : {};
   const base = { at: event.at ?? null, time_label: readableTime(event.at) };
+  if (event.type === "browser_session") return { ...base, stage: "浏览器会话", description: `代次 ${event.generation} · 存储身份 ${event.storage_context}`, outcome: event.phase };
+  if (["proxy_policy", "mock_policy"].includes(event.type)) return { ...base, stage: event.type === "mock_policy" ? "Mock 授权" : "普通代理授权", description: event.basis, outcome: event.decision === "allowed" ? "用户明确允许" : "用户明确拒绝或撤回" };
+  if (event.type === "preparation_adjustment") return { ...base, stage: "准备数据调整", description: event.unchanged_goal_reason, outcome: event.support_scope };
+  if (event.type === "form_interaction") return { ...base, stage: "控件提交与回读", description: event.description, outcome: event.stage };
+  if (event.type === "supplementary_attempt") return { ...base, stage: "补充观察", description: event.description, outcome: event.result ? `${resultLabels[event.result]}（不覆盖原结果）` : "开始" };
   if (event.type === "mcp_preflight") return { ...base, stage: "浏览器连接检查", description: event.description ?? "已检查 Chrome DevTools MCP 连接", outcome: event.status === "available" ? "可以继续执行" : "需要处理连接问题" };
   if (event.type === "role_observation") return { ...base, stage: "账号与权限核验", description: observation.description ?? "已核验当前页面中的账号、角色和权限", outcome: permissionVerificationLabels[observation.verification] ?? "核验结果未记录" };
   if (event.type === "permission_availability") return { ...base, stage: "权限准备", description: event.declaration ?? "权限准备状态已更新", outcome: permissionAvailabilityLabels[event.availability] ?? "状态未记录" };
@@ -293,14 +254,12 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     expected: step.expected.map(oracle => {
       const checkpoint = state.checkpoints[checkpointIndex++];
       const id = checkpointId(testCase.case_id, step.step_id, oracle.oracle_id);
-      const sourceEvent = [...(executionLog.events ?? [])].reverse().find(event =>
-        event.type === "checkpoint_result" && event.checkpoint_id === id);
-      const controls = (executionLog.events ?? []).filter(event =>
-        event.type === "control_effect" && event.checkpoint_ids.includes(id));
-      const source = sourceEvent?.verification_source ?? "unknown";
+      const controls = (executionLog.events ?? []).filter(event => event.type === "control_effect" && event.checkpoint_ids.includes(id));
+      const sourceEvent = [...(executionLog.events ?? [])].reverse().find(event => event.type === "checkpoint_result" && event.checkpoint_id === id);
+      const verificationSource = controls.length ? "mock_affected" : sourceEvent?.verification_source ?? "unknown";
       return {
         oracle_id: oracle.oracle_id,
-        checkpoint_id: id,
+        checkpoint_id: checkpointId(testCase.case_id, step.step_id, oracle.oracle_id),
         text: oracle.text,
         status: checkpoint.status,
         result: checkpoint.result,
@@ -309,11 +268,8 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
         observations: checkpoint.observations?.length ? [...checkpoint.observations] : ["未记录"],
         evidence_status: checkpoint.evidence_status,
         evidence_status_label: evidenceStatusLabels[checkpoint.evidence_status] ?? "证据状态未记录",
-        ...(executionLog.events?.[0]?.profile === "permission-batches-html-v3" ? {
-          verification_source_label: source === "real" ? "纯真实" : source === "mock_affected" ? "含模拟" : "来源未确认",
-          verification_source_description: controls.map(event => event.description).join("；") ||
-            (source === "real" ? "未记录影响此检查点的测试控制" : "控制影响范围尚未确认")
-        } : {}),
+        verification_source_label: verificationSource === "real" ? "纯真实" : verificationSource === "mock_affected" ? "含模拟或控制影响" : "来源未确认",
+        verification_source_description: controls.map(event => event.description).join("；") || "根据原检查点实际执行事实判断；配置本身不证明页面行为",
         evidence: (checkpoint.evidence_refs ?? []).map(id => evidence.get(id)).filter(Boolean),
         blocker: checkpoint.blocker ?? "未记录",
         permission_group_ids: checkpoint.permission_group_ids ? [...checkpoint.permission_group_ids] : []
@@ -332,6 +288,7 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
   }));
   const captureRecords = linkedEvents.filter(event => event.type === "evidence_capture").map(event => ({
     outcome: event.outcome,
+    capture_scope: event.capture_scope ?? "page",
     description: event.description,
     reason: event.reason ?? null,
     attempts: [...(event.attempts ?? [])]
@@ -377,6 +334,8 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
       });
     }
   }
+  const provenance = executionProvenance(executionLog, steps.flatMap(step => step.expected.map(item => item.checkpoint_id)));
+  const controlsUsed = linkedEvents.some(event => event.type === "control_effect");
   const effectiveReason = projection?.source === "mock"
     ? `Mock 前端补测：${projection.reason}`
     : (projection?.reason ?? state.reason ?? "缺少必要检查点结果，无法确定");
@@ -392,7 +351,8 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     real_result: state.result,
     real_result_label: resultLabels[state.result],
     result_source: projection?.source ?? "real",
-    reason: effectiveReason,
+    reason: `${effectiveReason}${controlsUsed ? "；含模拟或控制影响（不证明写入隔离）" : ""}${provenance.adjustments.length ? "；准备数据调整后继续原断言验证" : ""}${provenance.supplementary.length ? "；另有补充观察（不覆盖原结果）" : ""}`,
+    provenance,
     steps,
     permissions,
     actual_records: actualRecords,
@@ -440,7 +400,8 @@ export function buildReportModel(testCases, executionLog) {
   const importantTypes = new Set([
     "mcp_preflight", "role_observation", "assistance", "blocker", "sample_selected", "sample_replaced",
     "permission_availability", "permission_batch", "permission_wait", "proxy_state", "cleanup_state", "resume_check", "evidence_capture",
-    "data_gap", "mock_candidate", "mock_attempt", "mock_observation", "mock_checkpoint", "coverage_review"
+    "data_gap", "mock_candidate", "mock_attempt", "mock_observation", "mock_checkpoint", "coverage_review",
+    "browser_session", "proxy_policy", "mock_policy", "preparation_adjustment", "form_interaction", "supplementary_attempt"
   ]);
   const importantEvents = (executionLog.events ?? []).filter(event => importantTypes.has(event.type)).map(event => structuredClone(event));
   const roles = executionLog.browser?.role_observations ?? [];
@@ -461,7 +422,7 @@ export function buildReportModel(testCases, executionLog) {
     run: {
       run_id: executionLog.run.run_id,
       status: executionLog.run.status,
-      status_label: executionLog.run.status === "awaiting_user" && ["permission-batches-html-v2", "permission-batches-html-v3"].includes(profile)
+      status_label: executionLog.run.status === "awaiting_user"
         ? "未完成，等待用户协作"
         : statusLabels[executionLog.run.status] ?? executionLog.run.status,
       started_at: executionLog.run.started_at,
@@ -526,22 +487,20 @@ export function buildReportModel(testCases, executionLog) {
       scope: proxy.required ? (proxy.target_id ? "单个测试页面（已按精确页面绑定）" : "单个测试页面（绑定状态未记录）") : "没有页面受到代理影响",
       scope_outcome: proxy.required ? "限定为单一页面" : "未启用",
       restoration: proxy.required ? (proxy.cleanup?.reason ?? "代理停止后的原始行为恢复说明未记录") : "本次未启用代理，不需要恢复原始行为",
-      restoration_outcome: proxy.required ? (proxy.cleanup?.succeeded === true ? "原始行为已恢复" : proxy.cleanup?.succeeded === false ? "原始行为恢复失败" : "恢复结果未记录") : "无需恢复",
+      restoration_outcome: proxy.required ? (proxy.cleanup?.real_response_restored === true ? "原始行为已恢复" : proxy.cleanup?.succeeded === false ? "原始行为恢复失败" : "恢复结果未记录") : "无需恢复",
       description: proxy.cleanup?.reason ?? (proxy.required ? "代理运行说明未记录" : "本次没有启用代理"),
       verifications: (proxy.verifications ?? []).map((item, index) => semanticFact(item, `验证项 ${index + 1}`))
     },
     cleanup,
     cleanup_summary: {
-      status: cleanup.completed ? "清理已完成" : cleanup.attempted ? "清理未完成" : proxy.required ? "尚未执行清理" : "无需清理",
+      status: proxy.state === "isolation_unknown" ? "隔离未知，禁止继续业务操作" : cleanup.completed && (!proxy.required || (proxy.cleanup?.page_isolated === true && proxy.cleanup?.lock_released === true && proxy.cleanup?.real_response_restored === true)) ? "清理已完成" : cleanup.attempted ? "清理未完成" : proxy.required ? "尚未执行清理" : "无需清理",
       items: (cleanup.items ?? []).map((item, index) => semanticFact(item, `清理项 ${index + 1}`, "已完成", "未完成"))
     },
     consistency: {
       checks: [
         { item: "用例范围", outcome: "已核对", description: `${rows.length} 条输入用例均已按原顺序纳入报告` },
         { item: "执行记录", outcome: "完整", description: `执行记录完整，共读取 ${executionLog.events?.length ?? 0} 条连续记录` },
-        ["permission-batches-html-v2", "permission-batches-html-v3"].includes(profile)
-          ? { item: "交付来源", outcome: "一致", description: "HTML 与对话全量表由同一份不可变用例快照和执行日志模型生成" }
-          : { item: "双报告来源", outcome: "一致", description: "HTML 与 Markdown 由同一份不可变用例快照和执行日志生成" },
+        { item: "交付来源", outcome: "一致", description: "HTML 与对话全量表由同一份不可变用例快照和执行日志模型生成" },
         { item: "证据状态", outcome: "已汇总", description: evidenceSummary(evidenceCounts) },
         { item: "秘密保护", outcome: "已通过", description: "报告生成前后均执行秘密信息扫描" }
       ]

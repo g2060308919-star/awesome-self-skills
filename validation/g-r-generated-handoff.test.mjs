@@ -131,7 +131,7 @@ test('official G Case Document and test-confirmed Execution Plan reach R init-g'
     fileURLToPath(new URL('../b2b-e2e-runner/scripts/run-artifacts.mjs', import.meta.url)), 'init-g',
     '--workspace', path.join(root, 'runner'), '--case-manifest', caseManifestPath,
     '--plan-manifest', planManifestPath, '--g-compiler', gCompilerPath, '--suite', suitePath,
-    '--workflow-profile', 'permission-batches-html-v3'
+    '--workflow-profile', 'b2b-e2e-current'
   ]);
   const r = JSON.parse(stdout);
   assert.equal(r.ok, true);

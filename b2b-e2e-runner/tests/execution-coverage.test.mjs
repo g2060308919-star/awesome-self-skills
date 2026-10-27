@@ -36,7 +36,7 @@ function baseLog() {
       { case_id: "B", checkpoints: [{ step_id: "s1", oracle_id: "o1", status: "pending", result: null }] }
     ],
     events: [
-      { type: "workflow_profile", profile: "permission-batches-html-v2", sequence: 1, at: "2026-09-20T00:00:00.000Z" },
+      { type: "workflow_profile", profile: "b2b-e2e-current", sequence: 1, at: "2026-09-20T00:00:00.000Z" },
       {
         type: "permission_plan", version: "1.0", sequence: 2, at: "2026-09-20T00:00:01.000Z",
         groups: [
@@ -619,7 +619,7 @@ test("v1.1 AC-48/68: the A10 B8 C5 dual-site fixture stays 23 original checkpoin
       checkpoints: [{ step_id: "step-1", oracle_id: "oracle-1", status: "pending", result: null }]
     })),
     events: [
-      { type: "workflow_profile", profile: "permission-batches-html-v2", sequence: 1, at: "2026-09-20T00:00:00.000Z" },
+      { type: "workflow_profile", profile: "b2b-e2e-current", sequence: 1, at: "2026-09-20T00:00:00.000Z" },
       { type: "permission_plan", version: "1.0", groups, role_independent_case_ids: [], sequence: 2, at: "2026-09-20T00:00:01.000Z" }
     ]
   };

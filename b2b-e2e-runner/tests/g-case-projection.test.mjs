@@ -43,7 +43,7 @@ test('five G-shaped semantic cases retain values, constraints and exact criteria
   const input = { schema_version: '2.0',
     suite: { name: '非敏感五类交接夹具', target_urls: ['https://staging.example.test'] }, cases };
   const run = await initializeRun({ workspaceRoot: root, casesInput: input,
-    workflowProfile: 'permission-batches-html-v3' });
+    workflowProfile: 'b2b-e2e-current' });
   const frozen = JSON.parse(await readFile(path.join(run.runRoot, 'test-cases.json'), 'utf8'));
   assert.deepEqual(frozen, input);
   assert.deepEqual(frozen.cases.map(item => item.case_id), source.map(item => item.case_id));

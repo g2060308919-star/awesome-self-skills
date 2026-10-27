@@ -345,6 +345,7 @@ export class MockScenarioEngine {
     this.stateVersion = runtimeState?.state_version ?? 0;
     this.receipts = new Map();
     this.usedRoutes = new Set();
+    this.persistenceFailed = false;
     if (runtimeState) {
       requireValue(runtimeState.schema_version === "mock-runtime-v1", "Mock 状态 schema_version 无效");
       requireValue(runtimeState.scenario_id === this.scenario.scenario_id && runtimeState.attempt_id === this.scenario.attempt_id &&
@@ -352,11 +353,28 @@ export class MockScenarioEngine {
       requireValue(Number.isInteger(runtimeState.state_version) && runtimeState.state_version >= 0 &&
         runtimeState.state_hash === digest(runtimeState.state), "Mock 状态版本或哈希无效");
       requireValue(Array.isArray(runtimeState.processed_requests), "Mock 状态缺少已处理请求记录");
+      let previousHash = digest(this.scenario.initial_state);
+      let expectedVersion = 0;
+      const routeIds = new Set(this.scenario.routes.map(route => route.route_id));
       for (const item of runtimeState.processed_requests) {
         requireValue(nonEmpty(item?.key) && object(item.receipt) && nonEmpty(item.receipt.route_id), "Mock 状态包含无效请求回执");
+        const [attemptId, cycleId, requestId, ...extra] = item.key.split("\u0000");
+        const receipt = item.receipt;
+        expectedVersion += 1;
+        requireValue(attemptId === this.scenario.attempt_id && nonEmpty(cycleId) && nonEmpty(requestId) && extra.length === 0 &&
+          !this.receipts.has(item.key) && routeIds.has(receipt.route_id), "Mock 回执请求身份、路由或重复键无效");
+        requireValue(receipt.disposition === "mocked" && receipt.state_version === expectedVersion &&
+          receipt.state_before_hash === previousHash && /^[a-f0-9]{64}$/.test(receipt.state_after_hash ?? "") &&
+          receipt.receipt_id === digest({ key: item.key, route: receipt.route_id }) &&
+          receipt.transaction_id === digest({ key: item.key, version: expectedVersion }), "Mock 回执版本或状态哈希链无效");
+        requireValue(object(receipt.response) && Number.isInteger(receipt.response.status) &&
+          receipt.response.status >= 100 && receipt.response.status <= 599 && object(receipt.response.headers) &&
+          typeof receipt.response.body === "string", "Mock 回执响应无效");
+        previousHash = receipt.state_after_hash;
         this.receipts.set(item.key, structuredClone(item.receipt));
         this.usedRoutes.add(item.receipt.route_id);
       }
+      requireValue(expectedVersion === runtimeState.state_version && previousHash === runtimeState.state_hash, "Mock 回执链与最终状态不一致");
     }
     this.queue = Promise.resolve();
     this.active = 0;
@@ -369,6 +387,7 @@ export class MockScenarioEngine {
   }
 
   async #handle(request, identity) {
+    if (this.persistenceFailed) fail("MOCK_PERSISTENCE_UNCERTAIN", "Mock 持久化曾失败，必须核验运行资产后恢复，停止后续模拟请求");
     requireValue(nonEmpty(identity?.proxy_cycle_id) && nonEmpty(identity?.request_id), "请求缺少 proxy_cycle_id 或 request_id");
     const key = `${this.scenario.attempt_id}\u0000${identity.proxy_cycle_id}\u0000${identity.request_id}`;
     if (this.receipts.has(key)) return structuredClone(this.receipts.get(key));
@@ -412,7 +431,12 @@ export class MockScenarioEngine {
       const nextReceipts = new Map(this.receipts);
       nextReceipts.set(key, structuredClone(receipt));
       const runtime = this.#runtimeState(tentative, nextVersion, nextReceipts);
-      await this.persist({ runtime: structuredClone(runtime), receipt: structuredClone(receipt) });
+      try {
+        await this.persist({ runtime: structuredClone(runtime), receipt: structuredClone(receipt) });
+      } catch (error) {
+        this.persistenceFailed = true;
+        throw error;
+      }
       this.state = tentative;
       this.stateVersion = nextVersion;
       this.usedRoutes.add(route.route_id);
@@ -452,13 +476,9 @@ export class MockScenarioEngine {
   }
 
   requestPatterns() {
-    const seen = new Set();
-    return [...this.scenario.routes, ...this.scenario.passthrough].flatMap(item => {
-      const pattern = `${item.match.origin}${item.match.pathname}*`;
-      if (seen.has(pattern)) return [];
-      seen.add(pattern);
-      return [{ urlPattern: pattern, requestStage: "Request" }];
-    });
+    // Guard every HTTP(S) request before classifying it. A route-only Fetch
+    // subscription silently lets unknown paths and origins reach upstream.
+    return ["http://*", "https://*"].map(urlPattern => ({ urlPattern, requestStage: "Request" }));
   }
 
   updateScenario(scenario) {

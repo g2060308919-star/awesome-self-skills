@@ -1,12 +1,13 @@
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
+import { recordFixtureScreenshotGaps } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { initializeRun, recordEvent, validateRun } from "../scripts/run-artifacts.mjs";
+import { initializeRun, recordEvent as productionRecordEvent, validateRun } from "../scripts/run-artifacts.mjs";
 import { derivePermissionState } from "../scripts/lib/permission-batches.mjs";
-import { markAsHistoricalV2 } from "./test-helpers.mjs";
 
 async function createRun(root) {
   const casesPath = path.join(root, "cases.json");
@@ -18,14 +19,14 @@ async function createRun(root) {
       { case_id: "CTX-B", module: "权限", title: "独立上下文", preconditions: [], steps: [{ step_id: "s", action: "查看其他页面", expected: [{ oracle_id: "o", text: "页面可见" }] }] }
     ]
   }));
-  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-  await markAsHistoricalV2(run.runRoot);
+  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", role_independent_case_ids: [], groups: [
       { group_id: "g-a", role_text: "角色 A", permissions: ["使用功能"], case_ids: ["CTX-A"], checkpoint_ids: ["CTX-A/s/o"], availability: "ready", account_ref: "acct-a", preparation_owner: null, declaration: "用户说明账号 A 已准备" },
       { group_id: "g-b", role_text: "角色 B", permissions: ["查看页面"], case_ids: ["CTX-B"], checkpoint_ids: ["CTX-B/s/o"], availability: "ready", account_ref: "acct-b", preparation_owner: null, declaration: "用户说明账号 B 已准备" }
     ]
   });
+  await recordFixtureScreenshotGaps(run.runRoot);
   await recordEvent(run.runRoot, {
     type: "target_inventory",
     owned_target_ids: ["target-a", "target-b"],
@@ -65,15 +66,15 @@ test("permission recovery is accepted by the public Run API and deterministic lo
         steps: [{ step_id: "s", action: "打开审阅页", expected: [{ oracle_id: "o", text: "显示审阅内容" }] }]
       }]
     }));
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-    await recordEvent(run.runRoot, {
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+    await productionRecordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [], groups: [{
         group_id: "g-recover", role_text: "审阅角色", permissions: ["审阅内容"], case_ids: ["RECOVER"],
         checkpoint_ids: ["RECOVER/s/o"], availability: "user_preparation_required", account_ref: null,
         preparation_owner: "user", declaration: "用户稍后自行准备虚构审阅账号"
       }]
     });
-    await recordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot, {
       type: "coverage_plan", action: "initial", revision: 1, snapshot_hash: run.snapshotHash,
       source: "不可变用例快照与初始权限拓扑",
       items: [{
@@ -85,29 +86,29 @@ test("permission recovery is accepted by the public Run API and deterministic lo
         dependencies: []
       }]
     });
-    await recordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot, {
       type: "target_inventory", owned_target_ids: ["target-recover"], preexisting_target_ids: [], attached_preexisting_target_ids: []
     });
-    await recordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot, {
       type: "permission_availability", group_id: "g-recover", availability: "ready",
       account_ref: "account-recover", declaration: "用户说明虚构审阅账号已准备"
     });
-    await recordEvent(run.runRoot, observation("g-recover", "account-recover", "target-recover", "context-recover"));
-    const coverage = await recordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot, observation("g-recover", "account-recover", "target-recover", "context-recover"));
+    const coverage = await productionRecordEvent(run.runRoot, {
       type: "coverage_context", scope_ids: ["scope-recover"], account_ref: "account-recover",
       observed_account_ref: "account-recover", target_id: "target-recover", context_ref: "context-recover",
       environment_ref: "staging", observed_url: "https://staging.example.test/review", verification: "verified",
       switch_status: "not_required", fact_refs: [5, 6], role_observation_refs: [6]
     });
-    await recordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot, {
       type: "checkpoint_started", checkpoint_id: "RECOVER/s/o",
       scope_ids: ["scope-recover"], context_refs: [coverage.sequence]
     });
-    const observationEvent = await recordEvent(run.runRoot, {
+    const observationEvent = await productionRecordEvent(run.runRoot, {
       type: "page_observation", checkpoint_ids: ["RECOVER/s/o"], scope_ids: ["scope-recover"],
       context_ref: coverage.sequence, description: "审阅页面显示目标内容"
     });
-    const review = await recordEvent(run.runRoot, {
+    const review = await productionRecordEvent(run.runRoot, {
       type: "coverage_review", review_id: "close-recovered-checkpoint", purpose: "checkpoint_close", plan_revision: 1,
       based_on_sequence: observationEvent.sequence, scope_ids: ["scope-recover"], checkpoint_ids: ["RECOVER/s/o"],
       fact_refs: [observationEvent.sequence], assistance_refs: [], ready_scope_ids: ["scope-recover"],
@@ -115,7 +116,7 @@ test("permission recovery is accepted by the public Run API and deterministic lo
       closures: [{ checkpoint_id: "RECOVER/s/o", closure_kind: "observed", basis_refs: [observationEvent.sequence] }],
       choice: "close", reason: "后补账号范围已完成真实页面观察"
     });
-    await recordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot, {
       type: "checkpoint_result", checkpoint_id: "RECOVER/s/o", result: "passed",
       reason: "审阅页面显示目标内容", observation: "当前虚构账号下目标内容可见", evidence_status: "not_required",
       execution_refs: [observationEvent.sequence], coverage_review_ref: review.sequence

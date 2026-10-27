@@ -1,6 +1,6 @@
-# B2B E2E 历史 Markdown 报告模板
+# B2B E2E 当前报告内容结构
 
-> 仅供 `permission-batches-html-v1` 与无 profile 历史 Run 的兼容渲染使用。新建 `permission-batches-html-v2` Run 只生成 `report.html`，对话五列表由同一次报告模型返回，不使用本模板落盘。
+> 当前流程只生成 `report.html`。本文件说明内容结构，不是另一个运行或渲染入口。对话五列表由同一次报告模型返回，不创建 `report.md`。
 
 - Run ID：{{run_id}}
 - 开始/更新时间：{{created_at}} / {{updated_at}}
@@ -52,4 +52,4 @@
 
 {{hash_ids_counts_paths_contract_and_scan}}
 
-> `report.html` 与本兼容报告必须来自同一快照、事件读取边界和结果行；对话全表从本文件复制。
+> HTML、对话全表、详情和统计必须来自同一快照、事件读取边界与结果投影；来源属性不增加第五种结果状态。

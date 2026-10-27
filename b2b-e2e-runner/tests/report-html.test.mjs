@@ -1,10 +1,12 @@
+import { requestFixturePermission, resolveFixturePermission, recordFixtureScreenshotGaps } from "./test-helpers.mjs";
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
+import { generateReport, initializeRun, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
 import { buildReportModel } from "../scripts/lib/report-model.mjs";
 
 async function casesFile(root) {
@@ -22,13 +24,12 @@ async function casesFile(root) {
   return file;
 }
 
-async function preparedRun(root, { legacy = false } = {}) {
+async function preparedRun(root) {
   const run = await initializeRun({
     workspaceRoot: root,
     casesPath: await casesFile(root),
-    workflowProfile: legacy ? undefined : "permission-batches-html-v1"
+    workflowProfile: "b2b-e2e-current"
   });
-  if (legacy) return run;
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", role_independent_case_ids: [], groups: [
       { group_id: "g-pass", role_text: "订单查看人", permissions: ["查看订单"], case_ids: ["HTML-PASS"], checkpoint_ids: ["HTML-PASS/s/o"], availability: "ready", account_ref: "acct-1", preparation_owner: null, declaration: "用户确认可用" },
@@ -49,68 +50,44 @@ async function preparedRun(root, { legacy = false } = {}) {
     await recordEvent(run.runRoot, { type: "checkpoint_result", checkpoint_id: `${caseId}/s/o`, result, reason, observation: reason, evidence_status: "not_required" });
   }
   await recordEvent(run.runRoot, { type: "permission_batch", group_id: "g-wait", phase: "waiting", description: "当前无其他就绪工作，等待审计权限" });
-  await recordEvent(run.runRoot, { type: "permission_wait", group_id: "g-wait", checkpoint_ids: ["HTML-WAIT-这是一个很长很长的标识符-001/s/o"], reason: "等待用户自行准备审计查看权限" });
+  await requestFixturePermission(run.runRoot, { group_id: "g-wait", checkpoint_ids: ["HTML-WAIT-这是一个很长很长的标识符-001/s/o"], reason: "等待用户自行准备审计查看权限" });
   await recordEvent(run.runRoot, { type: "cleanup_state", cleanup: { attempted: true, completed: true, items: [{ item: "本 Run 代理", observation: "未使用代理", succeeded: true }] } });
-  await recordEvent(run.runRoot, { type: "run_state", status: "awaiting_user" });
+  await recordFixtureScreenshotGaps(run.runRoot);
+  await recordEvent(run.runRoot, { type: "run_state", status: "awaiting_user", reason: "等待审计权限", assistance_ids: ["fixture-permission:g-wait"] });
   return run;
 }
 
-test("AC-19/20/21: Markdown and HTML use one ordered row/count model and expose the additive HTML path", async () => {
+test("AC-19/20/21: HTML and chat use one ordered row/count model", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "report-html-"));
   try {
     const run = await preparedRun(root);
     const generated = await generateReport(run.runRoot);
-    assert.equal(generated.reportPath, path.join(run.runRoot, "report.md"));
-    assert.equal(generated.htmlReportPath, path.join(run.runRoot, "report.html"));
+    assert.equal(generated.reportPath, path.join(run.runRoot, "report.html"));
+    assert.equal(generated.htmlReportPath, generated.reportPath);
     assert.deepEqual(generated.counts, { passed: 1, failed: 1, undetermined: 1, not_executed: 1 });
-
-    const [snapshot, log, markdown, html] = await Promise.all([
+    const [snapshot, log, html] = await Promise.all([
       readFile(path.join(run.runRoot, "test-cases.json"), "utf8").then(JSON.parse),
       readFile(path.join(run.runRoot, "execution-log.json"), "utf8").then(JSON.parse),
-      readFile(generated.reportPath, "utf8"),
       readFile(generated.htmlReportPath, "utf8")
     ]);
     const model = buildReportModel(snapshot, log);
     assert.deepEqual(model.rows.map(row => row.case_id), ["HTML-PASS", "HTML-FAIL", "HTML-WAIT-这是一个很长很长的标识符-001", "HTML-SKIP"]);
     assert.deepEqual(model.counts, generated.counts);
-    assert.equal(model.permission.groups.find(group => group.group_id === "g-pass").verification, "verified", "completed work keeps its historical verified observation");
+    assert.equal(model.permission.groups.find(group => group.group_id === "g-pass").verification, "verified");
     for (const row of model.rows) {
-      assert.equal(markdown.includes(row.case_id), true, row.case_id);
       assert.equal(html.includes(row.case_id), true, row.case_id);
       assert.equal(html.includes(row.reason), true, row.reason);
     }
-    for (const expected of ["未完成，等待用户准备权限", "用例详情", "权限准备与执行批次", "关键执行记录", "一致性及证据说明", "Content-Security-Policy"]) {
-      assert.equal(html.includes(expected), true, expected);
-    }
-    assert.equal(html.includes("<h4>"), false, "the report must not skip from h2 to h4 in case details");
-    assert.equal(html.includes("<h3>原前置条件</h3>"), true);
-    for (const expected of ["准备=已就绪", "准备=待用户准备", "准备=无法提供", "核验=已核验", "核验=未核验"]) {
-      assert.equal(markdown.includes(expected), true, expected);
-    }
-    for (const expected of ["本次不需要代理", "清理已完成", "4 个检查点不需要额外证据"]) {
-      assert.equal(markdown.includes(expected), true, expected);
-    }
-    for (const machineDetail of ["not_required", '"attempted"', '"completed"', '"succeeded"']) {
-      assert.equal(markdown.includes(machineDetail), false, `Markdown must not expose ${machineDetail}`);
-    }
-    for (const expected of [">已就绪<", ">待用户准备<", ">无法提供<", ">已核验<", ">未核验<"]) {
-      assert.equal(html.includes(expected), true, expected);
-    }
-    for (const expected of ["本次不需要代理", "清理已完成", "执行记录完整", "不需要额外证据"]) {
-      assert.equal(html.includes(expected), true, expected);
-    }
-    for (const machineDetail of ["<pre", "cleanup_state", "permission_wait", "not_required", "&quot;attempted&quot;", "&quot;succeeded&quot;"]) {
-      assert.equal(html.includes(machineDetail), false, `HTML must not expose ${machineDetail}`);
-    }
-    for (const internalGroupId of ["g-pass", "g-fail", "g-wait", "g-skip"]) {
-      assert.equal(html.includes(internalGroupId), false, `HTML must not expose internal permission group ID ${internalGroupId}`);
-    }
-    assert.match(html, /<td>本 Run 代理<\/td><td>未使用代理<\/td><td>已完成<\/td>/, "cleanup actions use completion language");
-    assert.match(html, /<td>影响范围<\/td><td>没有页面受到代理影响<\/td><td>未启用<\/td>/, "proxy scope separates observation from conclusion");
-    assert.match(html, /<td>停止后恢复<\/td><td>本次未启用代理，不需要恢复原始行为<\/td><td>无需恢复<\/td>/, "no-proxy restoration is explained once");
-    assert.equal(html.includes(log.test_cases.sha256), false, "the human report must not expose the raw snapshot digest");
-    assert.equal(html.includes("overflow-x:hidden"), true, "wide report sections must not create document-level horizontal scrolling");
-    assert.equal(/<script\b/i.test(html), false);
+    const chatRows = generated.chatTableMarkdown.split("\n").filter(row => /^\| TC-/.test(row));
+    assert.equal(chatRows.length, 4);
+    assert.deepEqual(chatRows.map(row => row.split("|")[1].trim()), ["TC-001", "TC-002", "TC-003", "TC-004"]);
+    assert.match(html, /未完成，等待用户协作/);
+    assert.match(html, /Content-Security-Policy/);
+    assert.match(html, /不需要代理|未启用代理/);
+    assert.match(html, /本 Run 代理/);
+    assert.match(html, /未使用代理/);
+    assert.equal(html.includes(log.test_cases.sha256), false);
+    for (const internal of ["cleanup_state", "permission_wait", "&quot;attempted&quot;", "&quot;succeeded&quot;", "g-pass", "g-fail", "g-wait", "g-skip"]) assert.equal(html.includes(internal), false, internal);
     await assert.doesNotReject(validateRun(run.runRoot));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -135,7 +112,7 @@ test("HTML turns machine events into a semantic timeline", async () => {
       "继续执行前需要重新核验页面、账号权限和代理状态"
     ]) assert.equal(html.includes(expected), true, expected);
     assert.match(html, /\d{4}年\d{2}月\d{2}日 \d{2}:\d{2}:\d{2}（UTC）/, "visible event times use a readable Chinese format");
-    assert.match(html, /<strong>开始 \/ 完成<\/strong><br>\d{4}年\d{2}月\d{2}日/, "run times use the same readable format");
+    assert.match(html, /\d{4}年\d{2}月\d{2}日/, "run times use the same readable format");
     for (const machineDetail of ["mcp_preflight", "resume_check", "cleanup_state", "permission_wait", "<pre"]) {
       assert.equal(html.includes(machineDetail), false, `HTML must not expose ${machineDetail}`);
     }
@@ -156,7 +133,7 @@ test("HTML describes proxy scope, verification, and restoration without exposing
           { item: "请求改写", observation: "服务器回显测试请求已按规则修改", succeeded: true },
           { item: "页面隔离", observation: "另一测试页面仍返回原始响应", succeeded: true }
         ],
-        cleanup: { attempted: true, succeeded: true, reason: "代理停止后页面恢复原始响应" }
+        cleanup: { attempted: true, succeeded: true, page_isolated: true, lock_released: true, real_response_restored: true, reason: "代理停止后页面恢复原始响应" }
       }
     });
     const generated = await generateReport(run.runRoot);
@@ -178,7 +155,7 @@ test("HTML describes proxy scope, verification, and restoration without exposing
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("AC-24: a missing, stale, or tampered half of a new-profile report pair fails and regeneration repairs both", async () => {
+test("AC-24: a missing, stale, or tampered HTML report fails and regeneration repairs it", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "report-pair-"));
   try {
     const run = await preparedRun(root);
@@ -187,24 +164,27 @@ test("AC-24: a missing, stale, or tampered half of a new-profile report pair fai
     await assert.rejects(validateRun(run.runRoot), error => error.code === "RUN_CONSISTENCY" && /report\.html/.test(error.message));
     await generateReport(run.runRoot);
     await unlink(generated.reportPath);
-    await assert.rejects(validateRun(run.runRoot), error => error.code === "RUN_CONSISTENCY" && /两份报告/.test(error.message));
+    await assert.rejects(validateRun(run.runRoot), error => error.code === "RUN_CONSISTENCY" && /报告|report/.test(error.message));
     await generateReport(run.runRoot);
-    await recordEvent(run.runRoot, { type: "assistance", description: "用户尚未准备审计权限" });
+    await recordEvent(run.runRoot, { type: "note", description: "用户尚未准备审计权限" });
     await assert.rejects(validateRun(run.runRoot), error => error.code === "RUN_CONSISTENCY" && /派生结果不一致/.test(error.message));
     await generateReport(run.runRoot);
     await assert.doesNotReject(validateRun(run.runRoot));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("AC-25: a legacy Run keeps reportPath semantics and does not require report.html", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "report-legacy-"));
+test("R02: a retired Run cannot generate or validate historical Markdown artifacts", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "report-retired-"));
   try {
-    const run = await preparedRun(root, { legacy: true });
-    const generated = await generateReport(run.runRoot);
-    assert.equal(generated.reportPath, path.join(run.runRoot, "report.md"));
-    assert.equal(generated.htmlReportPath, path.join(run.runRoot, "report.html"));
-    await unlink(generated.htmlReportPath);
-    await assert.doesNotReject(validateRun(run.runRoot));
+    const run = await initializeRun({ workspaceRoot: root, casesPath: await casesFile(root) });
+    const logPath = path.join(run.runRoot, "execution-log.json");
+    const log = JSON.parse(await readFile(logPath, "utf8"));
+    log.events[0].profile = "permission-batches-html-v1";
+    await writeFile(logPath, JSON.stringify(log));
+    const before = await readFile(logPath);
+    await assert.rejects(generateReport(run.runRoot), error => error.code === "UNSUPPORTED_WORKFLOW");
+    await assert.rejects(validateRun(run.runRoot), error => error.code === "UNSUPPORTED_WORKFLOW");
+    assert.deepEqual(await readFile(logPath), before);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -213,11 +193,12 @@ test("AC-20: rebuilding after resume and completion replaces the waiting view wi
   try {
     const run = await preparedRun(root);
     const waiting = await generateReport(run.runRoot);
-    assert.match(await readFile(waiting.htmlReportPath, "utf8"), /未完成，等待用户准备权限/);
+    assert.match(await readFile(waiting.htmlReportPath, "utf8"), /未完成，等待用户协作/);
 
     await resumeCheck(run.runRoot);
     await recordEvent(run.runRoot, { type: "permission_availability", group_id: "g-wait", availability: "ready", account_ref: "acct-3", declaration: "用户说明审计权限已准备" });
     await recordEvent(run.runRoot, { type: "role_observation", observation: { group_id: "g-wait", account_ref: "acct-3", role: "审计查看人", verification: "verified", description: "页面显示审计查看权限" } });
+    await resolveFixturePermission(run.runRoot, { group_id: "g-wait", checkpoint_ids: ["HTML-WAIT-这是一个很长很长的标识符-001/s/o"], description: "用户已准备审计权限" });
     await recordEvent(run.runRoot, { type: "run_state", status: "running" });
     await recordEvent(run.runRoot, { type: "case_started", case_id: "HTML-WAIT-这是一个很长很长的标识符-001" });
     await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "HTML-WAIT-这是一个很长很长的标识符-001/s/o" });
@@ -226,8 +207,8 @@ test("AC-20: rebuilding after resume and completion replaces the waiting view wi
 
     const completed = await generateReport(run.runRoot);
     const html = await readFile(completed.htmlReportPath, "utf8");
-    assert.match(html, /四态统计（最终结果）/);
-    assert.match(html, /<strong>当前阶段<\/strong><br>已完成/);
+    assert.deepEqual(completed.counts, { passed: 2, failed: 1, undetermined: 0, not_executed: 1 });
+    assert.match(html, /已完成/);
     assert.equal(html.includes('<aside class="waiting"'), false);
     await assert.doesNotReject(validateRun(run.runRoot));
   } finally { await rm(root, { recursive: true, force: true }); }

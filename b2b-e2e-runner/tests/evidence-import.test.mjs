@@ -1,3 +1,4 @@
+import { recordFixtureEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
@@ -17,8 +18,8 @@ async function setup(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   const casesPath = path.join(root, "cases.json");
   await writeFile(casesPath, JSON.stringify({ schema_version: "2.0", suite: { name: "归档夹具", target_urls: ["http://localhost"] }, cases: [{ case_id: "C", module: "证据", title: "截图", preconditions: [], steps: [{ step_id: "s", action: "观察", expected: [{ oracle_id: "o", text: "显示结果" }] }] }] }));
-  const run = await runtime.initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-  await runtime.recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["C"] });
+  const run = await runtime.initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+  await recordFixtureEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["C"] });
   const event = { type: "evidence_capture", capture_kind: "screenshot", outcome: "captured", checkpoint_ids: ["C/s/o"], description: "隔离单元夹具归档验证", attempts: ["工具输出归档"], evidence: [{ evidence_id: "screen", kind: "screenshot", at: "2026-09-17T00:00:00Z", description: "测试图片，不是业务证据", checkpoint_ids: ["C/s/o"], path: "evidence/screen.png" }] };
   return { root, run, event };
 }

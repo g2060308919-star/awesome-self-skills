@@ -29,7 +29,7 @@ test("E02 frozen runner input retains source value origins, comparison rules and
     const input = { schema_version: "2.0", suite: { name: "非敏感交接夹具", target_urls: ["https://staging.example.test"] }, cases };
     const casesPath = path.join(workspace, "cases.json");
     await writeFile(casesPath, JSON.stringify(input));
-    const run = await initializeRun({ workspaceRoot: workspace, casesPath, workflowProfile: "permission-batches-html-v3" });
+    const run = await initializeRun({ workspaceRoot: workspace, casesPath, workflowProfile: "b2b-e2e-current" });
     const frozen = JSON.parse(await readFile(path.join(run.runRoot, "test-cases.json"), "utf8"));
     assert.deepEqual(frozen.cases, cases);
     assert.deepEqual(frozen.cases.map(item => item.case_id), ["fixed", "replaceable", "literal", "meaning", "readonly"]);

@@ -1,7 +1,5 @@
-const PROFILE_V1 = "permission-batches-html-v1";
-const PROFILE_V2 = "permission-batches-html-v2";
-const PROFILE_V3 = "permission-batches-html-v3";
-const PROFILES = new Set([PROFILE_V1, PROFILE_V2, PROFILE_V3]);
+import { CURRENT_WORKFLOW } from "./workflow-contract.mjs";
+const PROFILES = new Set([CURRENT_WORKFLOW]);
 const AVAILABILITIES = new Set(["ready", "user_preparation_required", "unavailable"]);
 const BATCH_PHASES = new Set(["started", "waiting", "drained"]);
 
@@ -51,14 +49,6 @@ function workflowProfile(executionLog) {
 
 function permissionPlan(executionLog) {
   return executionLog.events?.find(event => event.type === "permission_plan") ?? null;
-}
-
-function isV2(executionLog) {
-  return [PROFILE_V2, PROFILE_V3].includes(workflowProfile(executionLog));
-}
-
-function isV3(executionLog) {
-  return workflowProfile(executionLog) === PROFILE_V3;
 }
 
 function knownTargetIds(executionLog) {
@@ -311,8 +301,7 @@ function eventBySequence(executionLog, sequence) {
 function stoppedWaitingGroupIds(executionLog) {
   return new Set((executionLog.events ?? []).filter(event =>
     event.type === "assistance" && (
-      event.permission_decision === "stop_waiting" ||
-      (isV2(executionLog) && event.phase === "stop_waiting")
+      event.phase === "stop_waiting"
     )
   ).flatMap(event => event.group_ids ?? []));
 }
@@ -321,41 +310,41 @@ function validateAssistanceEvent(event, executionLog, groups, knownCheckpoints) 
   rejectUnknownKeys(event, new Set([
     "type", "assistance_id", "phase", "checkpoint_ids", "description", "required_user_action",
     "attempts", "decision_source", "group_ids", "sequence", "at"
-  ]), "v2 assistance");
-  requireValue(nonEmptyString(event.assistance_id), "v2 assistance 缺少 assistance_id");
-  requireValue(["requested", "resolved", "unavailable", "stop_waiting", "stop_run"].includes(event.phase), "v2 assistance.phase 无效");
-  validateStringArray(event.checkpoint_ids, "v2 assistance.checkpoint_ids");
-  for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `v2 assistance 引用未知检查点：${checkpointId}`);
-  requireValue(nonEmptyString(event.description), "v2 assistance 必须包含事实说明");
+  ]), "当前 assistance");
+  requireValue(nonEmptyString(event.assistance_id), "当前 assistance 缺少 assistance_id");
+  requireValue(["requested", "resolved", "unavailable", "stop_waiting", "stop_run"].includes(event.phase), "当前 assistance.phase 无效");
+  validateStringArray(event.checkpoint_ids, "当前 assistance.checkpoint_ids");
+  for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `当前 assistance 引用未知检查点：${checkpointId}`);
+  requireValue(nonEmptyString(event.description), "当前 assistance 必须包含事实说明");
   if (event.group_ids !== undefined) {
-    validateStringArray(event.group_ids, "v2 assistance.group_ids");
-    for (const groupId of event.group_ids) requireValue(groups.has(groupId), `v2 assistance 引用未知权限组：${groupId}`);
+    validateStringArray(event.group_ids, "当前 assistance.group_ids");
+    for (const groupId of event.group_ids) requireValue(groups.has(groupId), `当前 assistance 引用未知权限组：${groupId}`);
   }
   const items = assistanceState(executionLog);
   const current = items.get(event.assistance_id);
   if (event.phase === "requested") {
     requireValue(!current, `协作事项已存在：${event.assistance_id}`);
-    requireValue(nonEmptyString(event.required_user_action), "v2 assistance.requested 必须说明 required_user_action");
-    validateStringArray(event.attempts, "v2 assistance.attempts", { allowEmpty: true });
-    requireValue(event.decision_source === "agent", "v2 assistance.requested.decision_source 必须为 agent");
+    requireValue(nonEmptyString(event.required_user_action), "当前 assistance.requested 必须说明 required_user_action");
+    validateStringArray(event.attempts, "当前 assistance.attempts", { allowEmpty: true });
+    requireValue(event.decision_source === "agent", "当前 assistance.requested.decision_source 必须为 agent");
     return;
   }
   if (event.phase === "stop_run" && !current) {
-    requireValue(event.decision_source === "user", "v2 assistance.stop_run 必须来自用户明确决定");
+    requireValue(event.decision_source === "user", "当前 assistance.stop_run 必须来自用户明确决定");
     return;
   }
   requireValue(current, `协作事项不存在：${event.assistance_id}`);
   for (const checkpointId of event.checkpoint_ids) requireValue(current.remaining.has(checkpointId), `协作事项不包含未解决检查点：${checkpointId}`);
-  requireValue(["user", "agent"].includes(event.decision_source), "v2 assistance.decision_source 无效");
+  requireValue(["user", "agent"].includes(event.decision_source), "当前 assistance.decision_source 无效");
   if (["unavailable", "stop_waiting", "stop_run"].includes(event.phase)) {
-    requireValue(event.decision_source === "user", `v2 assistance.${event.phase} 必须来自用户明确决定`);
+    requireValue(event.decision_source === "user", `当前 assistance.${event.phase} 必须来自用户明确决定`);
   }
 }
 
-function validateV2Undetermined(event, executionLog, record, knownCheckpoints) {
+function validateUndetermined(event, executionLog, record, knownCheckpoints) {
   const hasInline = event.exploration_summary !== undefined;
   const hasReference = event.exploration_ref !== undefined;
-  requireValue(hasInline !== hasReference, "v2 最终 undetermined 必须在 exploration_summary 和 exploration_ref 中恰选一种");
+  requireValue(hasInline !== hasReference, "当前 最终 undetermined 必须在 exploration_summary 和 exploration_ref 中恰选一种");
   if (hasInline) {
     validateExplorationSummary(event.exploration_summary, knownCheckpoints, "checkpoint_result.exploration_summary");
     requireValue(event.exploration_summary.checkpoint_ids.includes(event.checkpoint_id), "exploration_summary 影响范围不包含当前检查点");
@@ -387,7 +376,7 @@ function validateV2Undetermined(event, executionLog, record, knownCheckpoints) {
   }
   if (record.checkpoint?.status !== "running" && event.permission_group_ids === undefined) {
     requireValue(event.resolution_ref !== undefined || event.data_gap_ref !== undefined,
-      "尚未开始的 v2 检查点终结为 undetermined 时缺少 resolution_ref 或 data_gap_ref");
+      "尚未开始的 当前 检查点终结为 undetermined 时缺少 resolution_ref 或 data_gap_ref");
   }
 }
 
@@ -398,7 +387,7 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     requireValue(PROFILES.has(event.profile), `未知 workflow profile：${event.profile}`);
     return;
   }
-  if (!PROFILES.has(profile)) return;
+  requireValue(profile === CURRENT_WORKFLOW, "不支持旧 workflow；请新建当前任务");
 
   if (event.type === "permission_plan") {
     requireValue(!permissionPlan(executionLog), "permission_plan 只能建立一次");
@@ -406,125 +395,80 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     validatePlan(testCases, executionLog, event);
     return;
   }
-  if (event.type === "mock_policy") {
-    rejectUnknownKeys(event, new Set([
-      "type", "action", "decision", "decision_source", "basis", "sequence", "at"
-    ]), "mock_policy");
-    requireValue(executionLog.extensions?.mock_fallback?.schema_version === "1.0", "mock_policy 缺少对应的 Mock 扩展");
-    requireValue(["initial", "revoked"].includes(event.action), "mock_policy.action 必须为 initial 或 revoked");
-    requireValue(["allowed", "declined"].includes(event.decision), "mock_policy.decision 无效");
-    requireValue(event.decision_source === "user", "mock_policy.decision_source 必须为 user");
-    requireValue(nonEmptyString(event.basis), "mock_policy 必须包含脱敏的选择依据");
-    if (event.action === "initial") {
-      requireValue(!(executionLog.events ?? []).some(item => item.type === "mock_policy"), "mock_policy.initial 只能记录一次");
-      requireValue(!(executionLog.events ?? []).some(item => item.type === "permission_plan"), "mock_policy.initial 必须早于 permission_plan");
-    } else {
-      requireValue(permissionPlan(executionLog), "mock_policy.revoked 必须在 permission_plan 后记录");
-      requireValue(event.decision === "declined", "mock_policy.revoked 必须将决定撤回为 declined");
-    }
-    return;
-  }
+  if (["mock_policy", "proxy_policy", "browser_session"].includes(event.type)) return;
   const plan = requirePlan(executionLog);
   const state = derivePermissionState(testCases, executionLog);
   const groups = new Map(state.groups.map(group => [group.group_id, group]));
   const checkpoints = checkpointRecords(testCases, executionLog);
   const knownCheckpoints = new Set(checkpoints.keys());
 
-  if (isV3(executionLog) && ["activity_start", "activity_end", "activity_complete"].includes(event.type)) {
-    rejectUnknownKeys(event, new Set(["type", "sequence", "at"]), "v3 activity");
-    const activity = (executionLog.events ?? []).filter(item => item.type.startsWith("activity_"));
-    const complete = activity.some(item => item.type === "activity_complete");
-    const open = activity.filter(item => item.type === "activity_start").length >
-      activity.filter(item => item.type === "activity_end").length;
-    requireValue(!complete, "活动区段已结算");
-    if (event.type === "activity_start") requireValue(!open, "活动区段已有开始记录");
-    else if (event.type === "activity_end") requireValue(open, "活动区段缺少开始记录");
-    else requireValue(!open && activity.some(item => item.type === "activity_end"), "活动区段尚未闭合");
-    return;
-  }
-
-  if (isV3(executionLog) && event.type === "retake_link") {
-    rejectUnknownKeys(event, new Set(["type", "parent_run_id", "parent_log_sha256", "root_run_id", "root_snapshot_sha256", "case_ids", "sequence", "at"]), "v3 retake_link");
-    requireValue(!(executionLog.events ?? []).some(item => item.type === "retake_link"), "补测关联只能建立一次");
-    requireValue(!(executionLog.events ?? []).some(item => ["case_started", "checkpoint_started", "checkpoint_result"].includes(item.type)), "补测关联必须在执行前建立");
-    requireValue(nonEmptyString(event.parent_run_id) && nonEmptyString(event.root_run_id) &&
-      /^[a-f0-9]{64}$/.test(event.parent_log_sha256) && /^[a-f0-9]{64}$/.test(event.root_snapshot_sha256), "补测关联缺少有效父轮和根快照绑定");
-    validateStringArray(event.case_ids, "retake_link.case_ids");
-    requireValue(new Set(event.case_ids).size === event.case_ids.length &&
-      event.case_ids.length === testCases.cases.length &&
-      event.case_ids.every((id, index) => id === testCases.cases[index].case_id), "补测关联必须精确覆盖本轮用例");
-    return;
-  }
-
-  if (isV3(executionLog) && event.type === "control_effect") {
-    rejectUnknownKeys(event, new Set(["type", "checkpoint_ids", "attempt_id", "target_id", "phase", "match", "description", "sequence", "at"]), "v3 control_effect");
-    validateStringArray(event.checkpoint_ids, "control_effect.checkpoint_ids");
-    for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `控制影响引用未知检查点：${checkpointId}`);
-    requireValue(nonEmptyString(event.attempt_id) && nonEmptyString(event.target_id) && knownTargetIds(executionLog).has(event.target_id), "控制影响必须绑定已登记 Target 和尝试");
-    requireValue(["request", "response"].includes(event.phase) && nonEmptyString(event.match) && nonEmptyString(event.description), "控制影响须记录实际请求或响应阶段与匹配事实");
-    return;
-  }
-
-  if (isV2(executionLog) && event.type === "assistance") {
+  if (event.type === "assistance") {
     validateAssistanceEvent(event, executionLog, groups, knownCheckpoints);
     return;
   }
-  if (isV2(executionLog) && event.type === "blocker") {
-    rejectUnknownKeys(event, new Set(["type", "checkpoint_ids", "description", "reason", "exploration_summary", "sequence", "at"]), "v2 blocker");
-    validateStringArray(event.checkpoint_ids, "v2 blocker.checkpoint_ids");
-    for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `v2 blocker 引用未知检查点：${checkpointId}`);
-    requireValue(nonEmptyString(event.description ?? event.reason), "v2 blocker 必须包含真实卡点说明");
+  if (event.type === "blocker") {
+    rejectUnknownKeys(event, new Set(["type", "checkpoint_ids", "description", "reason", "exploration_summary", "sequence", "at"]), "当前 blocker");
+    validateStringArray(event.checkpoint_ids, "当前 blocker.checkpoint_ids");
+    for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `当前 blocker 引用未知检查点：${checkpointId}`);
+    requireValue(nonEmptyString(event.description ?? event.reason), "当前 blocker 必须包含真实卡点说明");
     if (event.exploration_summary !== undefined) {
       validateExplorationSummary(event.exploration_summary, knownCheckpoints, "blocker.exploration_summary");
       for (const checkpointId of event.exploration_summary.checkpoint_ids) requireValue(event.checkpoint_ids.includes(checkpointId), "blocker.exploration_summary 不得扩大 blocker 影响范围");
     }
     return;
   }
-  if (isV2(executionLog) && event.type === "evidence_capture") {
+  if (event.type === "control_effect") {
+    rejectUnknownKeys(event, new Set(["type", "checkpoint_ids", "attempt_id", "target_id", "phase", "match", "description", "sequence", "at"]), "control_effect");
+    validateStringArray(event.checkpoint_ids, "control_effect.checkpoint_ids");
+    for (const id of event.checkpoint_ids) requireValue(knownCheckpoints.has(id), "控制影响引用未知检查点");
+    requireValue(nonEmptyString(event.attempt_id) && knownTargetIds(executionLog).has(event.target_id), "控制影响必须绑定已登记 Target 和尝试");
+    requireValue(["request", "response"].includes(event.phase) && nonEmptyString(event.match) && nonEmptyString(event.description), "控制影响须记录实际阶段与匹配事实");
+    return;
+  }
+  if (event.type === "evidence_capture") {
     rejectUnknownKeys(event, new Set([
-      "type", "checkpoint_ids", "capture_kind", "outcome", "description", "attempts", "reason", "evidence", "sequence", "at",
-      ...(isV3(executionLog) ? ["capture_scope"] : [])
-    ]), "v2 evidence_capture");
-    validateStringArray(event.checkpoint_ids, "v2 evidence_capture.checkpoint_ids");
-    for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `v2 evidence_capture 引用未知检查点：${checkpointId}`);
-    requireValue(event.capture_kind === "screenshot", "v2 evidence_capture.capture_kind 必须为 screenshot");
-    if (isV3(executionLog)) requireValue(["page", "request_details"].includes(event.capture_scope ?? "page"), "v3 capture_scope 无效");
-    requireValue(["captured", "failed", "unavailable"].includes(event.outcome), "v2 evidence_capture.outcome 无效");
-    requireValue(nonEmptyString(event.description), "v2 evidence_capture 必须包含采集上下文说明");
-    validateStringArray(event.attempts, "v2 evidence_capture.attempts", { allowEmpty: true });
+      "type", "checkpoint_ids", "capture_kind", "capture_scope", "outcome", "description", "attempts", "reason", "evidence", "sequence", "at"
+    ]), "当前 evidence_capture");
+    validateStringArray(event.checkpoint_ids, "当前 evidence_capture.checkpoint_ids");
+    for (const checkpointId of event.checkpoint_ids) requireValue(knownCheckpoints.has(checkpointId), `当前 evidence_capture 引用未知检查点：${checkpointId}`);
+    requireValue(["page", "request_details"].includes(event.capture_scope ?? "page"), "capture_scope 无效");
+    requireValue(event.capture_kind === "screenshot", "当前 evidence_capture.capture_kind 必须为 screenshot");
+    requireValue(["captured", "failed", "unavailable"].includes(event.outcome), "当前 evidence_capture.outcome 无效");
+    requireValue(nonEmptyString(event.description), "当前 evidence_capture 必须包含采集上下文说明");
+    validateStringArray(event.attempts, "当前 evidence_capture.attempts", { allowEmpty: true });
     if (event.outcome === "captured") {
-      requireValue(Array.isArray(event.evidence) && event.evidence.length > 0, "v2 evidence_capture.captured 必须注册真实图片证据");
+      requireValue(Array.isArray(event.evidence) && event.evidence.length > 0, "当前 evidence_capture.captured 必须注册真实图片证据");
       for (const evidence of event.evidence) {
-        requireValue(evidence?.kind === "screenshot", "v2 截图证据 kind 必须为 screenshot");
-        validateStringArray(evidence.checkpoint_ids, "v2 截图证据 checkpoint_ids");
-        for (const checkpointId of evidence.checkpoint_ids) requireValue(event.checkpoint_ids.includes(checkpointId), "v2 截图证据不得扩大采集事件影响范围");
+        requireValue(evidence?.kind === "screenshot", "当前 截图证据 kind 必须为 screenshot");
+        validateStringArray(evidence.checkpoint_ids, "当前 截图证据 checkpoint_ids");
+        for (const checkpointId of evidence.checkpoint_ids) requireValue(event.checkpoint_ids.includes(checkpointId), "当前 截图证据不得扩大采集事件影响范围");
       }
     } else {
-      requireValue(nonEmptyString(event.reason), `v2 evidence_capture.${event.outcome} 必须包含 reason`);
+      requireValue(nonEmptyString(event.reason), `当前 evidence_capture.${event.outcome} 必须包含 reason`);
       requireValue(event.evidence === undefined || event.evidence.length === 0, "截图失败或不可用时不得引用模拟图片");
     }
     return;
   }
-  if (isV2(executionLog) && event.type === "report_context") {
+  if (event.type === "report_context") {
     rejectUnknownKeys(event, new Set([
       "type", "prd_links", "environment_description", "display_timezone", "description", "sequence", "at"
-    ]), "v2 report_context");
-    requireValue(Array.isArray(event.prd_links ?? []), "v2 report_context.prd_links 必须是数组");
+    ]), "当前 report_context");
+    requireValue(Array.isArray(event.prd_links ?? []), "当前 report_context.prd_links 必须是数组");
     for (const [index, link] of (event.prd_links ?? []).entries()) {
-      requireValue(link && typeof link === "object" && !Array.isArray(link), `v2 report_context.prd_links[${index}] 必须是对象`);
-      rejectUnknownKeys(link, new Set(["title", "url"]), `v2 report_context.prd_links[${index}]`);
-      requireValue(nonEmptyString(link.title) && nonEmptyString(link.url), `v2 report_context.prd_links[${index}] 缺少 title 或 url`);
+      requireValue(link && typeof link === "object" && !Array.isArray(link), `当前 report_context.prd_links[${index}] 必须是对象`);
+      rejectUnknownKeys(link, new Set(["title", "url"]), `当前 report_context.prd_links[${index}]`);
+      requireValue(nonEmptyString(link.title) && nonEmptyString(link.url), `当前 report_context.prd_links[${index}] 缺少 title 或 url`);
       let parsed;
-      try { parsed = new URL(link.url); } catch { throw consistencyError(`v2 report_context.prd_links[${index}] 链接无效`); }
-      requireValue(["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password, `v2 report_context.prd_links[${index}] 只允许无认证信息的 HTTP(S) 链接`);
+      try { parsed = new URL(link.url); } catch { throw consistencyError(`当前 report_context.prd_links[${index}] 链接无效`); }
+      requireValue(["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password, `当前 report_context.prd_links[${index}] 只允许无认证信息的 HTTP(S) 链接`);
     }
-    requireValue(event.environment_description === undefined || nonEmptyString(event.environment_description), "v2 report_context.environment_description 无效");
+    requireValue(event.environment_description === undefined || nonEmptyString(event.environment_description), "当前 report_context.environment_description 无效");
     if (event.display_timezone !== undefined) {
-      requireValue(nonEmptyString(event.display_timezone), "v2 report_context.display_timezone 无效");
+      requireValue(nonEmptyString(event.display_timezone), "当前 report_context.display_timezone 无效");
       try { new Intl.DateTimeFormat("zh-CN", { timeZone: event.display_timezone }).format(new Date()); }
-      catch { throw consistencyError("v2 report_context.display_timezone 不是合法时区"); }
+      catch { throw consistencyError("当前 report_context.display_timezone 不是合法时区"); }
     }
-    requireValue(nonEmptyString(event.description), "v2 report_context 必须包含元数据来源说明");
+    requireValue(nonEmptyString(event.description), "当前 report_context 必须包含元数据来源说明");
     return;
   }
 
@@ -543,31 +487,27 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     requireValue(group, `角色核验引用未知权限组：${observation.group_id}`);
     requireValue(nonEmptyString(observation.account_ref), "角色核验缺少 account_ref");
     requireValue(observation.account_ref === group.account_ref, `角色核验账号与权限组 ${group.group_id} 当前账号不一致`);
-    if (isV2(executionLog)) {
+    {
       rejectUnknownKeys(observation, new Set([
         "group_id", "account_ref", "observed_account_ref", "verification_scope", "verification",
         "target_id", "environment_ref", "context_ref", "switch_status", "description"
-      ]), "v2 执行上下文核验");
-      requireValue(observation.observed_account_ref === null || nonEmptyString(observation.observed_account_ref), "v2 执行上下文 observed_account_ref 无效");
-      requireValue(observation.verification_scope === "execution_context", "v2 执行上下文 verification_scope 必须为 execution_context");
-      requireValue(["verified", "mismatch", "unconfirmed"].includes(observation.verification), "v2 执行上下文 verification 无效");
-      requireValue(nonEmptyString(observation.target_id) && knownTargetIds(executionLog).has(observation.target_id), "v2 执行上下文引用未登记 Target");
-      requireValue(nonEmptyString(observation.environment_ref), "v2 执行上下文缺少 environment_ref");
-      requireValue(nonEmptyString(observation.context_ref), "v2 执行上下文缺少 context_ref");
-      requireValue(["completed", "not_required", "incomplete", "unconfirmed"].includes(observation.switch_status), "v2 执行上下文 switch_status 无效");
+      ]), "当前 执行上下文核验");
+      requireValue(observation.observed_account_ref === null || nonEmptyString(observation.observed_account_ref), "当前 执行上下文 observed_account_ref 无效");
+      requireValue(observation.verification_scope === "execution_context", "当前 执行上下文 verification_scope 必须为 execution_context");
+      requireValue(["verified", "mismatch", "unconfirmed"].includes(observation.verification), "当前 执行上下文 verification 无效");
+      requireValue(nonEmptyString(observation.target_id) && knownTargetIds(executionLog).has(observation.target_id), "当前 执行上下文引用未登记 Target");
+      requireValue(nonEmptyString(observation.environment_ref), "当前 执行上下文缺少 environment_ref");
+      requireValue(nonEmptyString(observation.context_ref), "当前 执行上下文缺少 context_ref");
+      requireValue(["completed", "not_required", "incomplete", "unconfirmed"].includes(observation.switch_status), "当前 执行上下文 switch_status 无效");
       if (observation.verification === "verified") {
-        requireValue(observation.observed_account_ref === observation.account_ref, "v2 执行上下文实际账号与计划账号不一致，不得记为 verified");
-        requireValue(["completed", "not_required"].includes(observation.switch_status), "v2 执行上下文必要切换未完成，不得记为 verified");
+        requireValue(observation.observed_account_ref === observation.account_ref, "当前 执行上下文实际账号与计划账号不一致，不得记为 verified");
+        requireValue(["completed", "not_required"].includes(observation.switch_status), "当前 执行上下文必要切换未完成，不得记为 verified");
       }
-      requireValue(nonEmptyString(observation.description), "v2 执行上下文核验必须包含新鲜事实说明");
+      requireValue(nonEmptyString(observation.description), "当前 执行上下文核验必须包含新鲜事实说明");
       return;
     }
-    requireValue(["verified", "mismatch"].includes(observation.verification), "角色核验 verification 必须为 verified 或 mismatch");
-    requireValue(nonEmptyString(observation.description), "角色核验必须包含实际页面观察");
-    return;
   }
   if (event.type === "execution_context_change") {
-    requireValue(isV2(executionLog), "execution_context_change 仅属于 v2 工作流");
     rejectUnknownKeys(event, new Set(["type", "context_ref", "target_ids", "description", "sequence", "at"]), "execution_context_change");
     requireValue(nonEmptyString(event.context_ref), "execution_context_change 缺少 context_ref");
     validateStringArray(event.target_ids, "execution_context_change.target_ids");
@@ -589,16 +529,16 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     const group = groups.get(event.group_id);
     requireValue(group, `权限等待引用未知权限组：${event.group_id}`);
     requireValue(group.availability === "user_preparation_required", `权限组 ${group.group_id} 不是待用户准备状态`);
-    if (isV2(executionLog)) {
+    {
       rejectUnknownKeys(event, new Set([
         "type", "assistance_id", "group_id", "checkpoint_ids", "reason", "sequence", "at"
-      ]), "v2 permission_wait");
-      requireValue(nonEmptyString(event.assistance_id), "v2 permission_wait 缺少 assistance_id");
+      ]), "当前 permission_wait");
+      requireValue(nonEmptyString(event.assistance_id), "当前 permission_wait 缺少 assistance_id");
       const assistance = assistanceState(executionLog).get(event.assistance_id);
-      requireValue(assistance && assistance.remaining.size > 0, `v2 permission_wait 引用的协作事项不存在或已解决：${event.assistance_id}`);
-      requireValue((assistance.requested.group_ids ?? []).includes(event.group_id), `v2 permission_wait 的协作事项未关联权限组：${event.group_id}`);
+      requireValue(assistance && assistance.remaining.size > 0, `当前 permission_wait 引用的协作事项不存在或已解决：${event.assistance_id}`);
+      requireValue((assistance.requested.group_ids ?? []).includes(event.group_id), `当前 permission_wait 的协作事项未关联权限组：${event.group_id}`);
       for (const checkpointId of event.checkpoint_ids ?? []) {
-        requireValue(assistance.remaining.has(checkpointId), `v2 permission_wait 的协作事项不包含未解决检查点：${checkpointId}`);
+        requireValue(assistance.remaining.has(checkpointId), `当前 permission_wait 的协作事项不包含未解决检查点：${checkpointId}`);
       }
     }
     validateStringArray(event.checkpoint_ids, "permission_wait.checkpoint_ids");
@@ -608,11 +548,6 @@ export function validatePermissionEvent(testCases, executionLog, event) {
       const checkpoint = checkpoints.get(checkpointId)?.checkpoint;
       requireValue(checkpoint && checkpoint.result == null && checkpoint.status !== "completed", `权限等待不能覆盖已完成检查点：${checkpointId}`);
     }
-    return;
-  }
-  if (event.type === "assistance" && event.permission_decision === "stop_waiting") {
-    validateStringArray(event.group_ids, "assistance.group_ids");
-    for (const groupId of event.group_ids) requireValue(groups.has(groupId), `停止等待引用未知权限组：${groupId}`);
     return;
   }
   if (event.type === "case_started") {
@@ -633,26 +568,24 @@ export function validatePermissionEvent(testCases, executionLog, event) {
   }
   if (event.type === "checkpoint_result") {
     const record = checkpoints.get(event.checkpoint_id);
-    requireValue(record, `未知检查点：${event.checkpoint_id}`);
-    if (isV3(executionLog)) {
-      requireValue(record.checkpoint?.result === null, `检查点 ${event.checkpoint_id} 已有结果，须在新 Run 补测`);
-      requireValue(["real", "mock_affected", "unknown"].includes(event.verification_source ?? "unknown"), "验证来源无效");
-      const effects = (executionLog.events ?? []).filter(item => item.type === "control_effect" && item.checkpoint_ids.includes(event.checkpoint_id));
-      requireValue(event.verification_source !== "real" || effects.length === 0, "实际控制影响存在，不能声称纯真实来源");
-      requireValue(event.verification_source !== "mock_affected" || effects.length > 0, "含模拟来源缺少实际控制影响记录");
-      const captures = (executionLog.events ?? []).filter(item => item.type === "evidence_capture" && item.checkpoint_ids.includes(event.checkpoint_id));
-      const latestByScope = new Map(captures.map(item => [item.capture_scope ?? "page", item]));
-      if (event.evidence_status === "complete") {
-        requireValue([...latestByScope.values()].every(item => item.outcome === "captured"), "证据截图存在未补齐的采集缺口");
-        requireValue((event.evidence_refs?.length ?? 0) > 0 || [...latestByScope.values()].some(item => item.outcome === "captured"), "证据完整须有实际采集材料");
-      }
+    requireValue(["real", "mock_affected", "unknown"].includes(event.verification_source ?? "unknown"), "验证来源无效");
+    const effects = (executionLog.events ?? []).filter(item => item.type === "control_effect" && item.checkpoint_ids.includes(event.checkpoint_id));
+    requireValue(event.verification_source !== "real" || effects.length === 0, "实际控制影响存在，不能声称纯真实来源");
+    requireValue(event.verification_source !== "mock_affected" || effects.length > 0, "含模拟来源缺少实际控制影响记录");
+    const captures = (executionLog.events ?? []).filter(item => item.type === "evidence_capture" && item.checkpoint_ids.includes(event.checkpoint_id));
+    const latestByScope = new Map(captures.map(item => [item.capture_scope ?? "page", item]));
+    if (event.evidence_status === "complete") {
+      requireValue([...latestByScope.values()].every(item => item.outcome === "captured"), "证据截图存在未补齐的采集缺口");
+      requireValue((event.evidence_refs?.length ?? 0) > 0 || (event.evidence?.length ?? 0) > 0 || [...latestByScope.values()].some(item => item.outcome === "captured"), "证据完整须有实际采集材料");
     }
-    if (isV2(executionLog) && event.evidence_refs !== undefined) validateStringArray(event.evidence_refs, "checkpoint_result.evidence_refs", { allowEmpty: true });
+
+    requireValue(record, `未知检查点：${event.checkpoint_id}`);
+    if (event.evidence_refs !== undefined) validateStringArray(event.evidence_refs, "checkpoint_result.evidence_refs", { allowEmpty: true });
     if (["passed", "failed"].includes(event.result)) {
       requireValue(record.checkpoint?.status === "running", `检查点 ${event.checkpoint_id} 必须先实际开始`);
       requireValue(canRunCheckpoint(state, event.checkpoint_id), `检查点 ${event.checkpoint_id} 所需权限未就绪或未经实际核验`);
-    } else if (event.result === "undetermined" && isV2(executionLog)) {
-      validateV2Undetermined(event, executionLog, record, knownCheckpoints);
+    } else if (event.result === "undetermined") {
+      validateUndetermined(event, executionLog, record, knownCheckpoints);
       if (record.checkpoint?.status !== "running" && event.permission_group_ids !== undefined) {
         validateStringArray(event.permission_group_ids, "checkpoint_result.permission_group_ids");
         const stopWaiting = stoppedWaitingGroupIds(executionLog);
@@ -662,46 +595,34 @@ export function validatePermissionEvent(testCases, executionLog, event) {
           requireValue(group.availability === "unavailable" || stopWaiting.has(groupId), `权限组 ${groupId} 尚无允许结束等待的明确决定`);
         }
       }
-    } else if (event.result === "undetermined" && record.checkpoint?.status !== "running") {
-      validateStringArray(event.permission_group_ids, "checkpoint_result.permission_group_ids");
-      const stopWaiting = stoppedWaitingGroupIds(executionLog);
-      for (const groupId of event.permission_group_ids) {
-        const group = groups.get(groupId);
-        requireValue(group?.checkpoint_ids.includes(event.checkpoint_id), `无法确定结果引用不相关权限组：${groupId}`);
-        requireValue(group.availability === "unavailable" || stopWaiting.has(groupId), `权限组 ${groupId} 尚无允许结束等待的明确决定`);
-      }
     }
     return;
   }
-  if (event.type === "run_state" && isV2(executionLog) && (event.status ?? event.state) === "awaiting_user") {
-    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "assistance_ids", "coverage_review_ref", "sequence", "at"]), "v2 awaiting_user");
-    requireValue(nonEmptyString(event.reason), "v2 awaiting_user 必须说明全局暂停原因");
-    validateStringArray(event.assistance_ids, "v2 awaiting_user.assistance_ids");
+  if (event.type === "run_state" && (event.status ?? event.state) === "awaiting_user") {
+    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "assistance_ids", "coverage_review_ref", "sequence", "at"]), "当前 awaiting_user");
+    requireValue(nonEmptyString(event.reason), "当前 awaiting_user 必须说明全局暂停原因");
+    validateStringArray(event.assistance_ids, "当前 awaiting_user.assistance_ids");
     const assistance = assistanceState(executionLog);
     for (const assistanceId of event.assistance_ids) {
-      requireValue((assistance.get(assistanceId)?.remaining.size ?? 0) > 0, `v2 awaiting_user 引用的协作事项不存在或已解决：${assistanceId}`);
+      requireValue((assistance.get(assistanceId)?.remaining.size ?? 0) > 0, `当前 awaiting_user 引用的协作事项不存在或已解决：${assistanceId}`);
     }
     return;
   }
-  if (event.type === "run_state" && isV2(executionLog) && (event.status ?? event.state) === "running" && executionLog.run?.status === "awaiting_user") {
-    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "coverage_review_ref", "sequence", "at"]), "v2 resumed running");
+  if (event.type === "run_state" && (event.status ?? event.state) === "running" && executionLog.run?.status === "awaiting_user") {
+    rejectUnknownKeys(event, new Set(["type", "status", "state", "reason", "coverage_review_ref", "sequence", "at"]), "当前 resumed running");
     const awaiting = [...(executionLog.events ?? [])].reverse().find(item =>
       item.type === "run_state" && (item.status ?? item.state) === "awaiting_user"
     );
     const resume = [...(executionLog.events ?? [])].reverse().find(item => item.type === "resume_check");
-    requireValue(resume && (resume.sequence ?? 0) > (awaiting?.sequence ?? 0), "v2 全局暂停后必须先执行 resume-check 才能恢复 running");
+    requireValue(resume && (resume.sequence ?? 0) > (awaiting?.sequence ?? 0), "当前 全局暂停后必须先执行 resume-check 才能恢复 running");
     const assistance = assistanceState(executionLog);
-    if (executionLog.extensions?.execution_coverage?.schema_version === "1.0") {
+    {
       const review = eventBySequence(executionLog, event.coverage_review_ref);
       requireValue(review?.type === "coverage_review" && review.purpose === "resume" && review.checkpoint_ids?.length > 0,
-        "v2 部分恢复必须引用包含已释放检查点的 resume 审查");
+        "当前 部分恢复必须引用包含已释放检查点的 resume 审查");
       for (const item of assistance.values()) {
         requireValue(!review.checkpoint_ids.some(checkpointId => item.remaining.has(checkpointId)),
-          "v2 resume 审查包含仍受开放协作阻塞的检查点");
-      }
-    } else {
-      for (const assistanceId of awaiting?.assistance_ids ?? []) {
-        requireValue(assistance.has(assistanceId) && assistance.get(assistanceId).remaining.size === 0, `v2 全局暂停关联的协作事项尚未解决：${assistanceId}`);
+          "当前 resume 审查包含仍受开放协作阻塞的检查点");
       }
     }
     return;
@@ -758,7 +679,5 @@ export function validatePermissionLog(testCases, executionLog) {
   }
 }
 
-export const permissionWorkflowProfile = PROFILE_V1;
-export const permissionWorkflowProfileV2 = PROFILE_V2;
-export const permissionWorkflowProfileV3 = PROFILE_V3;
-export const permissionWorkflowProfiles = Object.freeze([PROFILE_V1, PROFILE_V2, PROFILE_V3]);
+export const permissionWorkflowProfile = CURRENT_WORKFLOW;
+export const permissionWorkflowProfiles = Object.freeze([CURRENT_WORKFLOW]);

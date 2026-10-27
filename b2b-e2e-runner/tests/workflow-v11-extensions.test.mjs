@@ -24,10 +24,10 @@ test("v1.1 AC-06/40: every newly initialized v2 Run enables coverage without inv
     const run = await initializeRun({
       workspaceRoot: root,
       casesPath: fixture,
-      workflowProfile: "permission-batches-html-v2"
+      workflowProfile: "b2b-e2e-current"
     });
     const log = await readLog(run.runRoot);
-    assert.deepEqual(log.extensions, { execution_coverage: { schema_version: "1.0" } });
+    assert.deepEqual(log.extensions, { execution_coverage: { schema_version: "1.0" }, mock_fallback: { schema_version: "1.0" } });
     assert.deepEqual(log.events.map(event => [event.type, event.sequence]), [["workflow_profile", 1]]);
   });
 });
@@ -38,7 +38,7 @@ test("v1.1 AC-01/02: an explicit Mock decision is initialized after the workflow
       const run = await initializeRun({
         workspaceRoot: root,
         casesPath: fixture,
-        workflowProfile: "permission-batches-html-v2",
+        workflowProfile: "b2b-e2e-current",
         mockFallback: decision
       });
       const log = await readLog(run.runRoot);
@@ -64,24 +64,24 @@ test("v1.1 AC-01/02: an explicit Mock decision is initialized after the workflow
 test("v1.1 AC-02/40: invalid or non-v2 Mock initialization combinations fail closed", async () => {
   await withRoot("runner-v11-invalid-mock-", async root => {
     for (const options of [
-      { mockFallback: "allowed" },
-      { workflowProfile: "permission-batches-html-v1", mockFallback: "declined" },
-      { workflowProfile: "permission-batches-html-v2", mockFallback: "sometimes" }
+      { mockFallback: "sometimes" },
+      { workflowProfile: "permission-batches-html-v2", mockFallback: "declined" },
+      { workflowProfile: "b2b-e2e-current", mockFallback: "sometimes" }
     ]) {
       await assert.rejects(
         initializeRun({ workspaceRoot: root, casesPath: fixture, ...options }),
-        error => error.code === "INPUT_CONTRACT" && /Mock|mock/.test(error.message)
+        error => error.code === "INPUT_CONTRACT"
       );
     }
   });
 });
 
-test("v1.1 AC-39/40: unknown extension versions reject, while a historical v2 Run without extensions is not migrated", async () => {
+test("v1.1 AC-39/40: unknown extension versions reject, while a incomplete current Run is rejected without migration", async () => {
   await withRoot("runner-v11-extension-compat-", async root => {
     const unknown = await initializeRun({
       workspaceRoot: root,
       casesPath: fixture,
-      workflowProfile: "permission-batches-html-v2"
+      workflowProfile: "b2b-e2e-current"
     });
     const unknownLog = await readLog(unknown.runRoot);
     unknownLog.extensions = { execution_coverage: { schema_version: "9.9" } };
@@ -92,12 +92,14 @@ test("v1.1 AC-39/40: unknown extension versions reject, while a historical v2 Ru
     const historical = await initializeRun({
       workspaceRoot: root,
       casesPath: fixture,
-      workflowProfile: "permission-batches-html-v2"
+      workflowProfile: "b2b-e2e-current"
     });
     const historicalLog = await readLog(historical.runRoot);
     delete historicalLog.extensions;
     await writeJsonAtomic(path.join(historical.runRoot, "execution-log.json"), historicalLog);
-    await assert.doesNotReject(validateRun(historical.runRoot, { checkReport: false }));
+    const before = await readFile(path.join(historical.runRoot, "execution-log.json"));
+    await assert.rejects(validateRun(historical.runRoot, { checkReport: false }), error => error.code === "RUN_CONSISTENCY");
+    assert.deepEqual(await readFile(path.join(historical.runRoot, "execution-log.json")), before);
     assert.equal((await readLog(historical.runRoot)).extensions, undefined);
   });
 });

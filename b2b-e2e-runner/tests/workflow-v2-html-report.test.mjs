@@ -1,10 +1,11 @@
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent } from "../scripts/run-artifacts.mjs";
+import { generateReport, initializeRun } from "../scripts/run-artifacts.mjs";
 
 async function createCases(root, count) {
   const casesPath = path.join(root, "cases.json");
@@ -27,7 +28,7 @@ test("AC-03/04/05/06/07/08/11: v2 HTML has six sections, 20-row paging, stable s
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-html-"));
   try {
     const { casesPath, cases } = await createCases(root, 21);
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
     await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: cases.map(item => item.case_id)
     });
@@ -108,7 +109,7 @@ test("AC-04/11: v2 report context rejects dangerous links instead of rendering t
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-context-link-"));
   try {
     const { casesPath, cases } = await createCases(root, 1);
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
     await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: cases.map(item => item.case_id)
     });

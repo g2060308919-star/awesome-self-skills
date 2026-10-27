@@ -22,7 +22,7 @@ async function fixture(root) {
 test("v1.1 AC-11/37/59: resolving one assistance scope resumes it without waiting for unrelated open assistance", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v11-partial-resume-"));
   try {
-    const run = await initializeRun({ workspaceRoot: root, casesPath: await fixture(root), workflowProfile: "permission-batches-html-v2" });
+    const run = await initializeRun({ workspaceRoot: root, casesPath: await fixture(root), workflowProfile: "b2b-e2e-current" });
     await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["A", "B"] });
     await recordEvent(run.runRoot, {
       type: "coverage_plan", action: "initial", revision: 1, snapshot_hash: run.snapshotHash, source: "原用例地址",
