@@ -30,7 +30,14 @@ declare module 'node:fs/promises' {
   export const writeFile: any;
 }
 
+declare module 'node:module' {
+  export const syncBuiltinESMExports: () => void;
+}
+
 declare module 'node:fs' {
+  export const promises: any;
+  export const existsSync: any;
+  export const writeFileSync: any;
   export const constants: any;
   export const realpathSync: any;
 }
@@ -70,4 +77,8 @@ declare module 'node:worker_threads' {
 declare module 'node:url' {
   export const fileURLToPath: any;
   export const pathToFileURL: any;
+}
+
+declare module 'node:zlib' {
+  export const gunzipSync: any;
 }

@@ -41,7 +41,7 @@ async function parent(catalog, { schema = '4.3.2', pending = false, answers = []
   if (!contract) throw new Error('FIXTURE_CONTRACT_INVALID');
   await ensureV4RunInstance(directory, { run_id: RUN, delivery_intent: 'case_document', contract });
   const fixture = ['4.0.0', '4.2.0'].includes(schema) ? v4PipelineFixture()
-    : reliabilityFixture(RUN, /** @type {any} */ ({ schema: '4.3.2', collision: false }));
+    : reliabilityFixture(RUN, /** @type {any} */ ({ schema: '4.3.2', collision: false, upgrade: answers.length > 0 }));
   const source = fixture.artifacts.source_pack, evidence = fixture.artifacts.evidence_claims;
   source.schema_version = schema; source.run_instance_id = RUN; evidence.schema_version = schema;
   if (['4.0.0', '4.2.0'].includes(schema)) {
@@ -53,10 +53,8 @@ async function parent(catalog, { schema = '4.3.2', pending = false, answers = []
   }
   if (answers.length) evidence.semantic_gaps = ['final', 'temporary', 'pending'].map((kind, index) => ({
     ...structuredClone(evidence.semantic_gaps[0]), code: `UPGRADE_RULE_${index}`, missing_aspect: `upgrade_rule_${index}`,
+    subject_fact_ids: [['f200'], ['f205'], ['f210']][index], source_claim_ids: [['c200'], ['c205'], ['c210']][index],
     question: `测试升级规则 ${kind} 的结果是什么？` }));
-  if (answers.length) for (const fact of evidence.fact_ledger) {
-    if (evidence.semantic_gaps.some((/** @type {any} */ gap) => gap.subject_fact_ids.includes(fact.fact_id))) fact.status = 'ambiguous';
-  }
   if (pending) Object.assign(evidence, JSON.parse(canonicalStringify(evidence)));
   await stageRaw(directory, 'source_pack', source);
   await stageRaw(directory, 'evidence_claims', evidence);

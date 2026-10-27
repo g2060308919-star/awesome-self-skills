@@ -92,3 +92,29 @@ Never reset, restore, delete, or repurpose another run. Preserve completed, fail
 ## Keep v3 migration read-only
 
 Legacy v3 bytes and digests never change. Migration creates one durable v4 sibling plus a bidirectional index; incomplete, unavailable, ambiguous, or mutated legacy input receives its explicit migration terminal status. A migrated v4 output comes only from that sibling. v3 remains readable for audit but is never a v4 workflow fallback.
+
+
+## Material verification followed by semantic rejection
+
+Invoke the runner on the same run first. It completes any fully materialized
+revision transaction before reconciling material ownership. An `acquired`
+material state proves bytes and receipt bindings, not acceptance of the answer
+or advancement of the formal checkpoint. A verified older material revision
+can legitimately support a later semantic revision.
+
+For a legal Evidence repair, build the next Source Pack from the last accepted
+Source and append the existing digest-bound `artifact_repairs` entry. Include
+only accepted events and Decisions; leave rejected candidate answers in audit.
+The compiler keeps versioned private candidate contexts and immutable material
+bases under `transactions/source-acquisition`. They are not Agent artifacts.
+Same-candidate retries reuse their bound requests/receipts; different candidates
+at the same revision retain separate bases. Keep all historical
+`derived/source-acquisition-base-rNNN.json` files unchanged.
+
+Legacy acquired-but-unaccepted state can be recovered only when accepted
+history, the immutable acquisition base, original request cycles, actual
+acquisition receipts and collection/review bindings uniquely prove the accepted
+material prefix. Missing, altered, cross-run or ambiguous evidence produces an
+integrity diagnostic and preserves the scene. Report that diagnostic and the
+missing proof; do not delete state, edit a revision number, synthesize receipts,
+rebind an old answer, or rewrite accepted history to force progress.

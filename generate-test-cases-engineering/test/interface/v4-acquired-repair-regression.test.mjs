@@ -1,3 +1,4 @@
+import { currentAcquisitionContextV4, readAcquisitionSnapshotV4, acquisitionBaseLocationV4 } from '../../src/source-acquisition-context-v4.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
@@ -343,12 +344,17 @@ test('GTC-01 acquired asset is reused while an unaccepted semantic answer is cor
     }]);
     // Model a crash after the immutable base is written but before acquired
     // state is committed. The pending state must still complete once.
-    const basePath = path.join(directory, 'derived/source-acquisition-base-r001.json');
+    const pendingState = JSON.parse(await readFile(path.join(directory, 'derived/source-acquisition.json')));
+    const stagedCandidate = JSON.parse(await readFile(path.join(directory, 'staging/source-pack.json')));
+    const basePath = acquisitionBaseLocationV4(directory, { ...pendingState, accepted_source_pack_digest: `sha256:${digest(stagedCandidate)}` });
     await writeFile(basePath, await readFile(path.join(directory, 'staging/source-pack.json')));
     const semanticFailure = await run(directory);
     assert.equal(semanticFailure.incomplete_reason.code, 'V4_DECISION_MESSAGE_PROVENANCE_INVALID',
       JSON.stringify(semanticFailure));
-    const acquiredBefore = await readFile(path.join(directory, 'derived/source-acquisition.json'));
+    const rejected = await currentAcquisitionContextV4(directory);
+    assert.equal(rejected.phase, 'rejected');
+    const acquiredBefore = `${canonicalStringify(await readAcquisitionSnapshotV4(directory, rejected.state_ref))}\n`;
+    assert.equal(JSON.parse(await readFile(path.join(directory, 'derived/source-acquisition.json'))).committed_revision, 0);
     const acquiredCandidate = JSON.parse(await readFile(path.join(directory, 'staging/source-pack.json')));
     valid.artifact_events = structuredClone(acquiredCandidate.artifact_events);
     const tamperedSource = structuredClone(valid);

@@ -132,15 +132,15 @@ test('[reliability T02/T22] formal CLI preserves four distinct gaps across two s
   assert.equal(checkpoint.semantic_gap_ledger.length, 4);
   assert.equal(pending.semantic_presentation.question_parts.length, 4);
   assert.equal(new Set(checkpoint.semantic_gap_ledger.map((/** @type {any} */ root) => root.root_issue_id)).size, 4);
-  for (const [scope, facts, claims] of [
+  for (const [scope, facts, claims] of /** @type {Array<[string,string[],string[]]>} */ ([
     ['benefits', ['f200', 'f205'], ['c200', 'c205']],
     ['theme', ['f224', 'f229'], ['c224', 'c229']]
-  ]) {
+  ])) {
     const roots = checkpoint.semantic_gap_ledger.filter((/** @type {any} */ root) => root.scope_ref === scope);
     assert.equal(roots.length, 2);
     for (const root of roots) {
-      assert.deepEqual(root.subject_fact_ids, facts);
-      assert.deepEqual(root.source_claim_ids, claims);
+      assert.deepEqual(root.subject_fact_ids, facts.map(id => id + (root.missing_aspect === 'failure_retry' ? '_retry' : '')));
+      assert.deepEqual(root.source_claim_ids, claims.map(id => id + (root.missing_aspect === 'failure_retry' ? '_retry' : '')));
       const part = pending.semantic_presentation.question_parts.find((/** @type {any} */ part) => part.root_issue_id === root.root_issue_id);
       assert.equal(part.affected_facts.length, 2);
       assert.equal(new Set(part.affected_facts).size, 2);
@@ -149,7 +149,7 @@ test('[reliability T02/T22] formal CLI preserves four distinct gaps across two s
     }
   }
   const accepted = await json(run.run_directory, 'accepted/r000/evidence-claims.json');
-  assert.deepEqual(accepted.fact_ledger.map((/** @type {any} */ fact) => fact.fact_id).sort(), ['f200', 'f205', 'f224', 'f229']);
+  assert.deepEqual(accepted.fact_ledger.map((/** @type {any} */ fact) => fact.fact_id).sort(), ['f200', 'f205', 'f224', 'f229'].flatMap(id => [id, id + '_known', id + '_retry']).sort());
   assert.equal(accepted.scope_manifest.modules.length, 2);
   await noDelivery(run.run_directory);
   assert.deepEqual(await cli(run.run_directory), pending);
@@ -171,11 +171,11 @@ function seededShuffle(seed) {
 }
 
 test('[reliability T06/T22] seeded legal fact and nested-set permutations persist one canonical Evidence projection through the formal CLI', async (/** @type {any} */ t) => {
-  const seeds = [3, 10, 100, 20261022];
+  const seeds = [3, 4, 10, 20261022];
   const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-reliability-cli-permutation-'));
   t.after(() => rm(catalog, { recursive: true, force: true }));
   t.diagnostic(`T06 seeds=${seeds.join(',')}; samples=${seeds.length}; facts=f3,f10,f100,f229,f_scope`);
-  const expectedIds = ['f10', 'f100', 'f229', 'f3', 'f_scope'];
+  const expectedIds = ['f10', 'f100', 'f229', 'f3', 'f_scope', ...['f200', 'f205', 'f224', 'f229'].flatMap(id => [id + '_known', id + '_retry'])].sort();
   /** @type {any[]} */ const results = [];
   const inputOrders = new Set();
   const nestedClaimOrders = new Set();

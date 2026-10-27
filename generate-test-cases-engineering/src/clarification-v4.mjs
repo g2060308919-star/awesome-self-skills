@@ -1,3 +1,4 @@
+import { assertCheckpointAnswerTargetsV4 } from './clarification-targets-v4.mjs';
 import { createHash } from 'node:crypto';
 
 import checkpointSchema from '../skill/generate-test-cases/scripts/schemas/checkpoint.schema.json' with { type: 'json' };
@@ -424,6 +425,7 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
       presentation_digest: presentation ? sha256CanonicalV4(presentation) : null
     }
   };
+  assertCheckpointAnswerTargetsV4(checkpoint, { fact_ledger: submitted.facts, claims: submitted.claims ?? [] });
   const diagnostics = validateSemanticClarificationCheckpointV4(checkpoint);
   if (diagnostics.length) throw new DiagnosticErrorV4(diagnostics[0].code, diagnostics);
   return {

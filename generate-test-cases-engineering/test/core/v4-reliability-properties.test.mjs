@@ -36,7 +36,7 @@ test('T01/T03 merged roots retain complete IDs and derive distinguishable labels
   assert.deepEqual(root.subject_fact_ids, ['f200', 'f205']);
   assert.deepEqual(root.source_claim_ids, ['c200', 'c205']);
   assert.deepEqual(root.affected_facts, [
-    '权益配置：校验通过后提交表单（保存草稿）', '权益配置：校验通过后提交表单（保存并生效）'
+    '权益配置：重复提交记录数未定义（保存草稿）', '权益配置：重复提交记录数未定义（保存并生效）'
   ]);
   assert.deepEqual(e.fact_ledger, original.fact_ledger);
 });

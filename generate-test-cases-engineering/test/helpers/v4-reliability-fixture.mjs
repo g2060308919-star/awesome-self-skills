@@ -10,14 +10,16 @@ import { latestV4Contract } from '../../src/v4-contract.mjs';
 
 // Synthetic, explicitly test-only business evidence; never a real user's answer.
 /** @param {string} runId */
-export function reliabilityFixture(runId, { collision = true, schema = latestV4Contract().schema_version } = {}) {
+export function reliabilityFixture(runId, { collision = true, schema = latestV4Contract().schema_version, form = false, upgrade = false } = {}) {
   const fixture = v4GeneralQualityFixture(schema);
   const pack = fixture.artifacts.source_pack;
   const evidence = fixture.artifacts.evidence_claims;
   pack.run_instance_id = runId;
   const original = pack.sources[0];
-  const actions = ['保存草稿', '保存并生效'];
-  const statements = actions.map(action => `权益配置${action}：校验通过后提交表单`);
+  const actions = form ? ['取消', '重新打开', '名称校验'] : upgrade ? ['保存草稿', '保存并生效', '撤回配置'] : ['保存草稿', '保存并生效'];
+  const statements = form ? ['取消关闭表单', '重新打开后数据规则未定义', '名称必填']
+    : upgrade ? ['权益配置保存草稿：重复提交记录数未定义', '权益配置保存并生效：失败后输入保留规则未定义', '权益配置撤回配置：操作权限未定义']
+    : actions.map(action => `权益配置${action}：重复提交记录数未定义`);
   const content = [original.content, ...statements].join('\n\n');
   const bytes = new TextEncoder().encode(content);
   const prepared = prepareV4Source({
@@ -42,8 +44,8 @@ export function reliabilityFixture(runId, { collision = true, schema = latestV4C
   const templateFact = structuredClone(evidence.fact_ledger[0]);
   for (const [index, action] of actions.entries()) {
     const unit = structure.find((/** @type {any} */ unit) => unit.text === statements[index]);
-    const claimId = ['c200', 'c205'][index];
-    const factId = ['f200', 'f205'][index];
+    const claimId = ['c200', 'c205', 'c210'][index];
+    const factId = ['f200', 'f205', 'f210'][index];
     const locatorId = `LOC-${claimId}`;
     pack.locators.push({ ...structuredClone(pack.locators[0]), locator_id: locatorId,
       unit_id: unit.unit_id, section_id: unit.section_id, range: { start: 0, end: Array.from(unit.text).length },
@@ -53,7 +55,7 @@ export function reliabilityFixture(runId, { collision = true, schema = latestV4C
       subject_descriptor: { ...templateClaim.subject_descriptor, entity_key: action },
       semantic_value: { source_value: { action, result: '提交表单' } } });
     evidence.fact_ledger.push({ ...structuredClone(templateFact), fact_id: factId,
-      statement: collision ? '权益配置：校验通过后提交表单' : unit.text, claim_ids: [claimId] });
+      status: form && index !== 1 ? 'active' : 'ambiguous', statement: collision && !form && !upgrade ? '权益配置：重复提交记录数未定义' : unit.text, claim_ids: [claimId] });
     evidence.acceptance_role_assignments.push({ ...structuredClone(evidence.acceptance_role_assignments[0]),
       entity_id: factId, role_basis_claim_ids: [claimId] });
   }
@@ -91,6 +93,10 @@ export function reliabilityFixture(runId, { collision = true, schema = latestV4C
     acceptance_impact: { classification: 'critical', criteria: ['makes_required_result_undecidable'],
       rationale: '记录数是必要验收结果。' }
   }];
+  if (form) Object.assign(evidence.semantic_gaps[0], {
+    code: 'REOPEN_DATA', subject_fact_ids: ['f205'], source_claim_ids: ['c200', 'c205', 'c210'],
+    missing_aspect: 'reopen_data', question: '重新打开表单后是否保留未提交内容？'
+  });
   return fixture;
 }
 

@@ -1,3 +1,10 @@
+import {
+  acquisitionAcceptanceBindingV4, acquisitionBaseLocationV4, acquisitionCandidateKeyV4,
+  bindAcceptedAcquisitionV4, currentAcquisitionContextV4, pointAcquisitionContextV4,
+  readAcceptedAcquisitionV4, readAcquisitionContextV4, readAcquisitionSnapshotV4,
+  selectedAcquisitionStateV4, snapshotAcquisitionStateV4, storeAcquisitionContextV4,
+  writeAcquisitionImmutableV4
+} from './source-acquisition-context-v4.mjs';
 import { constants } from 'node:fs';
 import { open, readdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
@@ -71,7 +78,7 @@ export function sourceAcquisitionBasePathV4(runDirectory, revision) {
 async function acquiredBase(runDirectory, state) {
   if (!['4.3.2', '4.3.3'].includes(state.schema_version)) return null;
   const stored = await readJsonIfPresent(
-    runDirectory, sourceAcquisitionBasePathV4(runDirectory, state.committed_revision)
+    runDirectory, acquisitionBaseLocationV4(runDirectory, state)
   );
   const base = stored?.value;
   if (!base || stored.digest !== state.accepted_source_pack_digest.slice(7)
@@ -85,6 +92,12 @@ async function acquiredBase(runDirectory, state) {
         || source.capture_digest !== receipt.capture_digest
         || source.semantic_digest !== receipt.semantic_digest;
     })) throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
+  if (state.candidate_context_id !== undefined) {
+    const context = await readAcquisitionContextV4(runDirectory, state.candidate_context_id);
+    if (!context || context.run_id !== state.run_id || context.candidate_revision !== state.committed_revision
+      || acquisitionCandidateKeyV4(base) !== context.candidate_id
+      || context.state_ref !== hash(state)) throw new TypeError('SOURCE_ACQUISITION_CONTEXT_INVALID');
+  }
   return base;
 }
 
@@ -337,6 +350,12 @@ function validateStateShape(state) {
     ? [...legacyKeys.slice(0, -1), 'collection_sessions', 'summary',
       ...(['4.3.2', '4.3.3'].includes(contract.schema_version) ? ['base_source_pack_digest'] : []), 'state_digest']
     : legacyKeys;
+  if (state.candidate_context_id !== undefined) {
+    keys.push('candidate_context_id');
+    if (state.schema_version !== '4.3.3' || !/^[0-9a-f]{64}$/u.test(state.candidate_context_id)) {
+      throw new TypeError('SOURCE_ACQUISITION_CONTEXT_INVALID');
+    }
+  }
   if (!only(state, keys) || !contract
     || state.registry_version !== sourceRuntimeRegistryVersionV4(state.schema_version)
     || typeof state.run_id !== 'string'
@@ -847,7 +866,7 @@ async function acquireCandidate(state, candidate, runDirectory) {
   };
   const acquired = { ...body, state_digest: hash(body) };
   if (['4.3.2', '4.3.3'].includes(state.schema_version)) {
-    const basePath = sourceAcquisitionBasePathV4(runDirectory, state.committed_revision);
+    const basePath = acquisitionBaseLocationV4(runDirectory, acquired);
     const previous = await readJsonIfPresent(runDirectory, basePath);
     if (previous && previous.digest !== digest(candidate)) {
       throw new TypeError('SOURCE_ACQUISITION_BASE_CONFLICT');
@@ -858,6 +877,7 @@ async function acquireCandidate(state, candidate, runDirectory) {
       throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
     }
   }
+  await recordCandidateAcquisitionV4(runDirectory, acquired);
   await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), acquired);
   // Raw resolver/upload bytes remain staging-only and are removed immediately
   // after the safe digest receipt is durably committed.
@@ -874,10 +894,12 @@ async function acquireCandidate(state, candidate, runDirectory) {
 export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId) {
   const contract = v4ContractForSchema(sourcePack.schema_version);
   if (!contract) return { kind: 'rejected', code: 'SOURCE_ACQUISITION_CONTRACT_UNSUPPORTED' };
+  if (sourcePack.schema_version === '4.3.3') await prepareSourceAcquisitionCandidateV4(runDirectory, sourcePack);
   let existing = await loadState(runDirectory);
   if (!existing && contract.candidate && sourcePack.delivery_intent === 'case_document') {
     existing = await bindV4PrdCollectionObservation(runDirectory, sourcePack);
   }
+  const acquisitionContext = sourcePack.schema_version === '4.3.3' ? await currentAcquisitionContextV4(runDirectory) : null;
   const revision = sourcePack.source_revision;
   const durableCheckpointText = await readTextIfPresent(
     runDirectory, path.join(runDirectory, 'checkpoint.json')
@@ -906,7 +928,8 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
     const currentCheckpoint = await readTextIfPresent(
       runDirectory, path.join(runDirectory, 'checkpoint.json')
     );
-    if (currentCheckpoint !== (existing.checkpoint_created ? null : existing.checkpoint_text)) {
+    if (currentCheckpoint !== (existing.checkpoint_created ? null : existing.checkpoint_text)
+      && !(existing.checkpoint_created && currentCheckpoint === existing.checkpoint_text)) {
       throw new TypeError('ARTIFACT_RESUME_STALE');
     }
     if (!acquiredCandidateMatchesBase(base, sourcePack)) {
@@ -948,6 +971,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
       }
     ];
     const body = {
+      ...(acquisitionContext ? { candidate_context_id: acquisitionContext.candidate_id } : {}),
       schema_version: contract.schema_version, compiler_version: contract.compiler_version,
       registry_version: sourceRuntimeRegistryVersionV4(sourcePack.schema_version),
       run_id: runId, committed_revision: revision, status: 'pending', checkpoint_text: checkpointText,
@@ -969,6 +993,7 @@ export async function advanceSourceAcquisitionV4(runDirectory, sourcePack, runId
     if (checkpointCreated) {
       await atomicWriteText(runDirectory, path.join(runDirectory, 'checkpoint.json'), checkpointText);
     }
+    await recordCandidateAcquisitionV4(runDirectory, state);
     await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), state);
     return { kind: 'need_artifact', reply: stopReply(state), discard_candidate: true };
   }
@@ -1031,16 +1056,17 @@ export async function replaySourceAcquisitionStopV4(runDirectory, runId) {
 }
 
 /** Load compiler-private byte/binding state for all later deterministic replays. */
-/** @param {string} runDirectory @param {any} sourcePack @param {{read_only?:boolean}} [options] */
-export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack, { read_only = false } = {}) {
-  const state = await loadState(runDirectory);
+/** @param {string} runDirectory @param {any} sourcePack @param {{read_only?:boolean,state?:any}} [options] */
+export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack, { read_only = false, state: suppliedState } = {}) {
+  const selected = suppliedState ?? await selectedAcquisitionStateV4(runDirectory, sourcePack);
+  const state = selected ? validateStateShape(selected).state : null;
   if (!state) return null;
   if (state.status === 'collected') {
     if (state.run_id !== sourcePack?.run_instance_id
       || state.committed_revision > sourcePack?.source_revision) {
       throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
     }
-    await loadV4SourceReadingSummary(runDirectory, sourcePack);
+    await loadV4SourceReadingSummary(runDirectory, sourcePack, state);
     if (state.committed_revision === sourcePack.source_revision
       && state.accepted_source_pack_digest !== hash(sourcePack)) {
       throw new TypeError('SOURCE_ACQUISITION_STATE_INVALID');
@@ -1048,7 +1074,7 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     return {
       verified_source_receipts: [], verified_acquisition_records: [],
       verified_collection_receipts: ['4.3.2', '4.3.3'].includes(sourcePack.schema_version)
-        ? await loadV4CollectionSourceReceipts(runDirectory, sourcePack) : [],
+        ? await loadV4CollectionSourceReceipts(runDirectory, sourcePack, state) : [],
       source_reading_summary: structuredClone(state.summary)
     };
   }
@@ -1111,7 +1137,180 @@ export async function loadSourceAcquisitionCompilerStateV4(runDirectory, sourceP
     verified_collection_receipts: [],
     ...(isCandidateV4SchemaVersion(state.schema_version)
       ? { source_reading_summary: ['4.3.2', '4.3.3'].includes(state.schema_version)
-        ? await loadV4SourceReadingSummary(runDirectory, sourcePack)
+        ? await loadV4SourceReadingSummary(runDirectory, sourcePack, state)
         : structuredClone(state.summary) } : {})
   };
+}
+
+/** Snapshot state BEFORE replacing its projection. If the process dies between
+ * these writes the context record is sufficient to replay the exact candidate.
+ * @param {string} runDirectory @param {any} state */
+async function recordCandidateAcquisitionV4(runDirectory, state) {
+  if (state.schema_version !== '4.3.3') return;
+  const context = await currentAcquisitionContextV4(runDirectory);
+  if (!context) return; // old acquisition-only integrations retain their protocol
+  if (state.candidate_context_id !== context.candidate_id) throw new TypeError('SOURCE_ACQUISITION_CONTEXT_INVALID');
+  validateStateShape(state);
+  await storeAcquisitionContextV4(runDirectory, { ...context,
+    state_ref: await snapshotAcquisitionStateV4(runDirectory, state), phase: state.status });
+}
+
+/** Establish an accepted material baseline before any candidate state changes.
+ * All callers hold the existing run lock. No unsafe Source content is journaled.
+ * @param {string} runDirectory @param {any} sourcePack */
+export async function prepareSourceAcquisitionCandidateV4(runDirectory, sourcePack) {
+  if (sourcePack.schema_version !== '4.3.3') return;
+  const checkpoint = (await readJsonIfPresent(runDirectory, path.join(runDirectory, 'checkpoint.json')))?.value;
+  const binding = checkpoint && checkpoint.phase !== 'source_acquisition'
+    ? await acquisitionAcceptanceBindingV4(runDirectory, checkpoint.revision) : null;
+  if (binding && sourcePack.source_revision <= binding.revision) return;
+  const candidateId = acquisitionCandidateKeyV4(sourcePack);
+  const current = await currentAcquisitionContextV4(runDirectory);
+  let context = await readAcquisitionContextV4(runDirectory, candidateId);
+  if (context) {
+    if (context.run_id !== sourcePack.run_instance_id
+      || canonicalStringify(context.base_binding) !== canonicalStringify(binding)) {
+      throw new TypeError('SOURCE_ACQUISITION_CONTEXT_STALE');
+    }
+    await pointAcquisitionContextV4(runDirectory, candidateId);
+    if (context.state_ref) {
+      const state = await readAcquisitionSnapshotV4(runDirectory, context.state_ref);
+      validateStateShape(state);
+      if (state.status === 'acquired') await loadSourceAcquisitionCompilerStateV4(
+        runDirectory, await acquiredBase(runDirectory, state), { state, read_only: true });
+      // Keep already-staged raw bytes for the same pending candidate.
+      await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), state);
+    }
+    return;
+  }
+  let baseline = null;
+  if (binding) {
+    let accepted = await readAcceptedAcquisitionV4(runDirectory, binding.revision);
+    if (!accepted) {
+      const prior = (await readJsonIfPresent(runDirectory, path.join(runDirectory, 'accepted',
+        `r${String(binding.revision).padStart(3, '0')}`, 'source-pack.json')))?.value;
+      let state = await loadState(runDirectory);
+      try { await loadSourceAcquisitionCompilerStateV4(runDirectory, prior, { state, read_only: true }); }
+      catch { state = await reconstructLegacyAcquisitionV4(runDirectory, prior, state); }
+      if (!state) throw new TypeError('SOURCE_ACQUISITION_BASE_UNPROVEN');
+      accepted = await bindAcceptedAcquisitionV4(runDirectory, prior, state);
+    }
+    baseline = accepted.state;
+    await loadSourceAcquisitionCompilerStateV4(runDirectory, accepted.source, { state: baseline, read_only: true });
+  } else {
+    baseline = await loadState(runDirectory);
+    if (current && current.candidate_id !== candidateId) throw new TypeError('SOURCE_ACQUISITION_CONTEXT_STALE');
+  }
+  const baseRef = baseline ? await snapshotAcquisitionStateV4(runDirectory, baseline) : null;
+  context = await storeAcquisitionContextV4(runDirectory, {
+    format_version: '1.0.0', schema_version: sourcePack.schema_version, compiler_version: '0.8.3',
+    registry_version: sourceRuntimeRegistryVersionV4(sourcePack.schema_version), run_id: sourcePack.run_instance_id,
+    candidate_id: candidateId, candidate_revision: sourcePack.source_revision,
+    operation: binding === null ? 'initial' : (sourcePack.artifact_repairs ?? []).length
+      > ((await readAcceptedAcquisitionV4(runDirectory, binding.revision))?.source.artifact_repairs ?? []).length
+      ? 'evidence_repair' : 'answer_append',
+    submitted_digest: hash(sourcePack), base_binding: binding, base_state_ref: baseRef,
+    state_ref: baseRef, phase: 'prepared', transaction_id: null
+  });
+  await pointAcquisitionContextV4(runDirectory, candidateId);
+  if (baseline) await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), baseline);
+}
+
+/** Recover only a proven legacy prefix: actual accepted events, immutable base,
+ * original request cycles and real acquisition receipts must all agree uniquely.
+ * No uploaded bytes or semantic text can manufacture a receipt here.
+ * @param {string} runDirectory @param {any} prior @param {any} state */
+async function reconstructLegacyAcquisitionV4(runDirectory, prior, state) {
+  if (!prior || !state || state.candidate_context_id !== undefined || state.status !== 'acquired'
+    || state.run_id !== prior.run_instance_id || state.committed_revision !== prior.source_revision + 1
+    || state.base_event_count !== prior.artifact_events.length
+    || canonicalStringify(state.events.slice(0, state.base_event_count)) !== canonicalStringify(prior.artifact_events)
+    || state.checkpoint_text !== await readTextIfPresent(runDirectory, path.join(runDirectory, 'checkpoint.json'))) {
+    throw new TypeError('SOURCE_ACQUISITION_BASE_UNPROVEN');
+  }
+  await acquiredBase(runDirectory, state); // contaminated candidate must itself be intact
+  const matches = [];
+  for (const cycle of state.request_history.filter((/** @type {any} */ item) => item.committed_revision <= prior.source_revision)) {
+    const base = (await readJsonIfPresent(runDirectory, sourceAcquisitionBasePathV4(runDirectory, cycle.committed_revision)))?.value;
+    if (!base || base.run_instance_id !== prior.run_instance_id
+      || base.source_revision !== cycle.committed_revision
+      || canonicalStringify(base.artifact_events) !== canonicalStringify(prior.artifact_events)) continue;
+    const candidate = { ...structuredClone(prior), source_revision: cycle.committed_revision };
+    // Repairs/clarifications from accepted history are allowed only by the
+    // existing material loader; validate the base's immutable material below.
+    candidate.artifact_repairs = base.artifact_repairs;
+    candidate.clarification_events = base.clarification_events;
+    if (!acquiredCandidateMatchesBase(base, candidate)) continue;
+    const requests = discoverRequests(base, { run_id: prior.run_instance_id,
+      committed_revision: cycle.committed_revision, checkpoint_bytes: encoder.encode(cycle.checkpoint_text) });
+    if (canonicalStringify(requests.requests) !== canonicalStringify(cycle.artifact_requests)) continue;
+    const eventIds = new Set(prior.artifact_events.map((/** @type {any} */ event) => event.event_id));
+    const receipts = state.source_receipts.map((/** @type {any} */ receipt) => {
+      const source = base.sources.find((/** @type {any} */ item) => item.source_id === receipt.source_id);
+      if (!source || receipt.source_artifact_digest !== sourceAcquisitionIdentityDigestV4(source)
+        || receipt.capture_digest !== source.capture_digest) throw new TypeError('SOURCE_ACQUISITION_BASE_UNPROVEN');
+      return { ...receipt, semantic_digest: source.semantic_digest,
+        artifact_event_ids: receipt.artifact_event_ids.filter((/** @type {string} */ id) => eventIds.has(id)) };
+    });
+    const body = { ...stateBody(state), committed_revision: cycle.committed_revision,
+      checkpoint_text: cycle.checkpoint_text, checkpoint_created: JSON.parse(cycle.checkpoint_text).phase === 'source_acquisition',
+      artifact_requests: cycle.artifact_requests, bindings: requests.bindings,
+      resume_ref: createArtifactResumeRef({ run_id: prior.run_instance_id, committed_revision: cycle.committed_revision,
+        checkpoint_bytes: encoder.encode(cycle.checkpoint_text), artifact_requests: cycle.artifact_requests }),
+      request_history: state.request_history.filter((/** @type {any} */ item) => item.committed_revision <= cycle.committed_revision),
+      base_event_count: prior.artifact_events.length - cycle.artifact_requests.length,
+      events: structuredClone(prior.artifact_events),
+      acquisitions: state.acquisitions.filter((/** @type {any} */ item) => eventIds.has(item.event.event_id)),
+      source_receipts: receipts, base_source_pack_digest: hash(base), accepted_source_pack_digest: hash(base),
+      summary: reboundV4SourceReadingSummary(state.collection_sessions[0], base) };
+    const restored = { ...body, state_digest: hash(body) };
+    await loadSourceAcquisitionCompilerStateV4(runDirectory, prior, { state: restored, read_only: true });
+    matches.push(restored);
+  }
+  if (matches.length !== 1) throw new TypeError('SOURCE_ACQUISITION_BASE_UNPROVEN');
+  // Preserve the rejected legacy receipt and its complete request history.
+  await snapshotAcquisitionStateV4(runDirectory, state);
+  return matches[0];
+}
+
+/** Called after existing revision recovery, and after each runner outcome. The
+ * original transaction is always authoritative; never roll back a pending or
+ * accepted semantic transaction because the material projection lagged.
+ * @param {string} runDirectory @param {any|null} [reply] */
+export async function reconcileSourceAcquisitionV4(runDirectory, reply = null) {
+  const context = await currentAcquisitionContextV4(runDirectory);
+  if (!context) return;
+  // Validate the actual projection before replacing it; corruption is not a
+  // reason to silently discard the observed state.
+  const projected = await loadState(runDirectory);
+  if (projected?.status === 'acquired') await loadSourceAcquisitionCompilerStateV4(
+    runDirectory, await acquiredBase(runDirectory, projected), { state: projected, read_only: true });
+  const pending = await readJsonIfPresent(runDirectory, path.join(runDirectory, 'staging', 'pending-revision.json'));
+  if (pending) return;
+  const checkpoint = (await readJsonIfPresent(runDirectory, path.join(runDirectory, 'checkpoint.json')))?.value;
+  if (checkpoint?.run_id === context.run_id && checkpoint.revision === context.candidate_revision
+    && checkpoint.phase !== 'source_acquisition') {
+    const source = (await readJsonIfPresent(runDirectory, path.join(runDirectory, 'accepted',
+      `r${String(checkpoint.revision).padStart(3, '0')}`, 'source-pack.json')))?.value;
+    if (source && acquisitionCandidateKeyV4(source) === context.candidate_id) {
+      const state = context.state_ref ? await readAcquisitionSnapshotV4(runDirectory, context.state_ref)
+        : await loadState(runDirectory);
+      if (!state) throw new TypeError('SOURCE_ACQUISITION_BASE_UNPROVEN');
+      await loadSourceAcquisitionCompilerStateV4(runDirectory, source, { state, read_only: true });
+      const accepted = await bindAcceptedAcquisitionV4(runDirectory, source, state);
+      await storeAcquisitionContextV4(runDirectory, { ...context, state_ref: accepted.state_ref,
+        phase: 'accepted', transaction_id: accepted.binding.transaction_id });
+      await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), state);
+      return;
+    }
+  }
+  if (reply && reply.status !== 'need_artifact' && context.phase !== 'accepted'
+    && context.base_binding && context.base_state_ref) {
+    await storeAcquisitionContextV4(runDirectory, { ...context, phase: 'rejected' });
+    const base = await readAcquisitionSnapshotV4(runDirectory, context.base_state_ref);
+    const accepted = await readAcceptedAcquisitionV4(runDirectory, context.base_binding.revision);
+    if (!accepted) throw new TypeError('SOURCE_ACQUISITION_BASE_UNPROVEN');
+    await loadSourceAcquisitionCompilerStateV4(runDirectory, accepted.source, { state: base, read_only: true });
+    await atomicWriteJson(runDirectory, sourceAcquisitionStatePathV4(runDirectory), base);
+  }
 }

@@ -22,7 +22,10 @@ export function twoModuleReliabilityFixture(runId, adapter) {
   ];
   const actions = ['保存草稿', '保存并生效'];
   const paragraphs = [scopeText, ...modules.flatMap(module => [
-    module.label, ...actions.map(action => `${module.label}${action}：校验通过后提交表单。`),
+    module.label, ...actions.flatMap(action => [
+      `${module.label}${action}：校验通过后提交表单。`,
+      `${module.label}${action}：重复提交记录数未定义。`,
+      `${module.label}${action}：失败后保留输入和重试规则未定义。`]),
     `${module.label}的提交中重复点击记录数，以及提交失败是否保留输入并允许重试，均待确认。`
   ])];
   const bytes = new TextEncoder().encode(paragraphs.join('\n\n'));
@@ -65,19 +68,26 @@ export function twoModuleReliabilityFixture(runId, adapter) {
     evidence.claims.push(claim(`c_${module.id}_unknown`,
       `${module.label}的提交中重复点击记录数，以及提交失败是否保留输入并允许重试，均待确认。`, module.id, 'unknown_save_rules'));
     for (const [index, action] of actions.entries()) {
-      evidence.claims.push(claim(module.claims[index], `${module.label}${action}：校验通过后提交表单。`, module.id, action));
-      evidence.fact_ledger.push({ fact_id: module.facts[index], statement: `${module.label}：校验通过后提交表单`,
-        status: 'active', acceptance_role: 'primary_acceptance', claim_ids: [module.claims[index]],
-        module_refs: [module.id], field_path: '/configuration' });
+      for (const [suffix, statement, status] of [
+        ['_known', '校验通过后提交表单', 'active'],
+        ['', '重复提交记录数未定义', 'ambiguous'],
+        ['_retry', '失败后保留输入和重试规则未定义', 'ambiguous']
+      ]) {
+        const claimId = module.claims[index] + suffix;
+        evidence.claims.push(claim(claimId, `${module.label}${action}：${statement}。`, module.id, `${action}${statement}`));
+        evidence.fact_ledger.push({ fact_id: module.facts[index] + suffix, statement: `${module.label}：${statement}`,
+          status, acceptance_role: 'primary_acceptance', claim_ids: [claimId],
+          module_refs: [module.id], field_path: '/configuration' });
+      }
     }
     for (const aspect of ['duplicate_submission', 'failure_retry']) evidence.semantic_gaps.push({
       category: 'semantic_gap', code: aspect === 'duplicate_submission' ? 'REPEATED_SUBMISSION' : 'FAILED_SAVE',
-      subject_fact_ids: module.facts, missing_aspect: aspect, scope_ref: module.id,
+      subject_fact_ids: module.facts.map(id => id + (aspect === 'failure_retry' ? '_retry' : '')), missing_aspect: aspect, scope_ref: module.id,
       question: aspect === 'duplicate_submission' ? `${module.label}提交中重复点击应产生几条记录？`
         : `${module.label}提交失败是否保留输入并允许重试？`,
       why_needed: '来源明确将该规则保留为待确认。', decision_impact: '答案决定记录数或失败后的可观察结果。',
       unresolved_outcome: '该业务预期仍不可确定。', answer_options: ['是', '否'], risk_level: 'high',
-      source_claim_ids: module.claims, discovery_phase: 'pre_case', affected_test_point_ids: [],
+      source_claim_ids: module.claims.map(id => id + (aspect === 'failure_retry' ? '_retry' : '')), discovery_phase: 'pre_case', affected_test_point_ids: [],
       acceptance_impact: { classification: 'critical', criteria: ['makes_required_result_undecidable'],
         rationale: '缺少最终规则时无法确定必要验收结果。' }
     });
@@ -129,10 +139,10 @@ export function collectionOrderReliabilityFixture(runId, adapter) {
   const evidence = fixture.evidence_claims;
   const names = new Map([['f200', 'f3'], ['f205', 'f10'], ['f224', 'f100'], ['f229', 'f229']]);
   for (const fact of evidence.fact_ledger) {
-    fact.fact_id = names.get(fact.fact_id);
+    fact.fact_id = names.get(fact.fact_id) ?? fact.fact_id;
     const parent = evidence.claims.find((/** @type {any} */ claim) => claim.claim_id === fact.claim_ids[0]);
     const locator = pack.locators.find((/** @type {any} */ locator) => locator.locator_id === parent.source_locator_ids[0]);
-    const excerpt = '校验通过';
+    const excerpt = locator.excerpt.includes('校验通过') ? '校验通过' : '未定义';
     const start = Array.from(locator.excerpt.slice(0, locator.excerpt.indexOf(excerpt))).length;
     const conditionLocator = {
       ...structuredClone(locator), locator_id: `LOC-zz-condition-${parent.claim_id}`,
@@ -149,7 +159,7 @@ export function collectionOrderReliabilityFixture(runId, adapter) {
     fact.claim_ids.push(conditionClaim.claim_id);
   }
   for (const gap of evidence.semantic_gaps) {
-    gap.subject_fact_ids = gap.subject_fact_ids.map((/** @type {string} */ id) => names.get(id));
+    gap.subject_fact_ids = gap.subject_fact_ids.map((/** @type {string} */ id) => names.get(id) ?? id);
     gap.source_claim_ids = evidence.fact_ledger.filter((/** @type {any} */ fact) => gap.subject_fact_ids.includes(fact.fact_id))
       .flatMap((/** @type {any} */ fact) => fact.claim_ids);
   }

@@ -1,3 +1,4 @@
+import { acquisitionBaseLocationV4, selectedAcquisitionStateV4 } from './source-acquisition-context-v4.mjs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
@@ -380,9 +381,11 @@ export async function bindV4PrdCollectionObservation(
 /** Read only a digest-bound summary; it cannot introduce business semantics. */
 export async function loadV4SourceReadingSummary(
   /** @type {string} */ runDirectory,
-  /** @type {Record<string,any>} */ sourcePack
+  /** @type {Record<string,any>} */ sourcePack,
+  /** @type {any} */ selectedState = null
 ) {
-  const stored = await readJsonIfPresent(runDirectory, statePath(runDirectory));
+  const selected = selectedState ?? await selectedAcquisitionStateV4(runDirectory, sourcePack);
+  const stored = selected ? { value: selected } : null;
   if (!stored) throw new TypeError('SOURCE_READING_BINDING_INVALID');
   const state = stored.value;
   if (state.status === 'collected') {
@@ -414,8 +417,7 @@ export async function loadV4SourceReadingSummary(
     return structuredClone(state.summary);
   }
   const baseStored = state.status === 'acquired' && ['4.3.2', '4.3.3'].includes(state.schema_version)
-    ? await readJsonIfPresent(runDirectory, path.join(runDirectory, 'derived',
-      `source-acquisition-base-r${String(state.committed_revision).padStart(3, '0')}.json`))
+    ? await readJsonIfPresent(runDirectory, acquisitionBaseLocationV4(runDirectory, state))
     : null;
   const base = baseStored?.value;
   if (!['4.3.2', '4.3.3'].includes(sourcePack.schema_version) || state.status !== 'acquired'
@@ -465,9 +467,10 @@ export async function loadV4SourceReadingSummary(
 /** Collection receipts are produced only from a durable, digest-bound
  * technical observation and its accepted Source Pack. They never reconstruct
  * raw bytes from normalized content. */
-/** @param {string} runDirectory @param {any} sourcePack */
-export async function loadV4CollectionSourceReceipts(runDirectory, sourcePack) {
-  const stored = await readJsonIfPresent(runDirectory, statePath(runDirectory));
+/** @param {string} runDirectory @param {any} sourcePack @param {any} [selectedState] */
+export async function loadV4CollectionSourceReceipts(runDirectory, sourcePack, selectedState = null) {
+  const selected = selectedState ?? await selectedAcquisitionStateV4(runDirectory, sourcePack);
+  const stored = selected ? { value: selected } : null;
   if (!stored || stored.value.status !== 'collected'
     || stored.value.run_id !== sourcePack.run_instance_id
     || stored.value.committed_revision > sourcePack.source_revision
