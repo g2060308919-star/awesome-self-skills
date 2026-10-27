@@ -1,11 +1,11 @@
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent, validateRun } from "../scripts/run-artifacts.mjs";
-import { markAsHistoricalV2 } from "./test-helpers.mjs";
+import { generateReport, initializeRun, validateRun } from "../scripts/run-artifacts.mjs";
 
 const checkpointId = "SCREEN/s/o";
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -20,8 +20,7 @@ async function createRun(root) {
       steps: [{ step_id: "s", action: "查看页面", expected: [{ oracle_id: "o", text: "显示目标状态" }] }]
     }]
   }));
-  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-  await markAsHistoricalV2(run.runRoot);
+  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["SCREEN"] });
   return run;
 }

@@ -10,6 +10,8 @@ import { assertNoSecrets, sanitizeUrl } from "./lib/redaction.mjs";
 import { TargetLock } from "./lib/target-lock.mjs";
 import { MockScenarioError } from "./lib/mock-scenario.mjs";
 import { loadMockProxyBinding } from "./lib/mock-runtime.mjs";
+import { loadProxyAuthorization } from "./lib/proxy-authorization.mjs";
+import { loadBrowserProxyBinding } from "./lib/proxy-browser-binding.mjs";
 
 export const BODY_LIMIT_BYTES = 5 * 1024 * 1024;
 
@@ -90,7 +92,7 @@ export function validateProxyConfig(config) {
   }
   let endpoint;
   try { endpoint = new URL(config.endpoint); } catch { fail("RULE_CONTRACT", "CDP endpoint URL 无效"); }
-  if (!isLoopback(endpoint.hostname)) fail("ENDPOINT_REJECTED", "V1 只连接本机 loopback CDP endpoint");
+  if (!isLoopback(endpoint.hostname)) fail("ENDPOINT_REJECTED", "只连接已核验归属的本机 loopback CDP endpoint");
   if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash || endpoint.pathname !== "/") {
     fail("ENDPOINT_REJECTED", "CDP endpoint 必须是无认证信息、查询、片段或额外路径的本机 origin");
   }
@@ -195,6 +197,27 @@ function objectHeaders(headers = {}) {
   return Object.entries(headers).map(([name, value]) => ({ name, value: String(value) }));
 }
 
+export async function probeMockChannels(client, targetId, sessionId, coverage) {
+  if (!coverage || coverage.target_id !== targetId) fail("MOCK_CHANNEL_UNVERIFIED", "Mock 启动缺少同 Target 请求通道核验");
+  const [targets, page] = await Promise.all([
+    client.command("Target.getTargets"), client.command("Page.getFrameTree", {}, sessionId)
+  ]);
+  const own = targets.targetInfos?.find(target => target.targetId === targetId && target.type === "page");
+  if (!own || !page.frameTree?.frame?.id) fail("MOCK_CHANNEL_UNVERIFIED", "无法只读核验 Mock Target 与页面框架");
+  if (page.frameTree.childFrames?.length) fail("MOCK_CHANNEL_UNVERIFIED", "存在未覆盖子框架，拒绝模拟场景");
+  const unsupported = targets.targetInfos.filter(target => {
+    if (!["worker", "service_worker", "shared_worker", "iframe"].includes(target.type)) return false;
+    if (target.browserContextId && own.browserContextId && target.browserContextId !== own.browserContextId) return false;
+    const parent = target.openerId ?? target.parentTargetId;
+    if (parent && parent !== targetId && targets.targetInfos.some(item => item.targetId === parent && item.type === "page")) return false;
+    // CDP does not always expose a service worker's page ownership. Unknown
+    // association is not evidence that this page's business traffic is covered.
+    return true;
+  });
+  if (unsupported.length) fail("MOCK_CHANNEL_UNVERIFIED", "存在关联或归属无法证明的 worker/子 Target；拒绝模拟场景，未接管其他目标");
+  return { target_id: targetId, frame_id: page.frameTree.frame.id, checked: true };
+}
+
 export class ProxyListener {
   constructor({
     endpoint,
@@ -206,9 +229,14 @@ export class ProxyListener {
     statusPath,
     clientFactory = CdpClient.connect,
     diagnostic = () => {},
+    stateSink = async () => {},
     mockScenarioEngine = null,
     mockProxyCycleId = null,
     mockReceiptSink = async () => {},
+    mockAssertAuthorized = async () => {},
+    ordinaryAssertAuthorized = async () => {},
+    browserAssertBound = async () => {},
+    mockChannelCoverage = null,
     prepareOwnedTargetForCleanup = null,
     verifyOwnedTargetForCleanup = null
   }) {
@@ -219,9 +247,17 @@ export class ProxyListener {
     this.statusPath = statusPath;
     this.clientFactory = clientFactory;
     this.diagnostic = diagnostic;
+    this.stateSink = stateSink;
     this.mockScenarioEngine = mockScenarioEngine;
     this.mockProxyCycleId = mockProxyCycleId;
     this.mockReceiptSink = mockReceiptSink;
+    this.mockAssertAuthorized = mockAssertAuthorized;
+    this.ordinaryAssertAuthorized = ordinaryAssertAuthorized;
+    this.browserAssertBound = browserAssertBound;
+    this.mockChannelCoverage = mockChannelCoverage;
+    this.mockLedgerUncertain = false;
+    this.requestQueue = Promise.resolve();
+    this.acceptingMockRequests = true;
     this.prepareOwnedTargetForCleanup = prepareOwnedTargetForCleanup;
     this.verifyOwnedTargetForCleanup = verifyOwnedTargetForCleanup ?? (async () => {
       const result = await this.client.command("Target.getTargetInfo", { targetId: this.targetId });
@@ -234,6 +270,9 @@ export class ProxyListener {
     this.started = false;
     this.state = "configured";
     this.stopping = null;
+    this.transportLost = false;
+    this.isolation = mockScenarioEngine ? "not_started" : "not_applicable";
+    this.cleanupFacts = { page_isolated: false, interception_disabled: false, detached: false, lock_released: false, real_response_restored: null };
     this.counts = {
       requestMatched: 0, responseMatched: 0, continued: 0, fulfilled: 0, ruleErrors: 0,
       mockFulfilled: 0, mockBlocked: 0, mockPassthrough: 0
@@ -252,6 +291,8 @@ export class ProxyListener {
       ownerToken: this.lock.ownerToken,
       lockRoot: this.lock.root,
       state: this.state,
+      isolation: this.isolation,
+      cleanup: { ...this.cleanupFacts },
       counts: { ...this.counts },
       recentErrors: [...this.recentErrors]
     };
@@ -259,8 +300,11 @@ export class ProxyListener {
 
   async start() {
     if (this.started) return this.status();
+    await this.browserAssertBound();
+    if (this.rules.length) await this.ordinaryAssertAuthorized();
     await this.lock.acquire();
     this.state = "target_locked";
+    this.acceptingMockRequests = true;
     await this.#persist();
     try {
       this.client = await this.clientFactory(this.browserWebSocketUrl);
@@ -269,17 +313,32 @@ export class ProxyListener {
       this.state = "attached";
       await this.#persist();
       await this.client.command("Network.enable", {}, this.sessionId);
+      if (this.mockScenarioEngine) {
+        await this.mockAssertAuthorized();
+        await probeMockChannels(this.client, this.targetId, this.sessionId, this.mockChannelCoverage);
+      }
       // Register every lifecycle and pause handler before Fetch.enable. CDP may
       // emit requestPaused as soon as interception is enabled; registering
       // afterwards leaves a race where a business request is paused without an
       // owner and can neither be failed closed nor fulfilled deterministically.
-      this.unsubscribers.push(this.client.on(this.sessionId, "Fetch.requestPaused", event => this.#handlePaused(event)));
+      this.unsubscribers.push(this.client.on(this.sessionId, "Fetch.requestPaused", event => this.#queuePaused(event)));
       this.unsubscribers.push(this.client.on("", "Target.detachedFromTarget", event => {
-        if (event.sessionId === this.sessionId || event.targetId === this.targetId) this.stop().catch(() => {});
+        if ((event.sessionId === this.sessionId || event.targetId === this.targetId) && this.state === "active") {
+          this.transportLost = true;
+          if (this.mockScenarioEngine) this.isolation = "isolation_unknown";
+          this.stop().catch(() => {});
+        }
       }));
-      this.unsubscribers.push(this.client.on(this.sessionId, "Inspector.detached", () => this.stop().catch(() => {})));
+      this.unsubscribers.push(this.client.on(this.sessionId, "Inspector.detached", () => {
+        if (this.state !== "active") return;
+        this.transportLost = true;
+        if (this.mockScenarioEngine) this.isolation = "isolation_unknown";
+        this.stop().catch(() => {});
+      }));
       this.unsubscribers.push(this.client.on("", "__transport_closed__", event => {
-        this.#recordError("CDP_DISCONNECTED", event.reason ?? "CDP transport closed");
+        this.transportLost = true;
+        if (this.mockScenarioEngine) this.isolation = "isolation_unknown";
+        this.#recordError("CDP_DISCONNECTED", this.mockScenarioEngine ? "CDP 断连，隔离未知；停止业务操作" : (event.reason ?? "CDP transport closed"));
         this.stop().catch(() => {});
       }));
       const ordinaryPatterns = this.rules.flatMap(rule => ["Request", "Response"].map(requestStage => ({
@@ -289,17 +348,24 @@ export class ProxyListener {
       const patterns = [...ordinaryPatterns, ...(this.mockScenarioEngine?.requestPatterns() ?? [])].filter((pattern, index, all) =>
         all.findIndex(candidate => candidate.urlPattern === pattern.urlPattern && candidate.requestStage === pattern.requestStage) === index
       );
+      this.fetchEnableDispatched = true;
       await this.client.command("Fetch.enable", {
         patterns
       }, this.sessionId);
       this.state = "fetch_enabled";
       this.started = true;
       this.state = "active";
+      if (this.mockScenarioEngine) this.isolation = "intercepting";
       await this.#persist();
       return this.status();
     } catch (error) {
       this.#recordError(error.code ?? "PROXY_START_FAILED", error.message);
       this.state = "degraded";
+      if (this.mockScenarioEngine && this.fetchEnableDispatched) {
+        this.acceptingMockRequests = false;
+        await this.stop().catch(() => {});
+        throw error;
+      }
       if (this.client && this.sessionId) {
         await this.client.command("Fetch.disable", {}, this.sessionId).catch(() => {});
         await this.client.command("Target.detachFromTarget", { sessionId: this.sessionId }).catch(() => {});
@@ -315,13 +381,54 @@ export class ProxyListener {
     }
   }
 
+  async assertReadyForBusiness() {
+    if (this.transportLost || !this.started || this.state !== "active") fail("MOCK_ISOLATION_UNKNOWN", "当前代理隔离不可证实，停止业务操作");
+    await this.browserAssertBound();
+    if (this.rules.length) await this.ordinaryAssertAuthorized();
+    if (this.mockScenarioEngine) {
+      if (this.mockLedgerUncertain) fail("MOCK_LEDGER_UNCERTAIN", "Mock 回执日志导入失败，必须核验补记后恢复");
+      await this.mockAssertAuthorized();
+      await probeMockChannels(this.client, this.targetId, this.sessionId, this.mockChannelCoverage);
+    }
+    return this.status();
+  }
+
+  async recoverIsolation({ client }) {
+    if (!this.transportLost || !this.mockScenarioEngine) fail("MOCK_RECOVERY_INVALID", "只有隔离未知的 Mock 代理可执行此恢复");
+    const { targetInfo } = await client.command("Target.getTargetInfo", { targetId: this.targetId });
+    if (targetInfo?.targetId !== this.targetId || targetInfo.type !== "page" || targetInfo.url !== "about:blank") {
+      fail("MOCK_CLEANUP_NOT_ISOLATED", "恢复前必须由 MCP 将同一自有 Target 安全导航到 about:blank");
+    }
+    // No navigation or browser creation here. The caller supplies the restored
+    // host-owned connection and only an already isolated page can be released.
+    const attached = await client.command("Target.attachToTarget", { targetId: this.targetId, flatten: true });
+    for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
+    this.client = client;
+    this.sessionId = attached.sessionId;
+    this.transportLost = false;
+    this.prepareOwnedTargetForCleanup = null;
+    this.verifyOwnedTargetForCleanup = async () => {
+      const result = await client.command("Target.getTargetInfo", { targetId: this.targetId });
+      return result.targetInfo?.targetId === this.targetId && result.targetInfo.url === "about:blank";
+    };
+    return this.stop();
+  }
+
   async stop() {
+    if (this.state === "stopped") return this.status();
     if (this.stopping) return this.stopping;
     this.stopping = this.#stop();
     try { return await this.stopping; } finally { this.stopping = null; }
   }
 
   async #stop() {
+    this.acceptingMockRequests = false;
+    if (this.transportLost && this.mockScenarioEngine) {
+      this.state = "isolation_unknown";
+      this.isolation = "isolation_unknown";
+      await this.#persist().catch(() => {});
+      return this.status();
+    }
     this.state = "stopping";
     await this.#persist().catch(() => {});
     if (this.client && this.sessionId) {
@@ -332,6 +439,8 @@ export class ProxyListener {
           }
           const safe = await this.verifyOwnedTargetForCleanup({ targetId: this.targetId, sessionId: this.sessionId });
           if (!safe) fail("MOCK_CLEANUP_NOT_ISOLATED", "Mock 测试页尚未由 Chrome DevTools MCP 安全导航到 about:blank，保持拦截与锁");
+          this.isolation = "page_isolated";
+          this.cleanupFacts.page_isolated = true;
         } catch (error) {
           this.#recordError(error.code ?? "MOCK_CLEANUP_PREPARE_FAILED", error.message);
           this.state = "cleanup_failed";
@@ -339,10 +448,20 @@ export class ProxyListener {
           return this.status();
         }
       }
-      await this.client.command("Fetch.disable", {}, this.sessionId).catch(() => {});
-      this.state = "fetch_disabled";
-      await this.client.command("Target.detachFromTarget", { sessionId: this.sessionId }).catch(() => {});
-      this.state = "detached";
+      await this.requestQueue;
+      try {
+        await this.client.command("Fetch.disable", {}, this.sessionId);
+        this.cleanupFacts.interception_disabled = true;
+        this.state = "fetch_disabled";
+        await this.client.command("Target.detachFromTarget", { sessionId: this.sessionId });
+        this.cleanupFacts.detached = true;
+        this.state = "detached";
+      } catch (error) {
+        this.#recordError(error.code ?? "PROXY_CLEANUP_FAILED", error.message);
+        this.state = "cleanup_failed";
+        await this.#persist().catch(() => {});
+        return this.status();
+      }
     }
     for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
     this.client?.close();
@@ -352,18 +471,40 @@ export class ProxyListener {
     await this.lock.release().catch(error => {
       if (error.code !== "ENOENT") throw error;
     });
+    this.cleanupFacts.lock_released = true;
     this.state = "lock_released";
     this.state = "stopped";
     await this.#persist();
     return this.status();
   }
 
+  #queuePaused(event) {
+    // State persistence and authoritative receipt import form one serial lane
+    // for this single Target, including duplicate Fetch delivery handling.
+    const operation = this.requestQueue.then(() => this.#handlePaused(event));
+    this.requestQueue = operation.catch(() => {});
+    return operation;
+  }
+
   async #handlePaused(event) {
+    if (this.transportLost) return;
+    let authorizationFailed = false;
     const responseStage = event.responseStatusCode !== undefined;
     const rule = this.rules.find(item => matchRule(item, event.request.url, event.request.method));
     try {
+      try { await this.browserAssertBound(); }
+      catch (error) {
+        authorizationFailed = true;
+        await this.client.command("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" }, this.sessionId);
+        this.#recordError(error.code ?? "PROXY_BROWSER_BINDING", error.message);
+        return;
+      }
       if (this.mockScenarioEngine && !responseStage) {
         try {
+          if (!this.acceptingMockRequests) fail("MOCK_STOPPING", "Mock 正在退出，停止新模拟业务请求");
+          if (this.mockLedgerUncertain) fail("MOCK_LEDGER_UNCERTAIN", "Mock 回执日志导入失败，必须核验补记后恢复");
+          await this.mockAssertAuthorized();
+          await probeMockChannels(this.client, this.targetId, this.sessionId, this.mockChannelCoverage);
           const outcome = await this.mockScenarioEngine.handle({
             url: event.request.url,
             method: event.request.method,
@@ -379,7 +520,9 @@ export class ProxyListener {
             // Mock-path failure, including an ordinary filesystem error such as
             // EACCES, must block the request instead of falling through to the
             // legacy proxy path and potentially reaching real upstream.
-            await this.mockReceiptSink(structuredClone(outcome));
+            await this.mockAssertAuthorized();
+            try { await this.mockReceiptSink(structuredClone(outcome)); }
+            catch (error) { this.mockLedgerUncertain = true; throw error; }
             await this.client.command("Fetch.fulfillRequest", {
               requestId: event.requestId,
               responseCode: outcome.response.status,
@@ -408,6 +551,15 @@ export class ProxyListener {
           return;
         }
       }
+      if (rule) {
+        try { await this.ordinaryAssertAuthorized(); }
+        catch (error) {
+          authorizationFailed = true;
+          this.#recordError(error.code ?? "PROXY_NOT_ALLOWED", error.message);
+          await this.client.command("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" }, this.sessionId);
+          return;
+        }
+      }
       if (!rule) {
         this.counts.continued += 1;
         await this.client.command(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }, this.sessionId);
@@ -423,7 +575,14 @@ export class ProxyListener {
         url: sanitizeUrl(event.request.url),
         stage: responseStage ? "response" : "request"
       });
-      await this.client.command(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }, this.sessionId).catch(() => {});
+      if (authorizationFailed || (this.mockScenarioEngine && !responseStage)) {
+        this.acceptingMockRequests = false;
+        this.isolation = "isolation_unknown";
+        this.state = "isolation_unknown";
+        this.#recordError("MOCK_ISOLATION_UNKNOWN", "CDP 无法确认请求已阻断，隔离未知；停止业务操作");
+      } else {
+        await this.client?.command(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }, this.sessionId).catch(() => {});
+      }
     } finally {
       await this.#persist().catch(() => {});
     }
@@ -467,6 +626,7 @@ export class ProxyListener {
   }
 
   async #persist() {
+    await this.stateSink(this.status());
     if (this.statusPath) await writeJsonAtomic(this.statusPath, { ...this.status(), updatedAt: new Date().toISOString() });
   }
 
@@ -477,6 +637,8 @@ export class ProxyListener {
 }
 
 export async function createProxyListener(config) {
+  const browserBinding = await loadBrowserProxyBinding(config);
+  const ordinaryAssertAuthorized = await loadProxyAuthorization(config);
   const validated = validateProxyConfig(config);
   const mock = await loadMockProxyBinding(validated);
   const endpoint = validated.endpoint;
@@ -484,16 +646,39 @@ export async function createProxyListener(config) {
     fetchCdpJson(endpoint, "/json/version"),
     fetchCdpJson(endpoint, "/json/list")
   ]);
+  await browserBinding.assertBound();
+  browserBinding.verifyDiscoveredBrowser(version);
   const target = targets.find(item => item.id === validated.targetId && item.type === "page");
   if (!target) fail("TARGET_NOT_FOUND", `endpoint 上不存在页面 Target：${validated.targetId}`);
+  const { recordEvent } = await import("./run-artifacts.mjs");
+  let lastState = null;
+  const stateSink = async status => {
+    const states = new Set(["configured", "active", "stopped", "degraded", "cleanup_failed", "isolation_unknown"]);
+    if (!states.has(status.state)) return;
+    const signature = JSON.stringify([status.state, status.cleanup]);
+    if (signature === lastState) return;
+    await recordEvent(config.run_root, { type: "proxy_state", proxy: {
+      required: true, state: status.state, target_id: validated.targetId,
+      cleanup: { ...status.cleanup, process_exited: null, succeeded: null,
+        reason: status.state === "isolation_unknown" ? "CDP 隔离无法证实，停止业务操作；不得宣称真实响应恢复" :
+          status.state === "stopped" ? "Fetch/detach/锁清理已核验；真实响应须另行通过安全 UI 请求回读" : "代理生命周期事实已记录；页面行为需独立证据" }
+    } });
+    lastState = signature;
+  };
   return new ProxyListener({
     ...validated,
+    stateSink,
     endpoint,
     browserWebSocketUrl: version.webSocketDebuggerUrl,
     rules: validated.rules,
+    ordinaryAssertAuthorized: ordinaryAssertAuthorized ?? (async () => {}),
+    browserAssertBound: browserBinding.assertBound,
     ...(mock ? {
       mockScenarioEngine: mock.engine,
-      mockProxyCycleId: mock.proxyCycleId
+      mockProxyCycleId: mock.proxyCycleId,
+      mockAssertAuthorized: mock.assertAuthorized,
+      mockReceiptSink: mock.receiptSink,
+      mockChannelCoverage: mock.channelCoverage
     } : {})
   });
 }
@@ -529,7 +714,7 @@ export async function stopProxyFromState(statePath, {
     }
     fail("STOP_TIMEOUT", "代理进程未在期限内确认停止");
   }
-  return { stopped: true, signaled: true, targetId: state.targetId };
+  return { stopped: false, signaled: true, cleanup_verified: false, targetId: state.targetId };
 }
 
 export function installStopSignalHandlers(listener, {
@@ -547,7 +732,7 @@ export function installStopSignalHandlers(listener, {
     stopping = true;
     try {
       const status = await listener.stop();
-      if (status.state === "cleanup_failed") {
+      if (["cleanup_failed", "isolation_unknown"].includes(status.state)) {
         stopping = false;
         completed.emit("attempt", status);
         return;

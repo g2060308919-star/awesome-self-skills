@@ -48,7 +48,7 @@ const plan = {
 
 test("AC-02/29/30/32: arbitrary groups replay in first-case order without fixed role/account cardinality", () => {
   const executionLog = log([
-    { type: "workflow_profile", profile: "permission-batches-html-v1" },
+    { type: "workflow_profile", profile: "b2b-e2e-current" },
     plan,
     { type: "role_observation", observation: { group_id: "第一组", account_ref: "acct-shared", role: "区域订单查看人", verification: "verified", description: "页面显示华东订单权限" } },
     { type: "role_observation", observation: { group_id: "后排组", account_ref: "acct-shared", role: "财务复核人", verification: "verified", description: "页面显示账单导出权限" } }
@@ -62,7 +62,7 @@ test("AC-02/29/30/32: arbitrary groups replay in first-case order without fixed 
 
 test("AC-09/11/12/14/31: availability changes invalidate stale verification and repeated notifications do not reset completed work", () => {
   const executionLog = log([
-    { type: "workflow_profile", profile: "permission-batches-html-v1" },
+    { type: "workflow_profile", profile: "b2b-e2e-current" },
     plan,
     { type: "role_observation", observation: { group_id: "第一组", account_ref: "acct-shared", role: "区域订单查看人", verification: "verified", description: "旧会话已核验" } },
     { type: "permission_availability", group_id: "后排组", availability: "ready", account_ref: "acct-shared", declaration: "同一账号新增财务授权" },
@@ -82,7 +82,7 @@ test("AC-09/11/12/14/31: availability changes invalidate stale verification and 
 });
 
 test("AC-05/10/17/27: malformed plans, unknown groups, and starts without verified permission fail closed", () => {
-  const beforePlan = log([{ type: "workflow_profile", profile: "permission-batches-html-v1" }]);
+  const beforePlan = log([{ type: "workflow_profile", profile: "b2b-e2e-current" }]);
   assert.throws(
     () => validatePermissionEvent(cases(), beforePlan, { type: "case_started", case_id: "Z-先出现" }),
     error => error.code === "RUN_CONSISTENCY" && /权限计划/.test(error.message)
@@ -102,7 +102,7 @@ test("AC-05/10/17/27: malformed plans, unknown groups, and starts without verifi
     error => error.code === "RUN_CONSISTENCY" && /未知字段/.test(error.message)
   );
 
-  const withPlan = log([{ type: "workflow_profile", profile: "permission-batches-html-v1" }, plan]);
+  const withPlan = log([{ type: "workflow_profile", profile: "b2b-e2e-current" }, plan]);
   assert.throws(
     () => validatePermissionEvent(cases(), withPlan, { type: "checkpoint_started", checkpoint_id: "M-第三/s/o" }),
     error => error.code === "RUN_CONSISTENCY" && /未就绪/.test(error.message)
@@ -115,7 +115,7 @@ test("AC-05/10/17/27: malformed plans, unknown groups, and starts without verifi
 
 test("AC-08/15/16: permission_wait leaves product checkpoints pending and stop-waiting is explicit", () => {
   const executionLog = log([
-    { type: "workflow_profile", profile: "permission-batches-html-v1" },
+    { type: "workflow_profile", profile: "b2b-e2e-current" },
     plan,
     { type: "permission_wait", group_id: "待准备组", checkpoint_ids: ["M-第三/s/o"], reason: "等待用户自行准备风险审阅权限" },
     { type: "run_state", status: "awaiting_user" }
@@ -153,7 +153,7 @@ test("AC-06/17/27: a failed item does not drain independent work and a shared ch
       { case_id: "NEXT", result: "undetermined", reason: "待处理", checkpoints: [{ step_id: "s", oracle_id: "o", status: "pending", result: null }] }
     ],
     events: [
-      { type: "workflow_profile", profile: "permission-batches-html-v1" }, compositePlan,
+      { type: "workflow_profile", profile: "b2b-e2e-current" }, compositePlan,
       { type: "role_observation", observation: { group_id: "maker", account_ref: "acct-maker", role: "发起人", verification: "verified", description: "页面核验" } },
       { type: "role_observation", observation: { group_id: "reader", account_ref: "acct-reader", role: "查看人", verification: "verified", description: "页面核验" } }
     ].map((event, index) => ({ ...event, sequence: index + 1, at: `2026-09-15T00:01:0${index}.000Z` }))
@@ -175,7 +175,7 @@ test("AC-30: all permission groups may be ready and no artificial waiting group 
     group.declaration = "用户确认当前已就绪";
   });
   const events = [
-    { type: "workflow_profile", profile: "permission-batches-html-v1" },
+    { type: "workflow_profile", profile: "b2b-e2e-current" },
     allReady,
     ...allReady.groups.map(group => ({ type: "role_observation", observation: { group_id: group.group_id, account_ref: group.account_ref, role: group.role_text, verification: "verified", description: "页面显示所需权限" } }))
   ];
@@ -188,7 +188,7 @@ test("AC-30: all permission groups may be ready and no artificial waiting group 
 
 test("AC-31/32: multiple groups can become ready in one notice and completed batches survive later resume cycles", () => {
   const executionLog = log([
-    { type: "workflow_profile", profile: "permission-batches-html-v1" },
+    { type: "workflow_profile", profile: "b2b-e2e-current" },
     plan,
     { type: "permission_availability", group_id: "待准备组", availability: "ready", account_ref: "acct-risk", declaration: "用户说明风险审阅和配置两组都已准备" },
     { type: "permission_availability", group_id: "无法提供组", availability: "ready", account_ref: "acct-config", declaration: "用户说明风险审阅和配置两组都已准备" },
@@ -206,7 +206,7 @@ test("AC-31/32: multiple groups can become ready in one notice and completed bat
 
 test("AC-20: a completed permission batch does not expose its obsolete wait reason as current state", () => {
   const executionLog = log([
-    { type: "workflow_profile", profile: "permission-batches-html-v1" },
+    { type: "workflow_profile", profile: "b2b-e2e-current" },
     plan,
     { type: "permission_wait", group_id: "待准备组", checkpoint_ids: ["M-第三/s/o"], reason: "等待用户准备风险审阅权限" },
     { type: "permission_availability", group_id: "待准备组", availability: "ready", account_ref: "acct-risk", declaration: "用户说明已经准备完成" },

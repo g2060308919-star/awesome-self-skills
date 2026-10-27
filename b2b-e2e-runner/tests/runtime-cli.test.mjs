@@ -1,3 +1,4 @@
+import { recordFixtureEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -48,18 +49,21 @@ test("TASK-02: init/record/report CLI works with spaces and secret input exits 4
     const initialized = await invoke(["init", "--workspace", root, "--cases", fixture]);
     assert.equal(initialized.code, 0);
     const initJson = JSON.parse(initialized.stdout);
+    await recordFixtureEvent(initJson.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE-原始-01"] });
+    await recordFixtureEvent(initJson.runRoot, { type: "checkpoint_started", checkpoint_id: "CASE-原始-01/step-001/oracle-001" });
     const eventPath = path.join(root, "event.json");
-    await writeFile(eventPath, JSON.stringify({
+    const event = await recordFixtureEvent(initJson.runRoot, {
       type: "checkpoint_result",
       checkpoint_id: "CASE-原始-01/step-001/oracle-001",
       result: "passed",
       reason: "页面显示订单号 REQ-9002",
       observation: "页面显示订单号 REQ-9002",
       evidence_status: "not_required"
-    }));
+    }, { prepareOnly: true });
+    await writeFile(eventPath, JSON.stringify(event));
     assert.equal((await invoke(["record", "--run", initJson.runRoot, "--event", eventPath])).code, 0);
     assert.equal((await invoke(["report", "--run", initJson.runRoot])).code, 0);
-    assert.equal((await readFile(path.join(initJson.runRoot, "report.md"), "utf8")).includes("REQ-9002"), true);
+    assert.equal((await readFile(path.join(initJson.runRoot, "report.html"), "utf8")).includes("REQ-9002"), true);
 
     await writeFile(eventPath, JSON.stringify({ type: "note", token: "fixture-value" }));
     const rejected = await invoke(["record", "--run", initJson.runRoot, "--event", eventPath]);
@@ -70,14 +74,14 @@ test("TASK-02: init/record/report CLI works with spaces and secret input exits 4
   }
 });
 
-test("PBH AC-25: CLI accepts the additive workflow profile and returns both compatible report paths", async () => {
+test("R02: CLI accepts the unique workflow and returns one HTML report path", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner profile cli "));
   try {
-    const initialized = await invoke(["init", "--workspace", root, "--cases", fixture, "--workflow-profile", "permission-batches-html-v1"]);
+    const initialized = await invoke(["init", "--workspace", root, "--cases", fixture, "--workflow-profile", "b2b-e2e-current"]);
     assert.equal(initialized.code, 0);
     const initJson = JSON.parse(initialized.stdout);
     const log = JSON.parse(await readFile(path.join(initJson.runRoot, "execution-log.json")));
-    assert.deepEqual(log.events.map(event => [event.type, event.profile]), [["workflow_profile", "permission-batches-html-v1"]]);
+    assert.deepEqual(log.events.map(event => [event.type, event.profile]), [["workflow_profile", "b2b-e2e-current"]]);
 
     const eventPath = path.join(root, "plan.json");
     await writeFile(eventPath, JSON.stringify({
@@ -90,7 +94,7 @@ test("PBH AC-25: CLI accepts the additive workflow profile and returns both comp
     const report = await invoke(["report", "--run", initJson.runRoot]);
     assert.equal(report.code, 0);
     const result = JSON.parse(report.stdout);
-    assert.equal(result.reportPath, path.join(initJson.runRoot, "report.md"));
+    assert.equal(result.reportPath, path.join(initJson.runRoot, "report.html"));
     assert.equal(result.htmlReportPath, path.join(initJson.runRoot, "report.html"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -98,7 +102,7 @@ test("PBH AC-25: CLI accepts the additive workflow profile and returns both comp
 test("v2 AC-02: CLI emits one JSON object with HTML-only paths and the complete chat table", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "runner v2 cli "));
   try {
-    const initialized = await invoke(["init", "--workspace", root, "--cases", fixture, "--workflow-profile", "permission-batches-html-v2"]);
+    const initialized = await invoke(["init", "--workspace", root, "--cases", fixture, "--workflow-profile", "b2b-e2e-current"]);
     assert.equal(initialized.code, 0);
     assert.equal(initialized.stdout.trim().split("\n").length, 1);
     const initJson = JSON.parse(initialized.stdout);

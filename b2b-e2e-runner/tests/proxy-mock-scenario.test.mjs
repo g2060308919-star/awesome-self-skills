@@ -16,6 +16,8 @@ class FakeCdp {
 
   async command(method, params = {}, sessionId) {
     this.calls.push({ method, params, sessionId });
+    if (method === "Target.getTargets") return { targetInfos: [{ targetId: this.targetId, type: "page", url: "https://fixture.test" }] };
+    if (method === "Page.getFrameTree") return { frameTree: { frame: { id: this.targetId } } };
     if (method === "Target.attachToTarget") return { sessionId: `session-${this.targetId}` };
     return {};
   }
@@ -71,6 +73,7 @@ function listenerConfig(root, client, receipts, cleanupOrder) {
     runId: "RUN-1",
     clientFactory: async () => client,
     mockScenarioEngine: engine(),
+    mockChannelCoverage: { target_id: "A" },
     mockProxyCycleId: "proxy-cycle-1",
     mockReceiptSink: async receipt => receipts.push(receipt),
     prepareOwnedTargetForCleanup: async () => cleanupOrder.push("blank-owned-target"),
@@ -91,7 +94,7 @@ test("v1.1 AC-23/24/25/26: Mock decides at Request stage, fulfills before upstre
     assert.ok(pausedHandlerIndex >= 0 && pausedHandlerIndex < fetchEnableIndex,
       "Mock requestPaused handler must exist before Fetch is enabled");
     const fetchEnable = client.calls.find(call => call.method === "Fetch.enable");
-    assert.deepEqual(fetchEnable.params.patterns, [{ urlPattern: "https://fixture.test/api/save*", requestStage: "Request" }, { urlPattern: "https://fixture.test/api/config*", requestStage: "Request" }]);
+    assert.deepEqual(fetchEnable.params.patterns, [{ urlPattern: "http://*", requestStage: "Request" }, { urlPattern: "https://*", requestStage: "Request" }]);
 
     await client.emit("session-A", "Fetch.requestPaused", {
       requestId: "request-save",

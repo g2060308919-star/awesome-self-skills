@@ -22,42 +22,6 @@ function list(values) {
   return `<ul>${values.map(value => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`;
 }
 
-function evidenceItem(entry) {
-  if (!entry.path) {
-    const facts = entry.inline_facts.map(fact => `<dt>${escapeHtml(fact.label)}</dt><dd>${escapeHtml(fact.value)}</dd>`).join("");
-    return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：${escapeHtml(entry.description)}<dl class="evidence-facts">${facts}</dl></li>`;
-  }
-  const href = safeEvidenceHref(entry.path);
-  if (!href) return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：证据路径被拒绝</li>`;
-  const extension = `.${entry.path.split(".").at(-1)?.toLowerCase()}`;
-  const preview = IMAGE_EXTENSIONS.has(extension)
-    ? `<figure><img src="${href}" alt="${escapeHtml(entry.description)}"><figcaption>${escapeHtml(entry.description)}</figcaption></figure>`
-    : `<a href="${href}" download>${escapeHtml(entry.description)}</a>`;
-  return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：${preview}</li>`;
-}
-
-function caseDetail(detail) {
-  const steps = detail.steps.map(step => {
-    const expected = step.expected.map(item => `<li><p><strong>${escapeHtml(item.oracle_id)}</strong>：${escapeHtml(item.text)}</p>` +
-      `<dl><dt>结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
-      `<dt>实际观察</dt><dd>${list(item.observations)}</dd><dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd>` +
-      `<dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
-      (item.evidence.length ? `<ul class="evidence">${item.evidence.map(evidenceItem).join("")}</ul>` : "") +
-      `</li>`).join("");
-    return `<section><h3>${escapeHtml(step.step_id)} · ${escapeHtml(step.action)}</h3><ol>${expected}</ol></section>`;
-  }).join("");
-  return `<details id="${detail.anchor}"><summary>${escapeHtml(detail.case_id)} · ${escapeHtml(detail.title)} · ${escapeHtml(detail.result_label)}</summary>` +
-    `<p><strong>原因：</strong>${escapeHtml(detail.reason)}</p><h3>原前置条件</h3>${list(detail.preconditions)}${steps}</details>`;
-}
-
-function permissionSection(permission) {
-  if (!permission.plan) return `<p>该 Run 没有权限批次工作流标记；按历史兼容模式展示。</p>`;
-  const rows = permission.groups.map(group => `<tr><td>${escapeHtml(group.role_text)}</td>` +
-    `<td>${list(group.permissions)}</td><td>${escapeHtml(group.account_ref ?? "未确定")}</td><td>${escapeHtml(group.availability_label)}</td>` +
-    `<td>${escapeHtml(group.verification_label)}</td><td>${list(group.case_ids)}</td><td>${escapeHtml(group.wait_reason ?? group.batch_description ?? "无")}</td></tr>`).join("");
-  return `<div class="table-wrap"><table><thead><tr><th>所需角色</th><th>具体权限</th><th>账号引用</th><th>准备状态</th><th>实际核验</th><th>受影响用例</th><th>当前说明</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-
 function semanticFactTable(items, emptyMessage = "未记录") {
   if (!items.length) return `<p>${escapeHtml(emptyMessage)}</p>`;
   const rows = items.map(item => `<tr><td>${escapeHtml(item.item)}</td><td>${escapeHtml(item.description)}</td><td>${escapeHtml(item.outcome)}</td></tr>`).join("");
@@ -81,37 +45,8 @@ function proxySummary(model) {
     `<h3>运行期验证</h3>${semanticFactTable(proxy.verifications, proxy.status === "本次不需要代理" ? "本次不需要代理，因此没有运行期代理验证。" : "未记录代理验证结果。")}`;
 }
 
-function proxyAndCleanup(model) {
-  return proxySummary(model) +
-    `<h3>自动清理</h3><p class="section-result"><strong>${escapeHtml(model.cleanup_summary.status)}</strong></p>` +
-    semanticFactTable(model.cleanup_summary.items, model.cleanup_summary.status === "无需清理" ? "本次没有需要清理的代理资源。" : "未记录具体清理项目。");
-}
-
-function buildLegacyHtmlReport(model) {
-  const summaryRows = model.rows.map(row => `<tr><td><a href="#${row.anchor}">${escapeHtml(row.case_id)}</a></td>` +
-    `<td>${escapeHtml(row.module)}</td><td>${escapeHtml(row.title)}</td><td><span class="status ${row.result}">${escapeHtml(row.result_label)}</span></td><td>${escapeHtml(row.reason)}</td></tr>`).join("");
-  const waiting = model.run.status === "awaiting_user"
-    ? `<aside class="waiting" role="status"><strong>未完成，等待用户准备权限</strong><p>等待检查点：${escapeHtml(model.permission.waiting_checkpoint_ids.join("、") || "账本未记录")}</p></aside>`
-    : "";
-  const cards = Object.entries(model.counts).map(([state, count]) => `<div class="card"><span>${escapeHtml({ passed: "通过", failed: "未通过", undetermined: "无法确定", not_executed: "未执行" }[state])}</span><strong>${count}</strong></div>`).join("");
-  return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-src 'none'; connect-src 'none'; script-src 'none'">
-<title>${escapeHtml(model.suite.name)} · B2B E2E 测试报告</title><style>
-:root{font-family:ui-sans-serif,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#172033;background:#f5f7fb;line-height:1.55}body{margin:0}main{max-width:1180px;margin:auto;padding:28px;overflow-x:hidden}header,section,details,aside{background:#fff;border:1px solid #dfe5ef;border-radius:12px;padding:18px;margin:14px 0}h1,h2,h3,h4{line-height:1.25}.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.cards{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px}.card{background:#eef3fb;border-radius:10px;padding:14px}.card strong{display:block;font-size:1.7rem}.waiting{border-color:#c78516;background:#fff8e8}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:760px}th,td{border:1px solid #dfe5ef;padding:10px;text-align:left;vertical-align:top}th{background:#eef3fb}td:first-child{overflow-wrap:anywhere;max-width:20rem}td:last-child{min-width:18rem}.facts td:last-child{min-width:8rem}.status{font-weight:700}.passed{color:#116b42}.failed{color:#a12222}.undetermined{color:#805600}.not_executed{color:#596275}summary{cursor:pointer;font-weight:700}.timeline{list-style:none;padding:0}.timeline li{display:grid;grid-template-columns:minmax(12rem,15rem) 1fr;gap:16px;border-top:1px solid #dfe5ef;padding:14px 0}.timeline li:first-child{border-top:0}.timeline time{color:#596275}.timeline p{margin:4px 0}.outcome,.section-result{color:#334b6f}img{display:block;max-width:100%;height:auto;border:1px solid #dfe5ef}dt{font-weight:700}dd{margin:0 0 8px}@media(max-width:640px){main{padding:12px}.cards{grid-template-columns:repeat(2,1fr)}.timeline li{grid-template-columns:1fr}.facts{min-width:560px}}
-</style></head><body><main><header><h1>B2B E2E 测试报告</h1><div class="meta"><div><strong>Run ID</strong><br>${escapeHtml(model.run.run_id)}</div><div><strong>测试目标</strong><br>${escapeHtml(model.suite.target_urls.join("、"))}</div><div><strong>当前阶段</strong><br>${escapeHtml(model.run.status_label)}</div><div><strong>开始 / 完成</strong><br>${escapeHtml(model.run.started_at_label)} / ${escapeHtml(model.run.completed_at_label)}</div></div></header>
-${waiting}<section><h2>四态统计（${model.run.is_final ? "最终结果" : "当前结果"}）</h2><div class="cards">${cards}</div></section>
-<section><h2>完整五列用例总表</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>模块</th><th>测试场景</th><th>测试结果</th><th>成功/失败的原因</th></tr></thead><tbody>${summaryRows}</tbody></table></div></section>
-<section><h2>用例详情</h2>${model.case_details.map(caseDetail).join("")}</section>
-<section><h2>权限准备与执行批次</h2>${permissionSection(model.permission)}</section>
-<section><h2>关键执行记录</h2>${timeline(model.timeline)}</section>
-<section><h2>代理验证与清理</h2>${proxyAndCleanup(model)}</section>
-<section><h2>一致性及证据说明</h2><p>本页和 report.md 来自同一次不可变用例快照与执行日志读取；结构校验通过不等于程序自动证明业务结论正确。</p>${semanticFactTable(model.consistency.checks)}</section>
-</main></body></html>\n`;
-}
-
-const V2_PAGE_SIZE = 20;
-const V2_REPORT_SCRIPT = `(() => {
+const PAGE_SIZE = 20;
+const REPORT_SCRIPT = `(() => {
   const root = document.querySelector('[data-page-size]');
   const rows = Array.from(root.querySelectorAll('.case-row'));
   const pageSize = Number(root.dataset.pageSize);
@@ -212,7 +147,7 @@ function linkOrText(link, label) {
     : escapeHtml(label ?? link ?? "未记录");
 }
 
-function v2EvidenceItem(entry) {
+function evidenceItem(entry) {
   if (!entry.path) {
     const facts = entry.inline_facts.map(fact => `<dt>${escapeHtml(fact.label)}</dt><dd>${escapeHtml(fact.value)}</dd>`).join("");
     return `<li><strong>${escapeHtml(entry.evidence_id)}</strong>：${escapeHtml(entry.description)}<dl class="evidence-facts">${facts}</dl></li>`;
@@ -227,7 +162,7 @@ function v2EvidenceItem(entry) {
     `<img src="${href}" alt="${escapeHtml(entry.description)}"></button><figcaption><strong>${escapeHtml(entry.evidence_id)}</strong> · ${escapeHtml(entry.description)}<span>点击图片放大查看</span></figcaption></figure></li>`;
 }
 
-function v2PermissionChips(detail) {
+function permissionChips(detail) {
   if (!detail.permissions.length) return `<div class="context-chips"><span class="context-chip muted-chip">未关联权限组</span></div>`;
   return `<div class="context-chips">${detail.permissions.map(item => {
     const permissions = item.permissions.length ? item.permissions : ["未记录具体权限"];
@@ -244,20 +179,20 @@ function v2PermissionChips(detail) {
   }).join("")}</div>`;
 }
 
-function v2CaseDetail(detail) {
+function caseDetail(detail) {
   const steps = detail.steps.map((step, stepIndex) => `<li class="step-item"><span class="step-number" aria-hidden="true">${stepIndex + 1}</span><div class="step-content"><p class="step-source">原步骤 ${escapeHtml(step.step_id)}</p><h4>${escapeHtml(step.action)}</h4>` +
     `<div class="expectation-list">${step.expected.map(item => `<article class="expectation"><p class="oracle-id">检查点 ${escapeHtml(item.oracle_id)}</p>` +
       `<div class="comparison"><div class="comparison-row expected"><span>预期结果</span><p>${escapeHtml(item.text)}</p></div>` +
       `<div class="comparison-row observed"><span>实际观察</span><div>${list(item.observations)}</div></div></div>` +
       `<dl class="checkpoint-meta"><dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
-      `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd><dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
-      (item.evidence.length ? `<ul class="evidence">${item.evidence.map(v2EvidenceItem).join("")}</ul>` : "<p class=\"evidence-gap\">未关联可展示的关键图片。</p>") +
+      `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd><dt>验证来源</dt><dd>${escapeHtml(item.verification_source_label)}：${escapeHtml(item.verification_source_description)}</dd><dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
+      (item.evidence.length ? `<ul class="evidence">${item.evidence.map(evidenceItem).join("")}</ul>` : "<p class=\"evidence-gap\">未关联可展示的关键图片。</p>") +
       `</article>`).join("")}</div></div></li>`).join("");
   const actual = detail.actual_records.length
     ? `<ol>${detail.actual_records.map(item => `<li>${escapeHtml(item.description)}</li>`).join("")}</ol>`
     : "<p>未记录已执行动作；原步骤不会被写成已执行事实。</p>";
   const captures = detail.capture_records.length
-    ? `<ul>${detail.capture_records.map(item => `<li>${escapeHtml(item.description)}：${escapeHtml({ captured: "已采集", failed: "采集失败", unavailable: "当前不可用" }[item.outcome] ?? "未识别")}` +
+    ? `<ul>${detail.capture_records.map(item => `<li>${item.capture_scope === "request_details" ? "请求详情截图" : "页面截图"} · ${escapeHtml(item.description)}：${escapeHtml({ captured: "已采集", failed: "采集失败", unavailable: "当前不可用" }[item.outcome] ?? "未识别")}` +
       `${item.reason ? `；${escapeHtml(item.reason)}` : ""}</li>`).join("")}</ul>`
     : "<p class=\"evidence-gap\">未记录关键截图采集结果。</p>";
   const exploration = detail.exploration_records.length
@@ -273,20 +208,25 @@ function v2CaseDetail(detail) {
       `<dt>请求事实</dt><dd>${escapeHtml(item.request_refs.join("、") || "未记录")}</dd></dl>` +
       `<p class="evidence-gap">结论边界：该结果只补充真实前端行为，不证明真实后端已创建、修改或持久化业务数据。</p></article>`).join("")
     : "";
+  const provenance = detail.provenance ?? { adjustments: [], supplementary: [], forms: [] };
+  const preparation = provenance.adjustments.map(item => `<article><h4>准备数据调整</h4><p>原值：${escapeHtml(JSON.stringify(item.original))}</p><p>替代值：${escapeHtml(JSON.stringify(item.replacement))}</p><p>依据事件：${escapeHtml(item.basis_refs.join("、"))}；实际验证事件：${escapeHtml(item.verification_refs.join("、"))}</p><p>${escapeHtml(item.unchanged_goal_reason)}；支持范围：${escapeHtml(item.support_scope)}</p></article>`).join("");
+  const supplementary = provenance.supplementary.map(item => `<p>${escapeHtml(item.attempt_id)} · ${escapeHtml(item.source)} · ${escapeHtml(item.description)} · ${escapeHtml(item.result ?? item.phase)}（不覆盖原结果）</p>`).join("");
+  const forms = provenance.forms.map(item => `<p>${escapeHtml(item.control_kind)} / ${escapeHtml(item.stage)} / ${escapeHtml(item.method)}：${escapeHtml(item.description)}${item.actual_value !== undefined ? `；可见回读：${escapeHtml(JSON.stringify(item.actual_value))}` : ""}</p>`).join("");
   return `<div class="case-detail"><section class="detail-outcome ${escapeHtml(detail.result)}"><div class="outcome-heading"><span class="status ${escapeHtml(detail.result)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(detail.result_label)}</span><strong>${escapeHtml(detail.title)}</strong></div><p>${escapeHtml(detail.reason)}</p></section>` +
-    `<div class="detail-context"><span class="context-chip neutral-chip">${escapeHtml(detail.display_id)}</span><span class="context-chip neutral-chip">模块 · ${escapeHtml(detail.module)}</span>${v2PermissionChips(detail)}</div>` +
+    `<div class="detail-context"><span class="context-chip neutral-chip">${escapeHtml(detail.display_id)}</span><span class="context-chip neutral-chip">模块 · ${escapeHtml(detail.module)}</span>${permissionChips(detail)}</div>` +
     `<details class="full-id"><summary>查看完整原始用例 ID</summary><p>${escapeHtml(detail.case_id)}</p></details>` +
     `<div class="detail-flow"><section class="detail-section"><h3>测试前提</h3>${list(detail.preconditions)}</section>` +
     `<section class="detail-section"><h3>操作步骤、预期与实际</h3><ol class="step-list">${steps}</ol></section>` +
     `<details class="supplementary-details"><summary>实际执行记录</summary><div class="supplementary-content">${actual}</div></details>` +
     `<details class="supplementary-details"><summary>截图采集记录</summary><div class="supplementary-content">${captures}</div></details>` +
     (exploration ? `<details class="supplementary-details"><summary>无法确定时的事实边界</summary><div class="supplementary-content">${exploration}</div></details>` : "") +
+    (preparation || supplementary || forms ? `<details class="supplementary-details"><summary>准备调整、控件回读和补充观察</summary><div class="supplementary-content">${preparation}${forms}${supplementary}</div></details>` : "") +
     (mock ? `<details class="supplementary-details"><summary>Mock 前端补测与后端边界</summary><div class="supplementary-content">${mock}</div></details>` : "") +
     `</div></div>`;
 }
 
-function v2PermissionSection(permission) {
-  if (!permission.plan) return `<p>该 Run 没有权限批次工作流标记；按历史兼容模式展示。</p>`;
+function permissionSection(permission) {
+  if (!permission.plan) return `<p>尚未登记当前任务的权限计划。</p>`;
   const rows = permission.groups.map(group => `<tr><td>${escapeHtml(group.role_text)}</td><td>${list(group.permissions)}</td>` +
     `<td>${escapeHtml(group.account_ref ?? "未确定")}</td><td>${escapeHtml(group.availability_label)}</td><td>${escapeHtml(group.verification_label)}</td>` +
     `<td class="permission-case-ids">${group.case_ids.map(caseId => `<span>${escapeHtml(caseId)}</span>`).join("")}</td>` +
@@ -294,7 +234,7 @@ function v2PermissionSection(permission) {
   return `<div class="table-wrap permission-table-wrap"><table class="permission-table"><thead><tr><th>所需角色</th><th>具体权限</th><th>账号引用</th><th>准备状态</th><th>实际核验</th><th>受影响用例</th><th>当前说明</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function v2ActionGroup(result, label, rows, action) {
+function actionGroup(result, label, rows, action) {
   const count = rows.length;
   const classes = result === "failed" ? "conclusion-block failure-summary" : result === "undetermined" ? "conclusion-block unknown-summary" : `action-group action-${result}`;
   return `<article class="${escapeHtml(classes)}" data-action-group="${escapeHtml(result)}"><div><p class="summary-kicker">${escapeHtml(action)}</p><h3>${escapeHtml(label)}</h3><p>${count} 条用例；按原始输入顺序保留在完整用例表中。</p></div>` +
@@ -317,7 +257,7 @@ function targetLabel(value) {
   }
 }
 
-function v2Verdict(model) {
+function verdictForReport(model) {
   if (!model.run.is_final) {
     return {
       tone: "pending",
@@ -353,13 +293,13 @@ function v2Verdict(model) {
   };
 }
 
-function buildV2HtmlReport(model) {
-  const pageCount = Math.max(1, Math.ceil(model.rows.length / V2_PAGE_SIZE));
-  const cspHash = crypto.createHash("sha256").update(V2_REPORT_SCRIPT).digest("base64");
-  const rows = model.rows.map((row, index) => `<tr class="case-row" data-result="${escapeHtml(row.result)}"${index >= V2_PAGE_SIZE ? " hidden" : ""}><td>${escapeHtml(row.display_id)}</td>` +
+function buildCurrentHtmlReport(model) {
+  const pageCount = Math.max(1, Math.ceil(model.rows.length / PAGE_SIZE));
+  const cspHash = crypto.createHash("sha256").update(REPORT_SCRIPT).digest("base64");
+  const rows = model.rows.map((row, index) => `<tr class="case-row" data-result="${escapeHtml(row.result)}"${index >= PAGE_SIZE ? " hidden" : ""}><td>${escapeHtml(row.display_id)}</td>` +
     `<td>${escapeHtml(row.module)}</td><td>${escapeHtml(row.title)}</td><td><span class="status ${row.result}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(row.result_label)}</span></td>` +
     `<td>${escapeHtml(row.reason)}</td><td><button class="view-button" type="button" aria-label="查看 ${escapeHtml(row.display_id)} 的用例详情" data-open-case="${index}" data-dialog-title="${escapeHtml(`${row.display_id} · ${row.title}`)}">查看</button></td></tr>`).join("");
-  const templates = model.case_details.map((detail, index) => `<template data-case-detail="${index}">${v2CaseDetail(detail)}</template>`).join("");
+  const templates = model.case_details.map((detail, index) => `<template data-case-detail="${index}">${caseDetail(detail)}</template>`).join("");
   const overview = [
     ["用例总数", model.overview.total, "total"], ["通过数量", model.counts.passed, "passed"], ["失败数量", model.counts.failed, "failed"],
     ["无法确定", model.counts.undetermined, "undetermined"], ["不执行", model.counts.not_executed, "not-executed"], ["通过率", model.overview.pass_rate, "passed"],
@@ -376,11 +316,11 @@ function buildV2HtmlReport(model) {
   const waiting = model.run.status === "awaiting_user"
     ? `<aside class="waiting" role="status"><strong>本报告尚未完成</strong><p>记录截止时刻：${escapeHtml(model.run.boundary_at_label)}。当前等待用户协作，阶段聚合中的“无法确定”不是最终结论。</p></aside>`
     : "";
-  const verdict = v2Verdict(model);
+  const verdict = verdictForReport(model);
   const actionGroups = [
-    v2ActionGroup("failed", "未通过", model.result_details.failed, "需要优先修复并复测"),
-    v2ActionGroup("undetermined", "无法确定", model.result_details.undetermined, "需要补齐事实或条件"),
-    v2ActionGroup("not_executed", "未执行", model.rows.filter(row => row.result === "not_executed"), "需要确认排除范围")
+    actionGroup("failed", "未通过", model.result_details.failed, "需要优先修复并复测"),
+    actionGroup("undetermined", "无法确定", model.result_details.undetermined, "需要补齐事实或条件"),
+    actionGroup("not_executed", "未执行", model.rows.filter(row => row.result === "not_executed"), "需要确认排除范围")
   ].join("");
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -475,12 +415,12 @@ table:not(.case-table) th,table:not(.case-table) td{border-bottom:1px solid var(
 <header class="report-hero" data-report-section="title"><div class="hero-copy"><p class="eyebrow">END-TO-END TEST REPORT</p><h1>${escapeHtml(model.suite.name)}</h1><p class="hero-description">汇总本轮端到端测试的执行结果、关键证据与结论边界。</p><div class="hero-meta"><div><span>当前阶段</span><strong>${escapeHtml(model.run.status_label)}</strong></div><div><span>记录截止</span><strong>${escapeHtml(model.run.boundary_at_label)}</strong></div></div>${waiting}</div><aside class="hero-verdict ${escapeHtml(verdict.tone)}" aria-label="验收结论"><strong><span class="verdict-dot" aria-hidden="true"></span>${escapeHtml(verdict.label)}</strong><p>${escapeHtml(verdict.summary)}</p></aside></header>
 <section class="report-section" data-report-section="overview"><div class="section-heading"><span class="section-index">01</span><div><h2>测试概览</h2></div><p>全量用例统计 · 不随筛选变化</p></div><div class="metric-strip">${overview}</div><div class="summary-footer"><p class="overview-note">统计口径：通过率 = 通过数量 ÷ 用例总数；失败率 = 失败数量 ÷ 用例总数。${model.mock_summary?.enabled ? `有效通过中，${escapeHtml(model.mock_summary.real_passed)} 条为纯真实通过，${escapeHtml(model.mock_summary.mock_supplemented_passed)} 条包含 Mock 前端补测；Mock 不证明真实后端持久化。` : ""}全局暂停等待时长：${escapeHtml(model.overview.waiting_duration)}；执行耗时扣除已记录的全局用户等待区段。</p></div></section>
 <section class="report-section" data-report-section="environment"><div class="section-heading"><span class="section-index">02</span><h2>测试环境</h2><p>本次测试的执行上下文</p></div><div class="environment-grid"><div class="environment-item"><span>PRD 链接</span><div class="environment-value">${prd}</div></div><div class="environment-item"><span>测试地址链接</span><div class="environment-value">${targets}</div></div><div class="environment-item"><span>测试账号</span><div class="environment-value">${accounts}</div></div><div class="environment-item"><span>执行时间</span><div class="environment-value"><p>${escapeHtml(model.run.started_at_display_label)} — ${escapeHtml(model.run.completed_at_display_label)}</p><p class="environment-note">时区：${escapeHtml(model.report_context.display_timezone)}</p></div></div><div class="environment-item"><span>代理方式</span><div class="environment-value"><p>${escapeHtml(model.report_context.proxy_method)}</p></div></div><div class="environment-item"><span>环境说明</span><div class="environment-value"><p>${escapeHtml(model.report_context.environment_description)}</p></div></div></div></section>
-<section class="report-section" data-report-section="coverage" data-page-size="${V2_PAGE_SIZE}"><div class="section-heading"><span class="section-index">03</span><h2>需求覆盖与验收</h2><p>逐条查看测试情况 · 每页最多 20 条</p></div><div class="active-filter" role="status"><span data-active-filter hidden></span><button type="button" data-clear-filter hidden>显示全部用例</button></div><div class="table-wrap"><table class="case-table"><thead><tr><th>测试用例 ID</th><th>模块</th><th>测试场景</th><th>测试结果</th><th>成功/失败的原因</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div><nav class="pagination" aria-label="用例分页"><button type="button" data-page-previous>上一页</button><span data-page-indicator aria-live="polite">第 1 / ${pageCount} 页 · 共 ${model.rows.length} 条</span><button type="button" data-page-next${pageCount === 1 ? " disabled" : ""}>下一页</button></nav>${templates}<dialog id="case-dialog" aria-labelledby="case-dialog-title"><div class="dialog-head"><h2 id="case-dialog-title" data-dialog-title>用例详情</h2><button type="button" data-dialog-close aria-label="关闭用例详情">关闭</button></div><div class="dialog-body" data-dialog-content></div></dialog><dialog id="image-dialog" class="image-dialog" aria-labelledby="image-dialog-title"><div class="dialog-head"><h2 id="image-dialog-title" data-image-title>关键证据截图</h2><button type="button" data-image-close aria-label="关闭放大截图">关闭</button></div><div class="image-dialog-body"><img data-enlarged-image alt=""></div></dialog></section>
+<section class="report-section" data-report-section="coverage" data-page-size="${PAGE_SIZE}"><div class="section-heading"><span class="section-index">03</span><h2>需求覆盖与验收</h2><p>逐条查看测试情况 · 每页最多 20 条</p></div><div class="active-filter" role="status"><span data-active-filter hidden></span><button type="button" data-clear-filter hidden>显示全部用例</button></div><div class="table-wrap"><table class="case-table"><thead><tr><th>测试用例 ID</th><th>模块</th><th>测试场景</th><th>测试结果</th><th>成功/失败的原因</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div><nav class="pagination" aria-label="用例分页"><button type="button" data-page-previous>上一页</button><span data-page-indicator aria-live="polite">第 1 / ${pageCount} 页 · 共 ${model.rows.length} 条</span><button type="button" data-page-next${pageCount === 1 ? " disabled" : ""}>下一页</button></nav>${templates}<dialog id="case-dialog" aria-labelledby="case-dialog-title"><div class="dialog-head"><h2 id="case-dialog-title" data-dialog-title>用例详情</h2><button type="button" data-dialog-close aria-label="关闭用例详情">关闭</button></div><div class="dialog-body" data-dialog-content></div></dialog><dialog id="image-dialog" class="image-dialog" aria-labelledby="image-dialog-title"><div class="dialog-head"><h2 id="image-dialog-title" data-image-title>关键证据截图</h2><button type="button" data-image-close aria-label="关闭放大截图">关闭</button></div><div class="image-dialog-body"><img data-enlarged-image alt=""></div></dialog></section>
 <section class="report-section" data-report-section="data-cleanup"><div class="section-heading"><span class="section-index">04</span><h2>测试数据与清理</h2><p>本 Run 的数据事实与资源收尾</p></div><div class="cleanup-panel"><article class="cleanup-block data-facts"><div class="cleanup-heading"><span class="cleanup-icon" aria-hidden="true">⌁</span><h3>已记录的测试数据事实</h3></div>${timeline(sampleFacts)}</article><article class="cleanup-block cleanup-result"><div class="cleanup-heading"><span class="cleanup-icon" aria-hidden="true">✓</span><h3>实际清理结果</h3></div><p class="cleanup-status"><span class="status-dot" aria-hidden="true"></span><strong>${escapeHtml(model.cleanup_summary.status)}</strong></p>${semanticFactTable(model.cleanup_summary.items, model.cleanup_summary.status === "无需清理" ? "本轮没有需要清理的代理资源。" : "未记录具体清理事项。")}</article></div></section>
-<section class="report-section" data-report-section="conclusion"><div class="section-heading"><span class="section-index">05</span><h2>结论边界和后续行动</h2><p>按已知结果类别归组，不推断共同根因</p></div><div class="conclusion-layout"><div class="action-groups">${actionGroups}</div><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">01</span><span class="disclosure-label"><strong>权限准备状态</strong><small>查看角色、账号与核验范围</small></span></summary><div class="disclosure-content">${v2PermissionSection(model.permission)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">02</span><span class="disclosure-label"><strong>关键执行记录</strong><small>查看本轮执行过程与阶段事实</small></span></summary><div class="disclosure-content">${timeline(model.timeline)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">03</span><span class="disclosure-label"><strong>代理验证</strong><small>查看影响范围与恢复结论</small></span></summary><div class="disclosure-content">${proxySummary(model)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">04</span><span class="disclosure-label"><strong>一致性与证据边界</strong><small>查看报告可信范围与证据说明</small></span></summary><div class="disclosure-content">${semanticFactTable(model.consistency.checks)}</div></details></div></section>
-</main><script>${V2_REPORT_SCRIPT}</script></body></html>\n`;
+<section class="report-section" data-report-section="conclusion"><div class="section-heading"><span class="section-index">05</span><h2>结论边界和后续行动</h2><p>按已知结果类别归组，不推断共同根因</p></div><div class="conclusion-layout"><div class="action-groups">${actionGroups}</div><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">01</span><span class="disclosure-label"><strong>权限准备状态</strong><small>查看角色、账号与核验范围</small></span></summary><div class="disclosure-content">${permissionSection(model.permission)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">02</span><span class="disclosure-label"><strong>关键执行记录</strong><small>查看本轮执行过程与阶段事实</small></span></summary><div class="disclosure-content">${timeline(model.timeline)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">03</span><span class="disclosure-label"><strong>代理验证</strong><small>查看影响范围与恢复结论</small></span></summary><div class="disclosure-content">${proxySummary(model)}</div></details><details class="report-disclosure"><summary><span class="disclosure-index" aria-hidden="true">04</span><span class="disclosure-label"><strong>一致性与证据边界</strong><small>查看报告可信范围与证据说明</small></span></summary><div class="disclosure-content">${semanticFactTable(model.consistency.checks)}</div></details></div></section>
+</main><script>${REPORT_SCRIPT}</script></body></html>\n`;
 }
 
 export function buildHtmlReport(model) {
-  return model.run.workflow_profile === "permission-batches-html-v2" ? buildV2HtmlReport(model) : buildLegacyHtmlReport(model);
+  return buildCurrentHtmlReport(model);
 }

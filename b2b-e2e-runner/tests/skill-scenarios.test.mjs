@@ -1,3 +1,5 @@
+import { initializeFixtureRun as initializeRun } from "./test-helpers.mjs";
+import { recordFixtureEvent as recordEvent, recordFixtureScreenshotGaps } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -5,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { generateReport, initializeRun, recordEvent } from "../scripts/run-artifacts.mjs";
+import { generateReport } from "../scripts/run-artifacts.mjs";
 
 const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -42,7 +44,7 @@ async function oneCase(root, expectedTexts) {
 
 test("AC-01/02: MCP is repaired before user intervention and never falls back", async () => {
   const [skill, workflow] = await sources();
-  assert.equal(skill.indexOf("自动安装、启用或恢复") < skill.indexOf("Execution preflight"), true);
+  assert.equal(skill.indexOf("自动安装、启用或恢复") < skill.indexOf("3. 同一批"), true);
   for (const phrase of [
     "工具缺失时先使用当前环境支持的机制自动安装并启用",
     "已安装但不可用时先执行安全、可判断的恢复",
@@ -60,7 +62,7 @@ test("AC-03/04: Chrome and the test page are prepared automatically", async () =
     "没有可操作页面时自动创建测试标签页",
     "只有确认 Chrome 缺失或系统阻止自动启动"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
-  assert.equal(skill.indexOf("自动准备 Chrome") < skill.indexOf("Execution preflight"), true);
+  assert.equal(skill.indexOf("自动准备 Chrome") < skill.indexOf("3. 同一批"), true);
   assert.equal(workflow.includes("不得要求用户提供调试端口或 `targetId`"), true);
 });
 
@@ -81,16 +83,19 @@ test("PBH AC-01/03/04/05/30/32: role requirements are classified without fixed n
   assert.equal(resultModel.includes("明确无法提供"), true);
 });
 
-test("AC-09/10: proxy decision is the only preflight proxy input and incomplete rules stay gated", async () => {
+test("R05 A11–A13: one preflight batch asks independent Mock and ordinary proxy decisions", async () => {
   const [skill, workflow] = await sources();
   assert.equal(workflow.includes("是否需要代理 | 匹配范围 | 请求修改 | 响应修改 | 作用页面"), true);
   for (const phrase of [
-    "选择“不需要”后不再询问规则，也不启动代理",
+    "选择“不需要”后不再询问规则，也不启动普通代理",
     "选择“需要”后只追问不完整的规则字段",
     "仅当前测试页面",
     "代理效果、页面隔离、刷新或导航和停止恢复都不是执行前确认项"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
-  assert.equal(skill.includes("Execution preflight asks the user only for account/permission coverage and the proxy decision/rules."), true);
+  assert.match(skill, /同一批.*账号覆盖、Mock 决定和普通代理规则/);
+  assert.match(workflow, /允许 Mock、无其他代理规则/);
+  assert.match(workflow, /仅允许普通代理、拒绝 Mock/);
+  assert.match(workflow, /previous_decision_ref/);
 });
 
 test("PBH AC-08/09/10/12/14/15/16/31: waiting and resume loop is contextual, repeatable, and never automates permission work", async () => {
@@ -129,17 +134,18 @@ test("v2 AC-02/03/24: HTML is the only persisted report and dialogue keeps the s
   assert.equal(workflow.includes("新版不生成 `report.md`"), true);
   assert.equal(artifact.includes("`reportFormat: \"html-only-v1\"`"), true);
   assert.equal(artifact.includes("`chatTableMarkdown`"), true);
-  assert.equal(artifact.includes("历史 v1"), true);
+  assert.match(artifact, /旧 Run.*拒绝/);
+  assert.equal(artifact.includes("历史兼容分支"), false);
   assert.equal(workflow.includes("密码状态只能显示“已提供”或“待提供”"), true);
   assert.equal(workflow.includes("最终回复不得回显密码"), true);
 });
 
-test("v2 AC-11/12/29/30: report instructions require escaping, local evidence boundaries, secret blocking, and profile-aware rebuild", async () => {
+test("v2 AC-11/12/29/30: report instructions require escaping, local evidence boundaries, secret blocking, and current-workflow-only rebuild", async () => {
   const [, , , , artifact, security] = await sources();
   for (const phrase of ["动态文本统一转义", "禁止外部脚本", "普通图片", "符号链接", "HTML 编码不能替代秘密扫描"]) {
     assert.equal(security.includes(phrase), true, phrase);
   }
-  for (const phrase of ["reportPath", "htmlReportPath", "reportFormat", "重新生成 `report.html`", "无 profile 的历史 Run"]) {
+  for (const phrase of ["reportPath", "htmlReportPath", "reportFormat", "重新生成 `report.html`", "UNSUPPORTED_WORKFLOW"]) {
     assert.equal(artifact.includes(phrase), true, phrase);
   }
 });
@@ -168,7 +174,7 @@ test("v2 AC-18..28: instructions separate readiness, execution context, assistan
     "开放协作",
     "只暂停真正依赖",
     "同 Run",
-    "不自动重放"
+    "不得自动重放"
   ]) assert.equal(combined.includes(phrase), true, phrase);
 });
 
@@ -203,7 +209,7 @@ test("v1.1 AC-01..68: Skill routes explicit Mock consent, execution coverage, fa
   const [skill, workflow, resultModel, proxy, artifact, security] = await sources();
   const combined = `${skill}\n${workflow}\n${resultModel}\n${proxy}\n${artifact}\n${security}`;
   for (const phrase of [
-    "先单独询问是否允许 Mock 前端补测",
+    "同一批",
     "不证明真实后端",
     "--mock-fallback allowed|declined",
     "coverage_plan",
@@ -218,9 +224,10 @@ test("v1.1 AC-01..68: Skill routes explicit Mock consent, execution coverage, fa
     "保持拦截和锁",
     "Mock 前端补测",
     "原始真实结果",
-    "历史 v2 Run"
+    "b2b-e2e-current"
   ]) assert.equal(combined.includes(phrase), true, phrase);
-  assert.equal(skill.indexOf("先单独询问是否允许 Mock 前端补测") < skill.indexOf("一次性确认"), true);
+  assert.equal(combined.includes("先单独询问是否允许 Mock 前端补测"), false);
+  for (const phrase of ["preparation_adjustment", "form_interaction", "supplementary_attempt", "mock_channel_coverage", "isolation_unknown", "Service Worker", "previous_decision_ref", "rules_sha256"]) assert.ok(combined.includes(phrase), phrase);
   assert.equal(combined.includes("用 HTTP 方法推断读写"), true);
 });
 
@@ -228,14 +235,16 @@ test("UAT-02: strict expected text remains failed when page shows a broader labe
   const root = await mkdtemp(path.join(os.tmpdir(), "uat-strict-"));
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await oneCase(root, ["评分"]) });
+    await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "UAT-CASE/S1/O1" });
     await recordEvent(run.runRoot, {
       type: "checkpoint_result",
       checkpoint_id: "UAT-CASE/S1/O1",
       result: "failed",
       reason: "页面字段实际显示“用户评分”，未显示用例要求的“评分”",
       observation: "详情页标签为“用户评分”",
-      evidence_status: "complete"
+      evidence_status: "partial"
     });
+    await recordFixtureScreenshotGaps(run.runRoot);
     const report = await generateReport(run.runRoot);
     assert.deepEqual(report.counts, { passed: 0, failed: 1, undetermined: 0, not_executed: 0 });
     assert.equal((await readFile(report.reportPath, "utf8")).includes("用户评分"), true);
@@ -261,10 +270,14 @@ test("UAT-04: permission layers aggregate menu pass plus direct/data fail to cas
       ["O1", "passed", "普通用户页面未显示管理菜单"],
       ["O2", "failed", "普通用户直接访问管理 URL 后页面仍展示管理数据"],
       ["O3", "failed", "管理数据请求返回 200 且响应包含业务记录"]
-    ]) await recordEvent(run.runRoot, {
-      type: "checkpoint_result", checkpoint_id: `UAT-CASE/S1/${oracle}`, result, reason,
-      observation: reason, evidence_status: "complete"
-    });
+    ]) {
+      await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: `UAT-CASE/S1/${oracle}` });
+      await recordEvent(run.runRoot, {
+        type: "checkpoint_result", checkpoint_id: `UAT-CASE/S1/${oracle}`, result, reason,
+        observation: reason, evidence_status: "partial"
+      });
+    }
+    await recordFixtureScreenshotGaps(run.runRoot);
     assert.equal((await generateReport(run.runRoot)).counts.failed, 1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -273,11 +286,13 @@ test("UAT-05/TASK-07-07: screenshot failure changes evidence only", async () => 
   const root = await mkdtemp(path.join(os.tmpdir(), "uat-screenshot-"));
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await oneCase(root, ["页面显示成功"]) });
+    await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "UAT-CASE/S1/O1" });
     await recordEvent(run.runRoot, {
       type: "checkpoint_result", checkpoint_id: "UAT-CASE/S1/O1", result: "passed",
       reason: "结构化页面观察确认显示成功；截图写入失败", observation: "页面显示成功",
       evidence_status: "missing"
     });
+    await recordFixtureScreenshotGaps(run.runRoot);
     assert.equal((await generateReport(run.runRoot)).counts.passed, 1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -289,14 +304,16 @@ test("TASK-07-08/10: disconnect recovery and cleanup failure remain independent 
   const root = await mkdtemp(path.join(os.tmpdir(), "uat-cleanup-"));
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await oneCase(root, ["页面显示成功"]) });
+    await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "UAT-CASE/S1/O1" });
     await recordEvent(run.runRoot, {
       type: "checkpoint_result", checkpoint_id: "UAT-CASE/S1/O1", result: "passed",
-      reason: "页面显示成功", observation: "页面显示成功", evidence_status: "complete"
+      reason: "页面显示成功", observation: "页面显示成功", evidence_status: "partial"
     });
     await recordEvent(run.runRoot, {
       type: "cleanup_state",
       cleanup: { attempted: true, completed: false, items: [{ item: "角色恢复", succeeded: false, reason: "测试账号已失效" }] }
     });
+    await recordFixtureScreenshotGaps(run.runRoot);
     const report = await generateReport(run.runRoot);
     assert.equal(report.counts.passed, 1);
     assert.equal((await readFile(report.reportPath, "utf8")).includes("测试账号已失效"), true);

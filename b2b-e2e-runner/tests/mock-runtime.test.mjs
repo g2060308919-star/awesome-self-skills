@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { CURRENT_WORKFLOW } from "../scripts/lib/workflow-contract.mjs";
 import { loadMockProxyBinding } from "../scripts/lib/mock-runtime.mjs";
 
 function sha(value) {
@@ -29,17 +30,26 @@ function scenario() {
 }
 
 function log(hash, decision = "allowed") {
-  return {
+  const result = {
     schema_version: "2.0", extensions: { execution_coverage: { schema_version: "1.0" }, mock_fallback: { schema_version: "1.0" } },
     run: { run_id: "RUN-1", status: "running" }, events: [
       { type: "mock_policy", action: "initial", decision, decision_source: "user", basis: "明确选择", sequence: 1, at: "2026-09-20T00:00:01Z" },
       {
         type: "mock_attempt", attempt_id: "attempt-1", candidate_ids: ["candidate-1"], case_id: "CASE-1", action: "started",
-        scenario_revision: 1, scenario_hash: hash, state_version: 0, context_refs: [1], proxy_cycle_refs: ["cycle-1"],
+        scenario_revision: 1, scenario_hash: hash, state_version: 0, context_refs: [3], proxy_cycle_refs: ["cycle-1"],
         candidate_checkpoint_ids: ["CASE-1/s/o"], supporting_checkpoint_ids: [], sequence: 2, at: "2026-09-20T00:00:02Z"
       }
+      , { type: "coverage_context", sequence: 3, context_ref: "context-1", target_id: "A", verification: "verified" },
+      { type: "network_observation", sequence: 4, context_ref: "context-1", target_id: "A", channel: "page-http", route_id: "save", url: "https://fixture.test/api/save", method: "POST" },
+      { type: "mock_channel_coverage", sequence: 5, context_ref: "context-1", target_id: "A", scenario_hash: hash,
+        covered_route_ids: ["save"], request_refs: [4], channels: [{ kind: "page-http", target_id: "A", request_refs: [4] }], uncovered_channels: [] }
     ]
   };
+  result.events[0].sequence = 2;
+  result.events[1].sequence = 6;
+  result.events.unshift({ type: "workflow_profile", profile: CURRENT_WORKFLOW, sequence: 1 });
+  result.events.sort((left, right) => left.sequence - right.sequence);
+  return result;
 }
 
 async function fixture() {
@@ -54,7 +64,7 @@ async function fixture() {
 
 function config(root, hash) {
   return {
-    run_root: root, run_id: "RUN-1", proxy_cycle_id: "cycle-1",
+    run_root: root, run_id: "RUN-1", proxy_cycle_id: "cycle-1", target_id: "A", mock_channel_coverage_ref: 5,
     mock_scenario: {
       path: "mock/scenario.json", sha256: hash, attempt_id: "attempt-1",
       state_path: "mock/state.json", receipts_path: "mock/receipts.json"
@@ -79,7 +89,7 @@ test("v1.1 AC-20/21/22/30/40: proxy binding verifies Run ownership and persists 
     current.events.push({
       type: "mock_observation", attempt_id: "attempt-1", receipt_id: receipt.receipt_id, route_id: "save", request_id: "request-1",
       disposition: "mocked", request_facts: ["exact request"], response_facts: ["201"], state_before_version: 0,
-      state_after_version: 1, evidence_refs: [], proxy_cycle_ref: "cycle-1", sequence: 3, at: "2026-09-20T00:00:03Z"
+      state_after_version: 1, evidence_refs: [], proxy_cycle_ref: "cycle-1", sequence: 7, at: "2026-09-20T00:00:03Z"
     });
     await writeFile(path.join(root, "execution-log.json"), JSON.stringify(current));
     const resumed = await loadMockProxyBinding(config(root, hash));

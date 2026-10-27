@@ -1,11 +1,12 @@
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
+import { recordFixtureScreenshotGaps } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent, resumeCheck } from "../scripts/run-artifacts.mjs";
-import { markAsHistoricalV2 } from "./test-helpers.mjs";
+import { generateReport, initializeRun, resumeCheck } from "../scripts/run-artifacts.mjs";
 
 async function createRun(root) {
   const casesPath = path.join(root, "cases.json");
@@ -17,11 +18,11 @@ async function createRun(root) {
       { case_id: "INDEPENDENT", module: "公共", title: "独立检查", preconditions: [], steps: [{ step_id: "s", action: "查看公共状态", expected: [{ oracle_id: "o", text: "页面显示可用" }] }] }
     ]
   }));
-  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-  await markAsHistoricalV2(run.runRoot);
+  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["BLOCKED", "INDEPENDENT"]
   });
+  await recordFixtureScreenshotGaps(run.runRoot);
   return run;
 }
 
@@ -132,6 +133,8 @@ test("AC-17/24: awaiting_user must point to an open assistance request and expla
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-awaiting-"));
   try {
     const run = await createRun(root);
+    await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: independentCheckpoint });
+    await recordEvent(run.runRoot, { type: "checkpoint_result", checkpoint_id: independentCheckpoint, result: "passed", reason: "独立公共页面检查已完成", observation: "公共页面可用", evidence_status: "missing" });
     await recordEvent(run.runRoot, {
       type: "assistance", assistance_id: "assist-review", phase: "requested", checkpoint_ids: [blockedCheckpoint],
       description: "需要用户完成外部操作", required_user_action: "完成后通知 Runner",
@@ -156,6 +159,8 @@ test("AC-25/28: resuming a global v2 pause requires resume-check and resolution 
   const root = await mkdtemp(path.join(os.tmpdir(), "runner-v2-resume-gates-"));
   try {
     const run = await createRun(root);
+    await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: independentCheckpoint });
+    await recordEvent(run.runRoot, { type: "checkpoint_result", checkpoint_id: independentCheckpoint, result: "passed", reason: "独立公共页面检查已完成", observation: "公共页面可用", evidence_status: "missing" });
     await recordEvent(run.runRoot, {
       type: "assistance", assistance_id: "assist-review", phase: "requested", checkpoint_ids: [blockedCheckpoint],
       description: "需要用户完成外部操作", required_user_action: "完成后通知 Runner", attempts: [], decision_source: "agent"
@@ -168,10 +173,11 @@ test("AC-25/28: resuming a global v2 pause requires resume-check and resolution 
       recordEvent(run.runRoot, { type: "run_state", status: "running" }),
       error => error.code === "RUN_CONSISTENCY" && /resume-check/.test(error.message)
     );
+    await generateReport(run.runRoot);
     await resumeCheck(run.runRoot);
     await assert.rejects(
       recordEvent(run.runRoot, { type: "run_state", status: "running" }),
-      error => error.code === "RUN_CONSISTENCY" && /协作事项/.test(error.message)
+      error => error.code === "RUN_CONSISTENCY" && /协作/.test(error.message)
     );
     await recordEvent(run.runRoot, {
       type: "assistance", assistance_id: "assist-review", phase: "resolved", checkpoint_ids: [blockedCheckpoint],
@@ -195,9 +201,8 @@ test("AC-23/28: a v2 permission wait must reference the same open assistance ite
         steps: [{ step_id: "s", action: "核对权限页面", expected: [{ oracle_id: "o", text: "显示授权信息" }] }]
       }]
     }));
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-    await markAsHistoricalV2(run.runRoot);
-    await recordEvent(run.runRoot, {
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+      await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [],
       groups: [{
         group_id: "g-review", role_text: "需审核权限", permissions: ["查看授权信息"], case_ids: ["NEEDS-ROLE"],
@@ -205,6 +210,7 @@ test("AC-23/28: a v2 permission wait must reference the same open assistance ite
         preparation_owner: "user", declaration: "用户需要准备该账号的查看权限"
       }]
     });
+  await recordFixtureScreenshotGaps(run.runRoot);
     await recordEvent(run.runRoot, {
       type: "assistance", assistance_id: "assist-review", phase: "requested", checkpoint_ids: ["NEEDS-ROLE/s/o"],
       group_ids: ["g-review"], description: "该账号尚缺查看授权信息的权限", required_user_action: "请完成权限准备后通知 Runner",
@@ -216,7 +222,7 @@ test("AC-23/28: a v2 permission wait must reference the same open assistance ite
     }), error => error.code === "RUN_CONSISTENCY" && /assistance_id/.test(error.message));
     await assert.rejects(recordEvent(run.runRoot, {
       type: "permission_wait", assistance_id: "missing", group_id: "g-review", checkpoint_ids: ["NEEDS-ROLE/s/o"], reason: "等待用户准备权限"
-    }), error => error.code === "RUN_CONSISTENCY" && /协作事项/.test(error.message));
+    }), error => error.code === "RUN_CONSISTENCY" && /协作/.test(error.message));
     await assert.doesNotReject(recordEvent(run.runRoot, {
       type: "permission_wait", assistance_id: "assist-review", group_id: "g-review", checkpoint_ids: ["NEEDS-ROLE/s/o"], reason: "等待用户准备权限"
     }));
@@ -237,9 +243,8 @@ test("AC-26/28: v2 stop_waiting ends only its permission scope without the legac
         steps: [{ step_id: "s", action: "核对目标", expected: [{ oracle_id: "o", text: "显示目标信息" }] }]
       }]
     }));
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v2" });
-    await markAsHistoricalV2(run.runRoot);
-    await recordEvent(run.runRoot, {
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+      await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [],
       groups: [{
         group_id: "g-wait", role_text: "待准备角色", permissions: ["查看目标"], case_ids: ["WAIT"],
@@ -247,6 +252,7 @@ test("AC-26/28: v2 stop_waiting ends only its permission scope without the legac
         preparation_owner: "user", declaration: "用户需要自行准备该权限"
       }]
     });
+  await recordFixtureScreenshotGaps(run.runRoot);
     const blocker = await recordEvent(run.runRoot, {
       type: "blocker", checkpoint_ids: ["WAIT/s/o"], description: "当前账号尚未具备所需准备条件",
       exploration_summary: {

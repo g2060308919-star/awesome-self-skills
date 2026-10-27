@@ -185,7 +185,8 @@ test("AC-022/FR-076: stop verifies state owner token before signaling exactly it
     await listener.start();
     const state = JSON.parse(await readFile(statePath, "utf8"));
     const signaled = [];
-    await stopProxyFromState(statePath, { signal: (pid, name) => signaled.push([pid, name]), wait: false });
+    const requested = await stopProxyFromState(statePath, { signal: (pid, name) => signaled.push([pid, name]), wait: false });
+    assert.equal(requested.stopped, false, "sending SIGTERM does not verify process or page cleanup");
     assert.deepEqual(signaled, [[process.pid, "SIGTERM"]]);
 
     state.ownerToken = "not-the-owner";

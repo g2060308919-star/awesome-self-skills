@@ -4,6 +4,7 @@ import { chmod, lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { withRunMutation } from "./lib/run-mutation.mjs";
 import { writeJsonAtomic, writeTextAtomic } from "./lib/atomic-json.mjs";
 import {
   expectedCheckpointIds,
@@ -14,18 +15,20 @@ import {
 import { assertNoSecrets } from "./lib/redaction.mjs";
 import { readScreenshotSource, writeScreenshotExclusive } from "./lib/evidence-import.mjs";
 import { validateScreenshotBytes } from "./lib/screenshot-validation.mjs";
-import { aggregateCase, buildReport, renderChatTableMarkdown } from "./lib/report.mjs";
+import { aggregateCase, renderChatTableMarkdown } from "./lib/report.mjs";
+import { loadGCaseDocumentHandoff } from "./lib/g-case-document-handoff.mjs";
 import { buildReportModel } from "./lib/report-model.mjs";
 import { buildHtmlReport } from "./lib/report-html.mjs";
 import { validateCoverageEvent, validateCoverageLog } from "./lib/execution-coverage.mjs";
+import { validateExecutionFact, validateExecutionFacts, reduceActions } from "./lib/execution-facts.mjs";
 import { validateMockEvent, validateMockLog } from "./lib/mock-fallback.mjs";
 import {
-  permissionWorkflowProfile,
-  permissionWorkflowProfileV2,
   permissionWorkflowProfiles,
   validatePermissionEvent,
   validatePermissionLog
 } from "./lib/permission-batches.mjs";
+
+import { CURRENT_WORKFLOW, assertCurrentWorkflow } from "./lib/workflow-contract.mjs";
 
 function ensureRuntime() {
   const major = Number(process.versions.node.split(".")[0]);
@@ -54,22 +57,21 @@ const RUN_EXTENSION_VERSION = "1.0";
 const MOCK_FALLBACK_DECISIONS = new Set(["allowed", "declined"]);
 
 function validateRunExtensions(log) {
-  if (log.extensions === undefined) return;
+  assertCurrentWorkflow(log);
+  if (log.extensions === undefined) throw consistencyError("当前 Run 必须包含覆盖与 Mock 能力格式");
   if (!log.extensions || typeof log.extensions !== "object" || Array.isArray(log.extensions)) {
     throw consistencyError("Run 扩展必须是对象");
   }
   const supported = new Set([EXECUTION_COVERAGE_EXTENSION, MOCK_FALLBACK_EXTENSION]);
   const unknown = Object.keys(log.extensions).find(key => !supported.has(key));
   if (unknown) throw consistencyError(`未知 Run 扩展：${unknown}`);
-  const profile = log.events?.find(event => event.type === "workflow_profile")?.profile;
-  if (profile !== permissionWorkflowProfileV2) throw consistencyError("Run 扩展只允许用于 v2 工作流");
   for (const [name, extension] of Object.entries(log.extensions)) {
     if (!extension || typeof extension !== "object" || Array.isArray(extension) ||
         Object.keys(extension).length !== 1 || extension.schema_version !== RUN_EXTENSION_VERSION) {
       throw consistencyError(`Run 扩展 ${name} 版本无效`);
     }
   }
-  if (!log.extensions[EXECUTION_COVERAGE_EXTENSION]) throw consistencyError("v1.1 Run 扩展缺少执行覆盖能力");
+  if (!log.extensions[EXECUTION_COVERAGE_EXTENSION] || !log.extensions[MOCK_FALLBACK_EXTENSION]) throw consistencyError("当前 Run 扩展缺少覆盖或 Mock 能力");
   if (log.extensions[MOCK_FALLBACK_EXTENSION] && !log.extensions[EXECUTION_COVERAGE_EXTENSION]) {
     throw consistencyError("Mock 扩展必须与执行覆盖扩展共同启用");
   }
@@ -198,24 +200,23 @@ async function scanEvidenceDirectory(runRoot) {
   }
 }
 
-export async function initializeRun({ workspaceRoot, casesPath, runId = createRunId(), workflowProfile, mockFallback }) {
+export async function initializeRun({ workspaceRoot, casesPath, casesInput, runId = createRunId(), workflowProfile = CURRENT_WORKFLOW, mockFallback }) {
   ensureRuntime();
-  if (!workspaceRoot || !casesPath) throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 必填");
+  if (!workspaceRoot || (casesPath === undefined) === (casesInput === undefined)) throw runnerError("INPUT_CONTRACT", "workspaceRoot 与 casesPath 或 casesInput 必填且只选择一种");
   if (workflowProfile !== undefined && !permissionWorkflowProfiles.includes(workflowProfile)) {
-    throw runnerError("INPUT_CONTRACT", "未知 workflow profile");
+    throw runnerError("INPUT_CONTRACT", "不支持旧 workflow；请新建 b2b-e2e-current 任务");
   }
   if (mockFallback !== undefined && !MOCK_FALLBACK_DECISIONS.has(mockFallback)) {
     throw runnerError("INPUT_CONTRACT", "Mock fallback 只接受 allowed 或 declined");
   }
-  if (mockFallback !== undefined && workflowProfile !== permissionWorkflowProfileV2) {
-    throw runnerError("INPUT_CONTRACT", "Mock fallback 只允许用于 permission-batches-html-v2");
-  }
   if (!/^[A-Za-z0-9._-]+$/.test(runId)) throw runnerError("INPUT_CONTRACT", "Run ID 只能包含字母、数字、点、下划线和连字符");
-  let input;
-  try { input = JSON.parse(await readFile(casesPath, "utf8")); }
-  catch (error) {
-    if (error instanceof SyntaxError) throw runnerError("INPUT_CONTRACT", "测试用例不是合法 JSON");
-    throw error;
+  let input = casesInput;
+  if (casesPath !== undefined) {
+    try { input = JSON.parse(await readFile(casesPath, "utf8")); }
+    catch (error) {
+      if (error instanceof SyntaxError) throw runnerError("INPUT_CONTRACT", "测试用例不是合法 JSON");
+      throw error;
+    }
   }
   const testCases = normalizeTestCases(input);
   assertNoSecrets(testCases);
@@ -262,9 +263,7 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
       })))
     };
   });
-  const events = workflowProfile
-    ? [{ type: "workflow_profile", profile: workflowProfile, sequence: 1, at: now }]
-    : [];
+  const events = [{ type: "workflow_profile", profile: CURRENT_WORKFLOW, sequence: 1, at: now }];
   if (mockFallback !== undefined) {
     events.push({
       type: "mock_policy",
@@ -288,12 +287,10 @@ export async function initializeRun({ workspaceRoot, casesPath, runId = createRu
       resume_count: 0
     },
     test_cases: { path: "./test-cases.json", sha256: snapshotHash },
-    ...(workflowProfile === permissionWorkflowProfileV2 ? {
-      extensions: {
-        [EXECUTION_COVERAGE_EXTENSION]: { schema_version: RUN_EXTENSION_VERSION },
-        ...(mockFallback !== undefined ? { [MOCK_FALLBACK_EXTENSION]: { schema_version: RUN_EXTENSION_VERSION } } : {})
-      }
-    } : {}),
+    extensions: {
+      [EXECUTION_COVERAGE_EXTENSION]: { schema_version: RUN_EXTENSION_VERSION },
+      [MOCK_FALLBACK_EXTENSION]: { schema_version: RUN_EXTENSION_VERSION }
+    },
     browser: {
       mcp_status: "unknown",
       owned_target_ids: [],
@@ -371,10 +368,11 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
       }
     }
   }
+  validateExecutionFacts(run.testCases, run.log);
   validatePermissionLog(run.testCases, run.log);
   validateCoverageLog(run.testCases, run.log);
   validateMockLog(run.testCases, run.log);
-  if (workflowProfile(run.log) === permissionWorkflowProfileV2 && ["awaiting_user", "completed"].includes(run.log.run.status)) {
+  if (["awaiting_user", "completed"].includes(run.log.run.status)) {
     const captureEvents = run.log.events.filter(event => event.type === "evidence_capture");
     for (const caseId of run.log.run.actual_case_order) {
       const sourceCase = run.testCases.cases.find(item => item.case_id === caseId);
@@ -408,7 +406,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
       throw consistencyError(`用例聚合或原因不一致：${sourceCase.case_id}`);
     }
   }
-  const proxyStates = new Set(["not_required", "configured", "starting", "active", "degraded", "stopped", "cleanup_failed"]);
+  const proxyStates = new Set(["not_required", "configured", "starting", "active", "degraded", "stopped", "cleanup_failed", "isolation_unknown"]);
   if (!proxyStates.has(run.log.proxy.state) || !Array.isArray(run.log.proxy.verifications) || !run.log.proxy.cleanup) {
     throw consistencyError("代理状态结构无效");
   }
@@ -423,23 +421,10 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
       lstat(reportPath).catch(error => error.code === "ENOENT" ? null : Promise.reject(error)),
       lstat(htmlReportPath).catch(error => error.code === "ENOENT" ? null : Promise.reject(error))
     ]);
-    const profile = workflowProfile(run.log);
     const deliveryState = ["awaiting_user", "completed"].includes(run.log.run.status);
-    if (profile === permissionWorkflowProfileV2) {
-      if (reportStats) throw consistencyError("v2 工作流不得生成 report.md");
-      if ((deliveryState || htmlStats) && !htmlStats) throw consistencyError("v2 阶段或最终交付必须存在 report.html");
-    } else if (profile === permissionWorkflowProfile && (deliveryState || reportStats || htmlStats) && (!reportStats || !htmlStats)) {
-      throw consistencyError("新工作流阶段或最终交付必须同时存在 report.md 与 report.html 两份报告");
-    }
+    if (reportStats) throw consistencyError("当前流程只交付 report.html，不接受 report.md");
+    if ((deliveryState || htmlStats) && !htmlStats) throw consistencyError("阶段或最终交付必须存在 report.html");
     const model = buildReportModel(run.testCases, run.log);
-    if (reportStats) {
-      if (!reportStats.isFile() || reportStats.isSymbolicLink()) throw consistencyError("report.md 必须是普通文件");
-      const report = await readFile(reportPath, "utf8");
-      assertNoSecrets(report);
-      if (report !== buildReport(run.testCases, run.log).markdown) {
-        throw consistencyError("report.md 与用例快照和执行日志的确定性派生结果不一致");
-      }
-    }
     if (htmlStats) {
       if (!htmlStats.isFile() || htmlStats.isSymbolicLink()) throw consistencyError("report.html 必须是普通文件");
       const html = await readFile(htmlReportPath, "utf8");
@@ -459,6 +444,11 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
 }
 
 export async function recordEvent(runRoot, event) {
+  await loadRun(path.resolve(runRoot)); // Reject historical Runs before even creating a temporary lock.
+  return withRunMutation(path.resolve(runRoot), () => appendEventUnlocked(runRoot, event));
+}
+
+async function appendEventUnlocked(runRoot, event) {
   assertNoSecrets(event);
   const run = await loadRun(path.resolve(runRoot));
   if (!event || typeof event !== "object" || typeof event.type !== "string") {
@@ -473,6 +463,7 @@ export async function recordEvent(runRoot, event) {
       throw runnerError("RUN_CONSISTENCY", `未知检查点：${event.checkpoint_id}`);
     }
   }
+  validateExecutionFact(run.testCases, run.log, event);
   validatePermissionEvent(run.testCases, run.log, event);
   validateCoverageEvent(run.testCases, run.log, event);
   validateMockEvent(run.testCases, run.log, event);
@@ -572,6 +563,7 @@ export async function archiveScreenshot(runRoot, options) {
   if (event?.type !== "evidence_capture" || event.outcome !== "captured" || event.evidence?.length !== 1 || event.evidence[0].kind !== "screenshot") {
     throw consistencyError("截图归档需要一个成功的 evidence_capture 和一份 screenshot 证据");
   }
+  validateExecutionFact(run.testCases, run.log, event);
   validatePermissionEvent(run.testCases, run.log, event);
   const entry = event.evidence[0];
   if (run.log.events.some(item => item.evidence?.some(previous => previous.evidence_id === entry.evidence_id))) throw consistencyError("证据 ID 重复");
@@ -590,14 +582,15 @@ export async function archiveScreenshot(runRoot, options) {
 }
 
 export async function resumeCheck(runRoot) {
-  await validateRun(runRoot);
+  await loadRun(path.resolve(runRoot));
+  return withRunMutation(path.resolve(runRoot), () => resumeCheckUnlocked(runRoot));
+}
+
+async function resumeCheckUnlocked(runRoot) {
+  await validateRun(runRoot, { checkReport: false });
   const { log, logPath } = await loadRun(path.resolve(runRoot));
-  const confirmed = new Set(log.events
-    .filter(event => event.type === "action_confirmed")
-    .map(event => event.action_id));
-  const possiblyCommitted = log.events.filter(event =>
-    event.type === "action_dispatched" && event.side_effect === true && !confirmed.has(event.action_id)
-  );
+  const actionStates = [...reduceActions(log.events).values()];
+  const possiblyCommitted = actionStates.filter(action => action.side_effect && action.state === "dispatched_unknown").map(action => action.last_event);
   const completed = log.cases.flatMap(testCase => testCase.checkpoints.map(checkpoint => ({ testCase, checkpoint })))
     .filter(item => item.checkpoint.status === "completed")
     .at(-1);
@@ -625,7 +618,9 @@ export async function resumeCheck(runRoot) {
       ? `${completed.testCase.case_id}/${completed.checkpoint.step_id}/${completed.checkpoint.oracle_id}`
       : null,
     possibly_committed_actions: possiblyCommitted,
-    auto_replay_allowed: possiblyCommitted.length === 0,
+    action_states: actionStates,
+    auto_replay_allowed: false,
+    retryable_action_ids: actionStates.filter(action => action.replay_allowed).map(action => action.action_id),
     reverify: "恢复前必须重新验证页面、角色和代理状态；对可能已提交的副作用动作不得自动重放。"
   };
 }
@@ -659,6 +654,7 @@ function reportDelivery(log) {
 }
 
 export async function deliverReport(runRoot, { stageRequested = false } = {}) {
+  await validateRun(runRoot, { checkReport: false });
   const { log } = await loadRun(path.resolve(runRoot));
   const delivery = reportDelivery(log);
   if (!delivery.automaticallyPresent && !stageRequested) {
@@ -674,34 +670,19 @@ export async function generateReport(runRoot) {
   const { testCases, log } = loaded;
   const model = buildReportModel(testCases, log);
   assertNoSecrets(model);
-  const generated = buildReport(testCases, log);
   const html = buildHtmlReport(model);
   const chatTableMarkdown = renderChatTableMarkdown(model);
-  assertNoSecrets(generated.markdown);
   assertNoSecrets(html);
   assertNoSecrets(chatTableMarkdown);
-  const reportPath = path.join(path.resolve(runRoot), "report.md");
   const htmlReportPath = path.join(path.resolve(runRoot), "report.html");
-  const profile = workflowProfile(log);
-  if (profile === permissionWorkflowProfileV2) {
-    await writeTextAtomic(htmlReportPath, html);
-  } else {
-    await writeTextAtomic(reportPath, generated.markdown);
-    await writeTextAtomic(htmlReportPath, html);
-  }
+  await writeTextAtomic(htmlReportPath, html);
   const writtenHtml = await readFile(htmlReportPath, "utf8");
   const latestLog = await readFile(loaded.logPath);
-  if (profile !== permissionWorkflowProfileV2) {
-    const writtenMarkdown = await readFile(reportPath, "utf8");
-    assertNoSecrets(writtenMarkdown);
-    if (writtenMarkdown !== generated.markdown) throw consistencyError("报告写入后内容校验失败");
-  }
   assertNoSecrets(writtenHtml);
   if (writtenHtml !== html) throw consistencyError("报告写入后内容校验失败");
   if (digest(latestLog) !== loaded.logHash) throw consistencyError("报告生成期间执行日志发生变化，拒绝交付过期报告");
   await validateRun(runRoot);
-  if (profile === permissionWorkflowProfileV2) {
-    return {
+  return {
       reportFormat: "html-only-v1",
       reportPath: htmlReportPath,
       htmlReportPath,
@@ -710,11 +691,9 @@ export async function generateReport(runRoot) {
       eventCount: log.events.length,
       lastSequence: log.events.at(-1)?.sequence ?? 0,
       delivery: reportDelivery(log),
-      counts: generated.counts,
+      counts: model.counts,
       runId: log.run.run_id
-    };
-  }
-  return { reportPath, htmlReportPath, counts: generated.counts, runId: log.run.run_id, delivery: reportDelivery(log) };
+  };
 }
 
 function parseArguments(argv) {
@@ -747,6 +726,14 @@ async function main() {
       workflowProfile: options["workflow-profile"],
       mockFallback: options["mock-fallback"]
     });
+  } else if (command === "init-g") {
+    if (options["workflow-profile"] !== undefined && options["workflow-profile"] !== CURRENT_WORKFLOW) throw runnerError("INPUT_CONTRACT", "旧 workflow 不受支持，请新建当前任务");
+    if (!options.suite) throw runnerError("INPUT_CONTRACT", "init-g 需要已确认的 suite JSON");
+    let suite;
+    try { suite = JSON.parse(await readFile(options.suite, "utf8")); }
+    catch (error) { if (error instanceof SyntaxError) throw runnerError("INPUT_CONTRACT", "suite 不是合法 JSON"); throw error; }
+    const casesInput = await loadGCaseDocumentHandoff({ caseManifestPath: options["case-manifest"], planManifestPath: options["plan-manifest"], gCompilerPath: options["g-compiler"], suite });
+    result = await initializeRun({ workspaceRoot: options.workspace, casesInput, mockFallback: options["mock-fallback"] });
   } else if (command === "record") {
     const event = JSON.parse(await readFile(options.event, "utf8"));
     result = await recordEvent(options.run, event);

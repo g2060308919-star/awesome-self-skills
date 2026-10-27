@@ -35,7 +35,7 @@ function baseLog(decision = "allowed") {
     proxy: { required: true, state: "stopped", verifications: [], cleanup: { succeeded: true, reason: "Mock 拦截已停止" } },
     cleanup: { attempted: true, completed: true, items: [] },
     events: [
-      { type: "workflow_profile", profile: "permission-batches-html-v2", sequence: 1, at: "2026-09-20T00:00:01.000Z" },
+      { type: "workflow_profile", profile: "b2b-e2e-current", sequence: 1, at: "2026-09-20T00:00:01.000Z" },
       { type: "mock_policy", action: "initial", decision, decision_source: "user", basis: "用户明确选择", sequence: 2, at: "2026-09-20T00:00:02.000Z" },
       { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE-1"], sequence: 3, at: "2026-09-20T00:00:03.000Z" },
       {
@@ -68,7 +68,7 @@ function addGapAndCandidate(log) {
     not_started_dependencies: ["详情步骤需要列表记录 ID"]
   });
   append(log, {
-    type: "mock_candidate", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId],
+    type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId],
     gap_ids: ["gap-1"], purpose: "补测前端收到可用记录后的选择和详情链路"
   });
 }
@@ -93,24 +93,25 @@ function addCompletedAttempt(log, result = "passed") {
     type: "mock_checkpoint", attempt_id: "attempt-1", checkpoint_id: checkpointId, action: "started",
     scope_ids: ["scope-1"], context_refs: [8]
   });
+  append(log, { type: "page_observation", attempt_id: "attempt-1", checkpoint_ids: [checkpointId], description: "组件夹具页面消费事实：显示 ITEM-1" });
   log.events.push({
     type: "coverage_review", review_id: "mock-close", purpose: "checkpoint_close", plan_revision: 1,
-    based_on_sequence: 11, scope_ids: ["scope-1"], checkpoint_ids: [checkpointId], fact_refs: [10], assistance_refs: [],
+    based_on_sequence: 12, scope_ids: ["scope-1"], checkpoint_ids: [checkpointId], fact_refs: [10], assistance_refs: [],
     ready_scope_ids: ["scope-1"], preparable_scope_ids: [], blocked_scope_ids: [],
     closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [10] }],
-    choice: "close", reason: "Mock 页面和请求事实足以判断前端原预期", sequence: 12, at: "2026-09-20T00:00:12.000Z"
+    choice: "close", reason: "Mock 页面和请求事实足以判断前端原预期", sequence: 13, at: "2026-09-20T00:00:13.000Z"
   });
   append(log, {
     type: "mock_checkpoint", attempt_id: "attempt-1", checkpoint_id: checkpointId, action: "result", result,
     observation: result === "passed" ? "前端显示 ITEM-1" : "前端未显示 ITEM-1", reason: result === "passed" ? "Mock 前端链路符合原预期" : "Mock 前端链路不符合原预期",
-    evidence_refs: [], request_refs: ["receipt-1"], execution_refs: [10], coverage_review_ref: 12
+    evidence_refs: [], request_refs: ["receipt-1"], execution_refs: [10], page_observation_refs: [12], coverage_review_ref: 13
   });
   append(log, {
     type: "mock_attempt", attempt_id: "attempt-1", candidate_ids: ["candidate-1"], case_id: "CASE-1", action: "finished",
     scenario_revision: 1, scenario_hash: "b".repeat(64), state_version: 1, context_refs: [8], proxy_cycle_refs: ["proxy-cycle-1"]
   });
   append(log, {
-    type: "mock_disposition", candidate_id: "candidate-1", outcome: "supplemented", attempt_id: "attempt-1", basis_refs: [13, 14]
+    type: "mock_disposition", candidate_id: "candidate-1", outcome: "supplemented", attempt_id: "attempt-1", basis_refs: [14, 15]
   });
 }
 
@@ -133,11 +134,11 @@ test("v1.1 AC-02/04/10/35/39: declined or revoked policy, real failures, and for
     missing_conditions: ["缺数据"], known_request_facts: ["空响应"], not_started_dependencies: ["需要记录 ID"]
   });
   assert.throws(() => append(declined, {
-    type: "mock_candidate", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["gap-1"], purpose: "补测"
+    type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["gap-1"], purpose: "补测"
   }), /允许|政策/);
 
   const revoked = baseLog();
-  append(revoked, { type: "mock_policy", action: "revoked", decision: "declined", decision_source: "user", basis: "用户撤回允许" });
+  append(revoked, { type: "mock_policy", action: "revoked", previous_decision_ref: 2, decision: "declined", decision_source: "user", basis: "用户撤回允许" });
   assert.throws(() => addGapAndCandidate(revoked), /允许|政策/);
 
   const failed = baseLog();
@@ -148,7 +149,7 @@ test("v1.1 AC-02/04/10/35/39: declined or revoked policy, real failures, and for
     missing_conditions: ["缺数据"], known_request_facts: ["空响应"], not_started_dependencies: ["需要记录 ID"]
   });
   assert.throws(() => append(failed, {
-    type: "mock_candidate", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["gap-1"], purpose: "覆盖真实失败"
+    type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["gap-1"], purpose: "覆盖真实失败"
   }), /真实失败/);
 });
 
@@ -269,8 +270,8 @@ test("v1.1 AC-41: passing checkpoints from different Mock attempts cannot be spl
       ]
     }],
     events: [
-      { type: "mock_candidate", candidate_id: "c1", case_id: "CASE-MIX", checkpoint_ids: ["CASE-MIX/s1/o1"], gap_ids: ["g1"] },
-      { type: "mock_candidate", candidate_id: "c2", case_id: "CASE-MIX", checkpoint_ids: ["CASE-MIX/s2/o2"], gap_ids: ["g2"] },
+      { type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "c1", case_id: "CASE-MIX", checkpoint_ids: ["CASE-MIX/s1/o1"], gap_ids: ["g1"] },
+      { type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "c2", case_id: "CASE-MIX", checkpoint_ids: ["CASE-MIX/s2/o2"], gap_ids: ["g2"] },
       { type: "mock_attempt", action: "started", attempt_id: "a1", case_id: "CASE-MIX", candidate_ids: ["c1"], candidate_checkpoint_ids: ["CASE-MIX/s1/o1"], supporting_checkpoint_ids: [], scenario_revision: 1, scenario_hash: "a".repeat(64), state_version: 0, context_refs: [1], proxy_cycle_refs: ["cycle-1"] },
       { type: "mock_checkpoint", action: "result", attempt_id: "a1", checkpoint_id: "CASE-MIX/s1/o1", result: "passed", reason: "尝试一通过" },
       { type: "mock_attempt", action: "finished", attempt_id: "a1", context_refs: [1], proxy_cycle_refs: ["cycle-1"], state_version: 1 },
@@ -284,4 +285,32 @@ test("v1.1 AC-41: passing checkpoints from different Mock attempts cannot be spl
   const projection = projectEffectiveResults(cases, log);
   assert.equal(projection.cases[0].effective_result, "undetermined");
   assert.match(projection.cases[0].reason, /不能拼接|同一.*尝试/);
+});
+
+test('R05 A13: declined→allowed→revoked→allowed decisions append with exact previous decision',()=>{
+ const log=baseLog('declined');
+ append(log,{type:'mock_policy',action:'changed',decision:'allowed',decision_source:'user',basis:'User explicitly allows frontend simulation now',previous_decision_ref:2});
+ const allowed=log.events.at(-1).sequence;
+ append(log,{type:'mock_policy',action:'revoked',decision:'declined',decision_source:'user',basis:'User revokes mock',previous_decision_ref:allowed});
+ const revoked=log.events.at(-1).sequence;
+ assert.throws(()=>append(log,{type:'mock_policy',action:'changed',decision:'allowed',decision_source:'user',basis:'stale reference',previous_decision_ref:2}),/previous/);
+ append(log,{type:'mock_policy',action:'changed',decision:'allowed',decision_source:'user',basis:'User explicitly allows again',previous_decision_ref:revoked});
+ assert.deepEqual(log.events.filter(e=>e.type==='mock_policy').map(e=>e.decision),['declined','allowed','declined','allowed']);
+});
+test('R10 A28: mock success cannot prove real backend or permission, receipt cannot substitute visible UI consumption',()=>{
+ for(const domain of ['real_backend','real_permission']) {
+  const log=baseLog(); addGapAndCandidate(log); log.events.at(-1).assertion_domain=domain;
+  assert.throws(()=>addCompletedAttempt(log),/真实后端|真实权限/);
+ }
+ const valid=baseLog(); addGapAndCandidate(valid); addCompletedAttempt(valid);
+ const result=valid.events.find(e=>e.type==='mock_checkpoint' && e.action==='result');
+ delete result.page_observation_refs;
+ assert.throws(()=>validateMockLog(testCases,valid),/page_observation_refs/);
+});
+
+test('A28: stale page observations before checkpoint execution cannot prove mock UI consumption',()=>{
+ const log=baseLog(); addGapAndCandidate(log); addCompletedAttempt(log);
+ const observed=log.events.find(e=>e.type==='page_observation'); const result=log.events.find(e=>e.type==='mock_checkpoint' && e.action==='result');
+ observed.sequence=4; result.page_observation_refs=[4];
+ assert.throws(()=>validateMockLog(testCases,log),/页面消费/);
 });

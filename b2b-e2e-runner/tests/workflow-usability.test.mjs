@@ -23,7 +23,24 @@ test("internal stage generation is distinct from external delivery on explicit R
   }
 });
 
-test("proxy preparation is skipped when unused and never implies silent restart or fallback", async () => {
+test("shared connectivity is prepared before login without interception or an implicit restart", async () => {
   const content = await read("references/proxy-protocol.md");
-  for (const text of ["不需要代理", "跳过", "remote-debugging-pipe", "browserUrl", "登录前", "重新登录", "不是代理效果验证", "不得要求用户查端口"]) assert.ok(content.includes(text), text);
+  for (const text of ["首次未登录启动", "不跳过", "不启用 Fetch", "remote-debugging-pipe", "browserUrl", "重新登录", "不是代理效果验证", "不得要求用户查端口"]) assert.ok(content.includes(text), text);
+});
+
+test("R12 A36: instructions expose one workflow and preserve connection, assertion and observation boundaries", async () => {
+  const files = ["SKILL.md", "references/workflow.md", "references/artifact-contract.md", "references/result-model.md", "references/proxy-protocol.md", "references/security-and-evidence.md"];
+  const contents = await Promise.all(files.map(read));
+  for (const [index, content] of contents.entries()) {
+    for (const command of content.matchAll(/--workflow-profile\s+([^\s`]+)/g)) {
+      assert.equal(command[1], "b2b-e2e-current", `${files[index]} exposes another workflow`);
+    }
+    assert.doesNotMatch(content, /permission-batches-html-v[123]/, files[index]);
+  }
+  const contract = contents[2];
+  for (const text of ["browser-session.mjs prepare", "browser-session.mjs discover", "browser-session.mjs bind", "不自行启动", "当前 bind CLI 只实现 marker 路径", "checkpoint_semantics", "preparation_adjustment", "assertion_domain", "page_observation_refs", "previous_decision_ref", "isolation_unknown"]) {
+    assert.ok(contents.join("\n").includes(text), text);
+  }
+  assert.ok(contract.includes("不重放业务写入"));
+  assert.ok(contract.includes("后台或权限专属断言不能由模拟升级为通过"));
 });

@@ -1,10 +1,12 @@
+import { recordFixtureScreenshotGaps } from "./test-helpers.mjs";
+import { recordFixtureEvent as recordEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { generateReport, initializeRun, recordEvent } from "../scripts/run-artifacts.mjs";
+import { generateReport, initializeRun } from "../scripts/run-artifacts.mjs";
 
 test("AC-22/23: HTML escapes hostile facts, encodes safe local evidence paths, and never auto-loads non-images", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "report-security-"));
@@ -22,7 +24,7 @@ test("AC-22/23: HTML escapes hostile facts, encodes safe local evidence paths, a
         steps: [{ step_id: "s", action: "查看", expected: [{ oracle_id: "o", text: "显示安全文本" }] }]
       }]
     }));
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "permission-batches-html-v1" });
+    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
     await recordEvent(run.runRoot, { type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: [caseId] });
     await recordEvent(run.runRoot, { type: "case_started", case_id: caseId });
     await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: `${caseId}/s/o` });
@@ -43,6 +45,7 @@ test("AC-22/23: HTML escapes hostile facts, encodes safe local evidence paths, a
         }
       ]
     });
+    await recordFixtureScreenshotGaps(run.runRoot);
     await recordEvent(run.runRoot, { type: "run_state", status: "completed" });
     const generated = await generateReport(run.runRoot);
     const [markdown, html] = await Promise.all([readFile(generated.reportPath, "utf8"), readFile(generated.htmlReportPath, "utf8")]);

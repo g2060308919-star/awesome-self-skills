@@ -113,27 +113,28 @@ function evidenceEntries(log) {
 }
 
 function validatePolicy(log, event) {
-  rejectUnknown(event, new Set(["type", "action", "decision", "decision_source", "basis", "sequence", "at"]), "mock_policy");
+  rejectUnknown(event, new Set(["type", "action", "decision", "decision_source", "basis", "previous_decision_ref", "sequence", "at"]), "mock_policy");
   requireValue(mockExtension(log), "mock_policy 缺少 mock_fallback 扩展");
-  requireValue(["initial", "revoked"].includes(event.action), "mock_policy.action 无效");
+  requireValue(["initial", "changed", "revoked"].includes(event.action), "mock_policy.action 无效");
   requireValue(["allowed", "declined"].includes(event.decision), "mock_policy.decision 无效");
   requireValue(event.decision_source === "user" && string(event.basis), "mock_policy 必须保存脱敏的用户明确决定");
   const previous = (log.events ?? []).filter(item => item.type === "mock_policy");
   if (event.action === "initial") {
     requireValue(previous.length === 0, "mock_policy.initial 只能记录一次");
-    requireValue(!(log.events ?? []).some(item => item.type === "permission_plan"), "mock_policy.initial 必须早于 permission_plan");
+    requireValue(event.previous_decision_ref === undefined, "首次 Mock 决定不得引用旧决定");
   } else {
-    requireValue(policy(log) === "allowed" && event.decision === "declined", "Mock 政策只能从 allowed 明确撤回为 declined");
-    requireValue(!previous.some(item => item.action === "revoked"), "Mock 政策已经撤回，不能覆盖历史决定");
+    requireValue(previous.length > 0 && event.previous_decision_ref === previous.at(-1).sequence, "Mock 变更必须引用最新 previous_decision_ref");
+    if (event.action === "revoked") requireValue(policy(log) === "allowed" && event.decision === "declined", "撤回必须从 allowed 变为 declined");
   }
 }
 
 function validateDataGap(testCases, log, event) {
   rejectUnknown(event, new Set([
     "type", "gap_id", "checkpoint_ids", "real_blocker_refs", "exploration_refs", "missing_conditions",
-    "known_request_facts", "not_started_dependencies", "sequence", "at"
+    "known_request_facts", "not_started_dependencies", "gap_kind", "sequence", "at"
   ]), "data_gap");
   requireValue(coverageExtension(log), "data_gap 需要 execution_coverage 扩展");
+  requireValue(event.gap_kind === undefined || ["missing_data", "preparation_blocked"].includes(event.gap_kind), "data_gap.gap_kind 无效");
   requireValue(string(event.gap_id) && !(log.events ?? []).some(item => item.type === "data_gap" && item.gap_id === event.gap_id),
     `data_gap.gap_id 缺失或重复：${event.gap_id}`);
   const records = checkpointRecords(testCases, log);
@@ -143,7 +144,7 @@ function validateDataGap(testCases, log, event) {
   sequences(event.exploration_refs, "data_gap.exploration_refs");
   for (const reference of [...event.real_blocker_refs, ...event.exploration_refs]) {
     const source = eventAt(log, reference);
-    requireValue(source && ["blocker", "page_observation", "network_observation", "checkpoint_result"].includes(source.type),
+    requireValue(source && ["blocker", "page_observation", "network_observation", "checkpoint_result", "preparation_adjustment"].includes(source.type),
       `data_gap 引用的真实阻塞或探索事实无效：${reference}`);
   }
   strings(event.missing_conditions, "data_gap.missing_conditions");
@@ -157,7 +158,7 @@ function stateBefore(log) {
 
 function validateCandidate(testCases, log, event) {
   rejectUnknown(event, new Set([
-    "type", "candidate_id", "case_id", "checkpoint_ids", "gap_ids", "purpose", "sequence", "at"
+    "type", "candidate_id", "case_id", "checkpoint_ids", "gap_ids", "purpose", "assertion_domain", "assertion_basis", "sequence", "at"
   ]), "mock_candidate");
   requireValue(mockExtension(log) && policy(log) === "allowed", "Mock 政策未明确允许，不能建立候选");
   const state = stateBefore(log);
@@ -179,6 +180,11 @@ function validateCandidate(testCases, log, event) {
   }
   requireValue(event.checkpoint_ids.every(id => covered.has(id)), "mock_candidate 的检查点缺少对应 data_gap 事实");
   requireValue(string(event.purpose), "mock_candidate 缺少补测目的");
+  requireValue(["frontend", "real_backend", "real_permission"].includes(event.assertion_domain) && string(event.assertion_basis), "mock_candidate 需要根据原断言分类验证域并记录依据");
+  for (const id of event.checkpoint_ids) {
+    const semantics = (log.events ?? []).find(item => item.type === "checkpoint_semantics" && item.checkpoint_id === id);
+    requireValue(!semantics || semantics.assertion_domain === event.assertion_domain, "Mock 候选不得改写原检查点验证域");
+  }
 }
 
 function validateAttempt(testCases, log, event) {
@@ -186,7 +192,7 @@ function validateAttempt(testCases, log, event) {
     "type", "attempt_id", "candidate_ids", "case_id", "action", "scenario_revision", "scenario_hash", "state_version",
     "context_refs", "proxy_cycle_refs", "candidate_checkpoint_ids", "supporting_checkpoint_ids", "sequence", "at"
   ]), "mock_attempt");
-  requireValue(mockExtension(log) && policy(log) === "allowed", "Mock 政策未明确允许或已撤回，不能运行尝试");
+  requireValue(mockExtension(log) && (policy(log) === "allowed" || ["paused", "aborted"].includes(event.action)), "Mock 政策未明确允许或已撤回，不能运行尝试");
   requireValue(string(event.attempt_id) && ATTEMPT_ACTIONS.has(event.action), "mock_attempt 标识或 action 无效");
   requireValue(Number.isInteger(event.scenario_revision) && event.scenario_revision > 0 && /^[a-f0-9]{64}$/.test(event.scenario_hash),
     "mock_attempt 场景版本或哈希无效");
@@ -261,7 +267,7 @@ function validateObservation(log, event) {
 function validateMockCheckpoint(testCases, log, event) {
   rejectUnknown(event, new Set([
     "type", "attempt_id", "checkpoint_id", "action", "scope_ids", "context_refs", "result", "observation", "reason",
-    "evidence_refs", "request_refs", "execution_refs", "coverage_review_ref", "sequence", "at"
+    "evidence_refs", "request_refs", "execution_refs", "page_observation_refs", "coverage_review_ref", "sequence", "at"
   ]), "mock_checkpoint");
   const state = stateBefore(log);
   const attempt = state.attempts.get(event.attempt_id);
@@ -271,6 +277,7 @@ function validateMockCheckpoint(testCases, log, event) {
   const records = checkpointRecords(testCases, log);
   requireValue(records.has(event.checkpoint_id), "mock_checkpoint 引用未知原检查点");
   if (event.action === "started") {
+    requireValue(policy(log) === "allowed", "Mock 已撤回，不能开始新检查点");
     requireValue(!attempt.checkpoint_started.has(event.checkpoint_id) && !attempt.checkpoint_results.has(event.checkpoint_id),
       "同一 Mock 尝试内检查点不得重复开始或覆盖结果");
     strings(event.scope_ids, "mock_checkpoint.scope_ids");
@@ -288,6 +295,18 @@ function validateMockCheckpoint(testCases, log, event) {
     "mock_checkpoint.result 必须先 started 且只能终结一次");
   requireValue(["passed", "failed", "undetermined"].includes(event.result), "mock_checkpoint.result 仅允许 passed/failed/undetermined");
   requireValue(string(event.observation) && string(event.reason), "mock_checkpoint.result 缺少观察或原因");
+  if (event.result === "passed") {
+    const candidates = attempt.candidate_ids.map(id => state.candidates.get(id)).filter(item => item.checkpoint_ids.includes(event.checkpoint_id));
+    requireValue(candidates.length > 0 && candidates.every(item => item.assertion_domain === "frontend"), "Mock 不能证明真实后端持久化或真实权限；只能记录前端补充观察");
+    sequences(event.page_observation_refs, "mock_checkpoint.page_observation_refs");
+    const checkpointStart = (log.events ?? []).find(item => item.type === "mock_checkpoint" && item.action === "started" && item.attempt_id === event.attempt_id && item.checkpoint_id === event.checkpoint_id);
+    const lastReceipt = Math.max(0, ...(log.events ?? []).filter(item => item.type === "mock_observation" && (event.request_refs ?? []).includes(item.receipt_id)).map(item => item.sequence));
+    for (const reference of event.page_observation_refs) {
+      const observed = eventAt(log, reference);
+      requireValue(observed?.type === "page_observation" && observed.checkpoint_ids?.includes(event.checkpoint_id) && observed.attempt_id === event.attempt_id && observed.sequence > checkpointStart.sequence && observed.sequence > lastReceipt,
+        "Mock 通过必须引用本尝试、本检查点的真实页面消费观察，代理回执不足以证明 UI");
+    }
+  }
   strings(event.evidence_refs, "mock_checkpoint.evidence_refs", { empty: true });
   const registered = evidenceEntries(log);
   const started = (log.events ?? []).find(item => item.type === "mock_checkpoint" && item.action === "started" &&
@@ -300,7 +319,7 @@ function validateMockCheckpoint(testCases, log, event) {
   strings(event.request_refs, "mock_checkpoint.request_refs", { empty: event.result === "undetermined" });
   for (const receiptId of event.request_refs) requireValue(state.receipts.get(receiptId)?.attempt_id === event.attempt_id, `mock_checkpoint 引用未知请求收据：${receiptId}`);
   sequences(event.execution_refs, "mock_checkpoint.execution_refs", { empty: event.result === "undetermined" });
-  for (const reference of event.execution_refs) requireValue(eventAt(log, reference)?.type === "mock_observation", `mock_checkpoint.execution_refs 无效：${reference}`);
+  for (const reference of event.execution_refs) requireValue(eventAt(log, reference)?.type === "mock_observation" && eventAt(log, reference)?.attempt_id === event.attempt_id, `mock_checkpoint.execution_refs 无效：${reference}`);
   const review = eventAt(log, event.coverage_review_ref);
   requireValue(review?.type === "coverage_review" && review.purpose === "checkpoint_close" && review.checkpoint_ids?.includes(event.checkpoint_id),
     "mock_checkpoint.result 缺少匹配的 checkpoint_close 审查");
@@ -472,7 +491,9 @@ export function projectEffectiveResults(testCases, log) {
       for (const oracle of step.expected) {
         const checkpointId = `${sourceCase.case_id}/${step.step_id}/${oracle.oracle_id}`;
         const real = loggedCase.checkpoints[checkpointIndex++];
-        const mockResult = mock.get(checkpointId);
+        let mockResult = mock.get(checkpointId);
+        const semantics = (log.events ?? []).find(event => event.type === "checkpoint_semantics" && event.checkpoint_id === checkpointId);
+        if (semantics && semantics.assertion_domain !== "frontend" && mockResult?.result === "passed") mockResult = null;
         if (real.result === "failed") projected.push({ result: "failed", source: "real", reason: real.reason, attempt_id: null });
         else if (mockResult?.result === "failed") projected.push({ result: "failed", source: "mock", reason: mockResult.reason, attempt_id: mockResult.attempt_id });
         else if (real.result === "passed") projected.push({ result: "passed", source: "real", reason: real.reason, attempt_id: null });

@@ -72,7 +72,7 @@ function reportModel() {
       target_urls: ["https://staging.example.test/campaigns/list?workspace=marketing&token=visible-fixture"]
     },
     run: {
-      workflow_profile: "permission-batches-html-v2",
+      workflow_profile: "b2b-e2e-current",
       run_id: "run-reading-fixture",
       status: "completed",
       status_label: "已完成",

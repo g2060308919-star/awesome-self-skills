@@ -10,7 +10,7 @@ const fixture = new URL("./fixtures/test-cases.json", import.meta.url);
 const checkpointId = "CASE-原始-01/step-001/oracle-001";
 
 async function createCoverageRun(root) {
-  const run = await initializeRun({ workspaceRoot: root, casesPath: fixture, workflowProfile: "permission-batches-html-v2" });
+  const run = await initializeRun({ workspaceRoot: root, casesPath: fixture, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["CASE-原始-01"]
   });
