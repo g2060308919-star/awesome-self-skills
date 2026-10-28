@@ -18,18 +18,18 @@ G 的 schema/compiler 配对沿用已有适配器：4.0.0/0.5.0、4.2.0/0.7.0、
 
 唯一流程为 `b2b-e2e-current`，省略 workflow 参数与显式选择它完全相同。`init` 将 `workflow_profile` 写为首个事件，每个 Run 固定包含 `execution_coverage@1.0` 和 `mock_fallback@1.0`；仅明确传入 `--mock-fallback allowed|declined` 才写初始 `mock_policy`。未回答时没有决定事件，不能启用模拟。随后在业务开始前记录 `permission_plan` 与完整 `coverage_plan`。旧 workflow 参数在创建目录前拒绝；旧 Run（包括无 profile）在读取/记录/恢复/报告前以 `UNSUPPORTED_WORKFLOW` 拒绝，原数据字节不变，不迁移、不降级接受。缺少能力格式、未知扩展或版本也拒绝；包与 schema 版本仍保留。
 
-`mock_policy` 和 `proxy_policy` 分别授权。共有字段为 `action`（`initial` / `changed` / `revoked`）、`decision`（`allowed` / `declined`）、`decision_source: user`、无秘密用户依据 `basis`；后续决定必须用 `previous_decision_ref` 指向同类最新决定的 sequence。首次不带前序引用；撤回须由 allowed 变为 declined。`proxy_policy` 另需 `rules_sha256`，由 `scripts/lib/proxy-authorization.mjs` 的 `proxyRulesDigest(rules)` 对实际确认规则计算。规则变化需要新的明确决定及摘要；普通代理许可不授权合成业务数据，Mock 许可不授权额外普通规则。所有决定都经 `record` 追加，不能改写历史。
+`mock_policy` 和 `proxy_policy` 分别授权。共有字段为 `action`（`initial` / `changed` / `revoked`）、`decision`（`allowed` / `declined`）、`decision_source: user`、无秘密用户依据 `basis`；后续决定必须用 `previous_decision_ref` 指向同类最新决定的 sequence。首次不带前序引用；撤回须由 allowed 变为 declined。`proxy_policy` 另需 `purpose: environment_access` 及 `rules_sha256`，由 `scripts/lib/proxy-authorization.mjs` 的 `proxyRulesDigest(rules)` 对实际确认规则计算。规则变化需要新的明确决定及摘要；基础规则按环境访问用途授权，保留请求头、响应头、响应体三种改写；不按业务 URL 或 `non_business` 标签限制合法环境规则。基础代理许可不授权构造用例模拟输入，Mock 许可不授权额外环境规则。所有决定都经 `record` 追加，不能改写历史。
 
 覆盖层事件：
 
 - `coverage_plan` 精确覆盖全部原检查点，记录递增修订、快照哈希、稳定 scope、既有权限组、位置、原步骤与显式依赖；refine 不得改变已执行含义或删除现有范围。
 - `coverage_context` 绑定 scope、计划/实际账号、Target、存储上下文、环境、实际安全 URL、切换状态和事实/角色观察引用。上下文变化、权限变化、计划修订、全局等待/恢复会使相关未来工作重新核验。
 - `coverage_review` 绑定当前计划修订和事件边界；用于 switch、batch_end、wait、resume、checkpoint_close、final，逐项分类范围并用事实引用证明选择。`checkpoint_result` 增加 `execution_refs` 与 `coverage_review_ref`；开始事件增加 `scope_ids` 与 `context_refs`。
-- `data_gap` 记录真实 blocker/探索、缺失条件、已知请求事实和未开始步骤的依赖；`gap_kind` 为 `missing_data` 或 `preparation_blocked`，准备阻塞可引用实际 `preparation_adjustment`。普通 `undetermined` 可用 `data_gap_ref` 支撑未开始依赖步骤，不再伪造 `resolution_ref`，但必须保留探索引用、`not_attempted_reason` 且没有开放协作。
+- `data_gap` 记录真实 blocker/探索、缺失条件、已知请求事实和未开始步骤的依赖；`gap_kind` 为 `missing_data`、`preparation_blocked`、`permission_unavailable` 或 `interface_input_unavailable`，准备阻塞可引用实际 `preparation_adjustment`。普通 `undetermined` 可用 `data_gap_ref` 支撑未开始依赖步骤，不再伪造 `resolution_ref`，但必须保留探索引用、`not_attempted_reason` 且没有开放协作。
 
 Mock 层事件包括追加式可变更/可撤回的 `mock_policy`、从合法数据缺口派生的 `mock_candidate`、版本化 `mock_attempt`、去重请求事实 `mock_observation`、不覆盖原检查点的 `mock_checkpoint` 和候选收尾 `mock_disposition`。场景/状态/回执是运行资产，不是第二份产品结果；代理不得直接覆盖 `execution-log.json`，Runner 通过既有 `record` 导入。重复回执幂等，跨 Run、未知证据、过期上下文和无效顺序同时在 record 与重放校验中拒绝。
 
-`mock_candidate` 必须填写 `assertion_domain: frontend|real_backend|real_permission` 与原断言依据 `assertion_basis`；已有 `checkpoint_semantics` 时分类必须匹配。`mock_checkpoint.result: passed` 只允许 frontend 候选，并须有 `page_observation_refs` 引用同 attempt_id、checkpoint_ids 的实际页面观察；观察必须晚于本检查点开始和关联回执，状态/回执不能代替页面消费证据。后台或权限专属断言不能由模拟升级为通过。
+`mock_candidate` 必须填写 `assertion_domain: frontend|real_backend|real_permission` 与原断言依据 `assertion_basis`；已有 `checkpoint_semantics` 时分类必须匹配。`mock_checkpoint` 的 passed/failed 只允许 frontend 候选，并须有 `page_observation_refs` 引用同 attempt_id、checkpoint_ids 的实际页面观察；观察必须晚于本场景实际开始、触发和引用的关联回执，状态/回执不能代替页面消费证据。请求行为断言可以没有回执，必须有实际观察窗口；响应消费通过必须引用实际响应及后续页面事实。后台或权限专属断言不能由模拟升级为通过。
 
 权限计划契约保持不变：
 
@@ -63,9 +63,35 @@ Mock 层事件包括追加式可变更/可撤回的 `mock_policy`、从合法数
 
 有效示例：先记录待准备组的 `permission_availability` 为 `ready`，再记录页面事实为 `verified`，成功记录绑定当前账号与新鲜观察的 `coverage_context`，然后开始其检查点。权限、账号或上下文变化后必须重复这道闸门。拒绝示例：只因用户说“好了”便直接写 `checkpoint_started`，或先操作业务页面再补上下文；没有新鲜角色核验或上下文被拒时必须失败关闭并只暂停受影响范围。
 
+## 场景级执行与统一进度
+
+以下字段由 Runner 从原用例与实际操作整理，不新增用户前置填写流程。单场景默认使用 `scope_id` 作为 `scenario_id`；scope 可包含 `preconditions`、`assertion_kind: ui|response_consumption|request_behavior`、`assertion_domain: frontend|real_backend|real_permission`、`chain_id`。多场景使用非空且至少两项的 `scenario_requirements`，每项严格包含 `scenario_id`、`step_refs`、`source_refs`、`preconditions`、`assertion_kind`、`assertion_domain`、`chain_id`，不能同时填写 scope 的单场景字段。计划修订不得删减场景或改写已绑定语义。
+
+依赖可声明 `condition_kind: required_action|preparation`，省略为 required_action。只有原文明确属于准备条件且有原步骤来源依据时才标 preparation；模拟准备不能替代原必需动作。固定批次按原输入首次出现顺序并尊重必需动作依赖排序；必需动作产生 A→B→A 配置循环时拒绝并说明输入冲突。`batch_id` 是 scope 的排序权限组 ID 以 `+` 连接，无权限组为 `general`。
+
+| 事件/扩展 | 必要字段与验证 |
+|---|---|
+| `identity_observation` | `account_ref`、相同的 `observed_account_ref`、自有 `target_id`、`context_ref`、`environment_ref`、`observed_url`、`verification: verified`、引用该 Target/上下文真实页面或 Network 的 `fact_refs`；只核验真实身份 |
+| `data_gap` 权限缺口 | `gap_kind: permission_unavailable`、精确 `group_id`、新鲜 `identity_ref`、明确用户无法提供资源的 `resource_statement_ref`；资源状态保持 unavailable |
+| `simulated_permission` | `group_id`、`identity_ref`、上述 `gap_ref`、已知契约的 `contract_refs`、`input_description`；不得伪记实际权限 ready |
+| `coverage_context` 扩展 | `identity_ref`、可选 `simulated_permission_ref`、`verification_stage: identity`；真实身份可在同源入口核验，不以被测权限行为先成功作为前提。仅数据 Mock 时沿正常真实权限上下文，无须 unavailable 或模拟权限事实 |
+| `scenario_preparation` | `checkpoint_id`、`scenario_id`、唯一 `execution_id`、`batch_id`、`context_refs`、同检查点实际前置输入 `fact_refs`、独立 `data_source: real|mock` 与 `permission_source: real|mock`。模拟输入另需当前 `attempt_id`、`scenario_hash`、最新 `state_version`；模拟权限需 `simulated_permission_ref` |
+| 准备依赖扩展 | `scenario_preparation.prepared_dependencies: [{dependency_id, fact_refs}]` 只关联本场景输入事实与原计划 preparation 依赖，不能完成或改写其来源操作。由有效 Mock 结果满足的依赖必须在同一 attempt/hash 相容链内，不能用于真实写链 |
+| `checkpoint_started` / `mock_checkpoint` started | 同一 `scenario_id`、`execution_id`、`preparation_ref`、精确单个 `scope_ids`、新鲜 `context_refs`；可带匹配 `batch_id`。模拟开始还需原有 attempt/candidate 字段，与准备的尝试/hash/当前状态一致 |
+| `action_dispatched`、页面与 Network 事实 | 使用同一 `scenario_id`、`execution_id`、检查点关联和模拟时的 `attempt_id`。实际触发晚于开始、页面观察晚于触发；不能仅写自由文本或代理计数代替执行 |
+| `checkpoint_result` / `mock_checkpoint` result | 使用同一场景和执行 ID，保留原结果/证据字段，引用实际触发后的 `execution_refs` / `page_observation_refs`；passed、failed 都需要完整前置输入与实际执行链 |
+
+响应消费通过需要同场景匹配响应（实际 Network `response_status`，或 Mock 的 `disposition: mocked` 与 `response_facts`）以及其后的页面观察。请求行为断言的 Network 事实使用 `request_window: {action_ref, completion_ref, completion_basis, request_count}`；completion_ref 指向实际控件完成页面事实，计数为非负整数，不能仅凭固定等待或强制 Mock 命中判定。
+
+准备、开始和结果均复核上下文；实际身份、权限、浏览器或恢复状态变化会使旧核验失效。模拟场景修订后必须基于当前 hash 重新准备，不能复用旧准备记录。场景引擎回执只在确有唯一开放执行时关联其场景；准备期间回执不能伪造为产品执行。
+
+`execution-progress` 从不可变快照与追加事件统一派生场景/检查点/case/固定批次，覆盖、依赖、权限、日志重放与报告共用。真实失败优先保留，但同 case 其他场景未测时 `execution_complete` 仍为 false。候选合法收尾不表示场景已测。允许模式中的 unknown/unsupported/遗漏候选、预排除或后端专属输入不能正常完成；拒绝模式保留已探索缺口和原契约合法预排除。未回答不是拒绝。
+
+当前配置未合法完成不能启动另一配置；完成后不能返回。只在当前批次内继续独立工作，其他批次存在可测范围不阻止当前批次明确等待。最终审查、`run_state: completed`、validate、report 和 deliver 均执行共同门槛；用户原有 `assistance.stop_run` 可以生成明确标注未完成的早结束报告，不能算全量完成。
+
 ## 执行事实与追加尝试
 
-以下事件都使用同一 `record` 入口，秘密、路径和证据关联检查同样适用；运行重放用相同验证器。已完成原检查点拒绝再次 `checkpoint_started` 或 `checkpoint_result`，补充结果只追加，不重写快照、原 expected 或原结果。
+以下事件都使用同一 `record` 入口，秘密、路径和证据关联检查同样适用；运行重放用相同验证器。同一场景执行结果不可覆盖，已完成真实场景不可重开；同检查点的其他原必测场景仍须继续。补充结果只追加，不重写快照、原 expected 或原结果。
 
 | 事件 | 字段与边界 |
 |---|---|
@@ -75,7 +101,7 @@ Mock 层事件包括追加式可变更/可撤回的 `mock_policy`、从合法数
 | `supplementary_attempt` | `attempt_id`、`checkpoint_ids`、`phase: started|result`、`source: real|mock`、`description`；结果必须匹配开始范围/来源且只能一次，带四态中的 passed/failed/undetermined 与实际 `fact_refs`。它保存补充观察，不升级原始失败/未知 |
 | `mock_channel_coverage` | 精确 `target_id`、当前 `context_ref`、`scenario_hash`、`covered_route_ids`、实际 Network `request_refs`、`channels` 与 `uncovered_channels`。每个合法 channel 为 `kind: page-http`、同一 Target 和请求引用；无法确认或存在未覆盖通道不能启动该场景 |
 
-`mock_channel_coverage` 在运行时还与代理配置的 `mock_channel_coverage_ref`、Run/attempt/场景摘要核对；每条实际 `network_observation` 必须含 `target_id`、`context_ref`、`channel: page-http`、`route_id`、安全 `url` 和精确 `method`，证明覆盖的路由确实来自该页面通道。不能用人为填写覆盖布尔值或另一 Target 请求替代事实，不为取证擅自触发真实业务写入。新上下文或场景修订后重新核验。
+`mock_channel_coverage` 在运行时还与代理配置的 `mock_channel_coverage_ref`、Run/attempt/场景摘要核对；每条实际 `network_observation` 必须含 `target_id`、`context_ref`、`channel: page-http`、安全 `url` 和精确 `method`；正式路由通过请求的 `route_id` 或覆盖事件的 `route_bindings: [{route_id, request_ref}]` 关联，证明覆盖的路由确实来自该页面通道。`route_bindings` 仅用于先经同一发现会话安全探针核验、随后被阻断的 `discovery_request`，需精确匹配实际 URL/method；不能把未知接口预先伪装为已编译路由。不能用人为填写覆盖布尔值或另一 Target 请求替代事实，不为取证擅自触发真实业务写入。新上下文或场景修订后重新核验。
 
 动作使用 `action_planned` → `action_dispatched` → `effect_observed` / `action_confirmed`。计划与派发必须包含非空 `action_id`、原 `checkpoint_id` 与显式 `side_effect`；效果确认引用 `page_observation` / `network_observation` 的 `fact_refs`，引用必须关联同一 action_id、checkpoint_ids 且晚于派发。记录可读 `description`，`outcome` 为 `confirmed_success` / `confirmed_failure` / `not_submitted`；无 outcome 的真实效果观察按已确认成功归约。未派发与已证明未提交允许检查重试条件，效果已确认或效果不明拒绝重复派发。不能把日志补记或检查点恢复当成业务动作执行。
 

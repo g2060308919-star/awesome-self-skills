@@ -6,6 +6,7 @@ import { writeJsonAtomic } from "./atomic-json.mjs";
 import { deriveMockState } from "./mock-fallback.mjs";
 import { compileMockScenario, MockScenarioEngine } from "./mock-scenario.mjs";
 import { assertNoSecrets } from "./redaction.mjs";
+import { freshContext } from "./execution-progress.mjs";
 import { assertCurrentWorkflow } from "./workflow-contract.mjs";
 
 function fail(code, message) {
@@ -81,10 +82,8 @@ export function verifyMockChannelCoverage(log, config, scenario, attempt) {
       !context || context.verification !== "verified" || context.target_id !== targetId || context.sequence >= ref) {
     fail("MOCK_CHANNEL_UNVERIFIED", "Mock 请求通道缺少本 Run 同 Target/场景/上下文的核验证据");
   }
-  if ((log.events ?? []).some(event => event.sequence > context.sequence && (
-    event.type === "resume_check" || (event.type === "browser_session" && ["disconnected", "target_lost", "retired"].includes(event.phase) && (!event.target_id || event.target_id === targetId)) || (event.type === "run_state" && ["awaiting_user", "interrupted"].includes(event.status ?? event.state)) ||
-    (event.type === "execution_context_change" && (event.context_ref === context.context_ref || (event.target_ids ?? []).includes(targetId)))
-  ))) fail("MOCK_CHANNEL_UNVERIFIED", "Mock 请求通道上下文已失效，必须重新核验");
+  if (!freshContext(log, context)) fail("MOCK_CHANNEL_UNVERIFIED", "Mock 请求通道上下文已失效，必须重新核验");
+
   if (!Array.isArray(coverage.uncovered_channels) || coverage.uncovered_channels.length ||
       !Array.isArray(coverage.channels) || !coverage.channels.length ||
       coverage.channels.some(channel => channel.kind !== "page-http" || channel.target_id !== targetId ||
@@ -109,7 +108,11 @@ export function verifyMockChannelCoverage(log, config, scenario, attempt) {
     const matches = observations.some(event => {
       let url;
       try { url = new URL(event.url); } catch { return false; }
-      return event.route_id === route.route_id && url.origin === route.match.origin &&
+      const discoveryMapping = coverage.route_bindings?.some(binding => binding.route_id === route.route_id && binding.request_ref === event.sequence) &&
+        event.kind === "discovery_request" && event.disposition === "blocked" && (log.events ?? []).some(probe =>
+          probe.type === "network_observation" && probe.kind === "discovery_probe" && probe.disposition === "blocked" &&
+          probe.discovery_id === event.discovery_id && probe.target_id === targetId && probe.context_ref === context.context_ref && probe.sequence < event.sequence);
+      return (event.route_id === route.route_id || discoveryMapping) && url.origin === route.match.origin &&
         url.pathname === route.match.pathname && event.method === route.match.method;
     });
     if (!coverage.covered_route_ids.includes(route.route_id) || !matches) {
@@ -135,6 +138,23 @@ export async function loadMockProxyBinding(config) {
   assertCurrentWorkflow(log);
   const scenario = compileMockScenario(JSON.parse(scenarioBytes.toString("utf8")));
   assertNoSecrets(scenario);
+  // Request-stage Mock supplies the final response. Environment headers cannot
+  // rely on another Response-stage pass, or silently disappear from the page.
+  for (const route of scenario.routes) {
+    const url = new URL(route.match.origin + route.match.pathname);
+    const required = (config.rules ?? []).filter(rule => rule.enabled !== false && rule.match.protocol === url.protocol &&
+      rule.match.hostname.toLowerCase() === url.hostname.toLowerCase() && url.pathname.startsWith(rule.match.path_prefix) &&
+      (!rule.match.methods || rule.match.methods.includes(route.match.method)));
+    const headers = new Map(Object.entries(route.response.headers).map(([name,value]) => [name.toLowerCase(), String(value)]));
+    for (const rule of required) {
+      for (const [name,value] of Object.entries(rule.response?.headers?.set ?? {})) {
+        if (headers.get(name.toLowerCase()) !== String(value)) fail("MOCK_ENVIRONMENT_CONFLICT", `Mock 最终响应缺少或冲突的环境响应头：${name}`);
+      }
+      for (const name of rule.response?.headers?.remove ?? []) {
+        if (headers.has(name.toLowerCase())) fail("MOCK_ENVIRONMENT_CONFLICT", `Mock 最终响应包含环境要求删除的响应头：${name}`);
+      }
+    }
+  }
   if (log.extensions?.mock_fallback?.schema_version !== "1.0" || currentPolicy(log) !== "allowed") {
     fail("MOCK_NOT_ALLOWED", "当前 Run 未明确允许 Mock 或授权已撤回");
   }
@@ -226,7 +246,11 @@ export async function loadMockProxyBinding(config) {
       const fresh = JSON.parse(await readFile(logPath, "utf8"));
       const current = deriveMockState(null, fresh).attempts.get(attemptId);
       if (attemptId !== attempt.attempt_id || !current?.proxy_cycle_refs?.includes(cycleId)) fail("MOCK_BINDING", "Mock 持久回执的尝试或周期不一致");
+      const active = fresh.events.filter(event => event.type === "mock_checkpoint" && event.action === "started" && event.attempt_id === attemptId &&
+        !fresh.events.some(result => result.type === "mock_checkpoint" && result.action === "result" && result.execution_id === event.execution_id));
+      if (active.length > 1) fail("MOCK_BINDING", "同 Target 多个场景同时运行，无法绑定请求观察");
       const expected = {
+        ...(active.length === 1 ? { scenario_id: active[0].scenario_id, execution_id: active[0].execution_id, checkpoint_ids: [active[0].checkpoint_id] } : {}),
         type: "mock_observation", attempt_id: attemptId, receipt_id: item.receipt.receipt_id,
         route_id: item.receipt.route_id, request_id: requestId, disposition: "mocked",
         request_facts: [`Request 阶段声明路由 ${item.receipt.route_id} 已匹配；未继续至真实上游`],

@@ -1,3 +1,4 @@
+import { deriveExecutionProgress, scenarioForEvent, freshContext } from "./execution-progress.mjs";
 const MOCK_VERSION = "1.0";
 const ATTEMPT_ACTIONS = new Set(["started", "paused", "resumed", "scenario_updated", "finished", "aborted"]);
 const DISPOSITIONS = new Set(["supplemented", "unavailable", "stopped", "unsupported"]);
@@ -131,10 +132,10 @@ function validatePolicy(log, event) {
 function validateDataGap(testCases, log, event) {
   rejectUnknown(event, new Set([
     "type", "gap_id", "checkpoint_ids", "real_blocker_refs", "exploration_refs", "missing_conditions",
-    "known_request_facts", "not_started_dependencies", "gap_kind", "sequence", "at"
+    "known_request_facts", "not_started_dependencies", "gap_kind", "sequence", "at", "scenario_ids", "identity_ref", "group_id", "resource_statement_ref"
   ]), "data_gap");
   requireValue(coverageExtension(log), "data_gap 需要 execution_coverage 扩展");
-  requireValue(event.gap_kind === undefined || ["missing_data", "preparation_blocked"].includes(event.gap_kind), "data_gap.gap_kind 无效");
+  requireValue(event.gap_kind === undefined || ["missing_data", "preparation_blocked", "permission_unavailable", "interface_input_unavailable"].includes(event.gap_kind), "data_gap.gap_kind 无效");
   requireValue(string(event.gap_id) && !(log.events ?? []).some(item => item.type === "data_gap" && item.gap_id === event.gap_id),
     `data_gap.gap_id 缺失或重复：${event.gap_id}`);
   const records = checkpointRecords(testCases, log);
@@ -146,6 +147,14 @@ function validateDataGap(testCases, log, event) {
     const source = eventAt(log, reference);
     requireValue(source && ["blocker", "page_observation", "network_observation", "checkpoint_result", "preparation_adjustment"].includes(source.type),
       `data_gap 引用的真实阻塞或探索事实无效：${reference}`);
+  }
+  if (event.gap_kind === "permission_unavailable") {
+    const identity = eventAt(log, event.identity_ref), statement = eventAt(log, event.resource_statement_ref);
+    requireValue(identity?.type === "identity_observation" && freshContext(log,identity), "权限缺口需要实际新鲜身份");
+    const declaration = statement?.type === "permission_plan" ? statement.groups.find(group => group.group_id === event.group_id) : statement?.type === "permission_availability" && statement.group_id === event.group_id ? statement : null;
+    requireValue(declaration?.availability === "unavailable" && string(declaration.declaration), "权限缺口必须引用用户明确无法提供资源的声明");
+    const latest = (log.events ?? []).filter(item => item.type === "permission_availability" && item.group_id === event.group_id).at(-1);
+    requireValue(!latest || latest.sequence === statement.sequence, "权限资源声明已失效");
   }
   strings(event.missing_conditions, "data_gap.missing_conditions");
   strings(event.known_request_facts, "data_gap.known_request_facts");
@@ -169,7 +178,7 @@ function validateCandidate(testCases, log, event) {
   for (const checkpointId of event.checkpoint_ids) {
     const record = records.get(checkpointId);
     requireValue(record?.case_id === event.case_id, `mock_candidate 检查点不属于用例 ${event.case_id}`);
-    requireValue(!record.excluded && record.checkpoint?.result !== "failed", `mock_candidate 不得覆盖预排除或真实失败检查点：${checkpointId}`);
+    requireValue(!record.excluded, `mock_candidate 不得覆盖预排除或真实失败检查点：${checkpointId}`);
   }
   strings(event.gap_ids, "mock_candidate.gap_ids");
   const covered = new Set();
@@ -239,7 +248,7 @@ function validateAttempt(testCases, log, event) {
   requireValue(event.state_version === existing.state_version, "mock_attempt.state_version 与已记录状态不一致");
   if (event.action === "finished") {
     for (const checkpointId of existing.candidate_checkpoint_ids) {
-      requireValue(existing.checkpoint_results.has(checkpointId), `Mock 尝试仍有候选检查点未终结：${checkpointId}`);
+      requireValue([...existing.checkpoint_results.values()].some(item => item.checkpoint_id === checkpointId), `Mock 尝试仍有候选检查点未终结：${checkpointId}`);
     }
   }
 }
@@ -247,7 +256,7 @@ function validateAttempt(testCases, log, event) {
 function validateObservation(log, event) {
   rejectUnknown(event, new Set([
     "type", "attempt_id", "receipt_id", "route_id", "request_id", "disposition", "request_facts", "response_facts",
-    "state_before_version", "state_after_version", "evidence_refs", "proxy_cycle_ref", "sequence", "at"
+    "state_before_version", "state_after_version", "evidence_refs", "proxy_cycle_ref", "sequence", "at", "scenario_id", "execution_id", "checkpoint_ids"
   ]), "mock_observation");
   const state = stateBefore(log);
   const attempt = state.attempts.get(event.attempt_id);
@@ -267,7 +276,7 @@ function validateObservation(log, event) {
 function validateMockCheckpoint(testCases, log, event) {
   rejectUnknown(event, new Set([
     "type", "attempt_id", "checkpoint_id", "action", "scope_ids", "context_refs", "result", "observation", "reason",
-    "evidence_refs", "request_refs", "execution_refs", "page_observation_refs", "coverage_review_ref", "sequence", "at"
+    "evidence_refs", "request_refs", "execution_refs", "page_observation_refs", "coverage_review_ref", "sequence", "at", "scenario_id", "execution_id", "batch_id", "preparation_ref"
   ]), "mock_checkpoint");
   const state = stateBefore(log);
   const attempt = state.attempts.get(event.attempt_id);
@@ -276,9 +285,10 @@ function validateMockCheckpoint(testCases, log, event) {
     "mock_checkpoint 引用不属于尝试范围的原检查点");
   const records = checkpointRecords(testCases, log);
   requireValue(records.has(event.checkpoint_id), "mock_checkpoint 引用未知原检查点");
+  const sceneKey = `${event.checkpoint_id}#${event.scenario_id ?? ""}`;
   if (event.action === "started") {
     requireValue(policy(log) === "allowed", "Mock 已撤回，不能开始新检查点");
-    requireValue(!attempt.checkpoint_started.has(event.checkpoint_id) && !attempt.checkpoint_results.has(event.checkpoint_id),
+    requireValue(!attempt.checkpoint_started.has(sceneKey) && !attempt.checkpoint_results.has(sceneKey),
       "同一 Mock 尝试内检查点不得重复开始或覆盖结果");
     strings(event.scope_ids, "mock_checkpoint.scope_ids");
     sequences(event.context_refs, "mock_checkpoint.context_refs");
@@ -291,11 +301,11 @@ function validateMockCheckpoint(testCases, log, event) {
     return;
   }
   requireValue(event.action === "result", "mock_checkpoint.action 必须为 started 或 result");
-  requireValue(attempt.checkpoint_started.has(event.checkpoint_id) && !attempt.checkpoint_results.has(event.checkpoint_id),
+  requireValue(attempt.checkpoint_started.has(sceneKey) && !attempt.checkpoint_results.has(sceneKey),
     "mock_checkpoint.result 必须先 started 且只能终结一次");
   requireValue(["passed", "failed", "undetermined"].includes(event.result), "mock_checkpoint.result 仅允许 passed/failed/undetermined");
   requireValue(string(event.observation) && string(event.reason), "mock_checkpoint.result 缺少观察或原因");
-  if (event.result === "passed") {
+  if (["passed", "failed"].includes(event.result)) {
     const candidates = attempt.candidate_ids.map(id => state.candidates.get(id)).filter(item => item.checkpoint_ids.includes(event.checkpoint_id));
     requireValue(candidates.length > 0 && candidates.every(item => item.assertion_domain === "frontend"), "Mock 不能证明真实后端持久化或真实权限；只能记录前端补充观察");
     sequences(event.page_observation_refs, "mock_checkpoint.page_observation_refs");
@@ -316,10 +326,10 @@ function validateMockCheckpoint(testCases, log, event) {
     requireValue(evidence?.entry?.checkpoint_ids?.includes(event.checkpoint_id), `mock_checkpoint 引用未登记或不支持当前检查点的证据：${evidenceId}`);
     requireValue((evidence.event.sequence ?? 0) > (started?.sequence ?? 0), `mock_checkpoint 证据不在当前补测检查点执行范围内：${evidenceId}`);
   }
-  strings(event.request_refs, "mock_checkpoint.request_refs", { empty: event.result === "undetermined" });
+  strings(event.request_refs, "mock_checkpoint.request_refs", { empty: true });
   for (const receiptId of event.request_refs) requireValue(state.receipts.get(receiptId)?.attempt_id === event.attempt_id, `mock_checkpoint 引用未知请求收据：${receiptId}`);
   sequences(event.execution_refs, "mock_checkpoint.execution_refs", { empty: event.result === "undetermined" });
-  for (const reference of event.execution_refs) requireValue(eventAt(log, reference)?.type === "mock_observation" && eventAt(log, reference)?.attempt_id === event.attempt_id, `mock_checkpoint.execution_refs 无效：${reference}`);
+  for (const reference of event.execution_refs) requireValue(["mock_observation", "page_observation", "network_observation", "action_dispatched"].includes(eventAt(log, reference)?.type) && eventAt(log, reference)?.attempt_id === event.attempt_id, `mock_checkpoint.execution_refs 无效：${reference}`);
   const review = eventAt(log, event.coverage_review_ref);
   requireValue(review?.type === "coverage_review" && review.purpose === "checkpoint_close" && review.checkpoint_ids?.includes(event.checkpoint_id),
     "mock_checkpoint.result 缺少匹配的 checkpoint_close 审查");
@@ -340,7 +350,7 @@ function validateDisposition(log, event) {
     const attempt = state.attempts.get(event.attempt_id);
     requireValue(attempt?.state === "finished" && attempt.candidate_ids.includes(event.candidate_id),
       "supplemented 必须引用已完成且覆盖候选的 Mock 尝试");
-    requireValue(candidate.checkpoint_ids.every(id => attempt.checkpoint_results.has(id)), "supplemented 尝试缺少候选检查点结果");
+    requireValue(candidate.checkpoint_ids.every(id => [...attempt.checkpoint_results.values()].some(item => item.checkpoint_id === id)), "supplemented 尝试缺少候选检查点结果");
   } else {
     requireValue(event.attempt_id === undefined || state.attempts.has(event.attempt_id), "mock_disposition.attempt_id 无效");
   }
@@ -406,8 +416,8 @@ export function deriveMockState(testCases, log) {
     if (event.type === "mock_checkpoint") {
       const attempt = attempts.get(event.attempt_id);
       if (!attempt) continue;
-      if (event.action === "started") attempt.checkpoint_started.add(event.checkpoint_id);
-      if (event.action === "result") attempt.checkpoint_results.set(event.checkpoint_id, structuredClone(event));
+      if (event.action === "started") attempt.checkpoint_started.add(`${event.checkpoint_id}#${event.scenario_id ?? ""}`);
+      if (event.action === "result") attempt.checkpoint_results.set(`${event.checkpoint_id}#${event.scenario_id ?? ""}`, structuredClone(event));
     }
     if (event.type === "mock_disposition") {
       const candidate = candidates.get(event.candidate_id);
@@ -464,75 +474,19 @@ export function validateMockLog(testCases, log) {
   }
 }
 
-function mockResultsByCheckpoint(log) {
-  const state = deriveMockState(null, log);
-  const results = new Map();
-  for (const candidate of state.candidates.values()) {
-    if (candidate.outcome !== "supplemented") continue;
-    const attempt = state.attempts.get(candidate.disposition.attempt_id);
-    if (attempt?.state !== "finished") continue;
-    for (const [checkpointId, result] of attempt.checkpoint_results) {
-      const current = results.get(checkpointId);
-      if (!current || result.result === "failed" || (current.result === "undetermined" && result.result === "passed")) {
-        results.set(checkpointId, result);
-      }
-    }
-  }
-  return results;
-}
-
 export function projectEffectiveResults(testCases, log) {
-  const mock = mockResultsByCheckpoint(log);
-  const cases = testCases.cases.map((sourceCase, caseIndex) => {
-    const loggedCase = log.cases[caseIndex];
-    let checkpointIndex = 0;
-    const projected = [];
-    for (const step of sourceCase.steps) {
-      for (const oracle of step.expected) {
-        const checkpointId = `${sourceCase.case_id}/${step.step_id}/${oracle.oracle_id}`;
-        const real = loggedCase.checkpoints[checkpointIndex++];
-        let mockResult = mock.get(checkpointId);
-        const semantics = (log.events ?? []).find(event => event.type === "checkpoint_semantics" && event.checkpoint_id === checkpointId);
-        if (semantics && semantics.assertion_domain !== "frontend" && mockResult?.result === "passed") mockResult = null;
-        if (real.result === "failed") projected.push({ result: "failed", source: "real", reason: real.reason, attempt_id: null });
-        else if (mockResult?.result === "failed") projected.push({ result: "failed", source: "mock", reason: mockResult.reason, attempt_id: mockResult.attempt_id });
-        else if (real.result === "passed") projected.push({ result: "passed", source: "real", reason: real.reason, attempt_id: null });
-        else if (mockResult?.result === "passed") projected.push({ result: "passed", source: "mock", reason: mockResult.reason, attempt_id: mockResult.attempt_id });
-        else projected.push({ result: real.result ?? "undetermined", source: "real", reason: real.reason ?? "检查点尚待继续", attempt_id: null });
-      }
-    }
-    const mockPassAttempts = new Set(projected
-      .filter(item => item.source === "mock" && item.result === "passed" && item.attempt_id)
-      .map(item => item.attempt_id));
-    const inconsistentMockPass = mockPassAttempts.size > 1;
-    let effective = sourceCase.excluded ? "not_executed"
-      : projected.some(item => item.result === "failed") ? "failed"
-        : inconsistentMockPass ? "undetermined"
-        : projected.some(item => item.result === "undetermined" || item.result == null) ? "undetermined"
-          : projected.every(item => item.result === "not_executed") ? "not_executed" : "passed";
-    const decisive = inconsistentMockPass && effective !== "failed"
-      ? { reason: "不同 Mock 尝试的成功事实不能拼接为同一用例通过；需要在同一一致场景尝试中复核全部相关检查点" }
-      : projected.find(item => item.result === "failed") ?? projected.find(item => item.result === "undetermined") ?? projected.at(-1);
-    const source = inconsistentMockPass || projected.some(item => item.source === "mock" && item.result === effective) ? "mock" : "real";
-    return {
-      case_id: sourceCase.case_id,
-      real_result: loggedCase.result,
-      effective_result: effective,
-      source,
-      reason: decisive?.reason ?? loggedCase.reason
-    };
+  const progress = deriveExecutionProgress(testCases, log);
+  const cases = progress.cases.map((item, index) => {
+    const scenes = progress.checkpoints.filter(cp => cp.case_id === item.case_id).flatMap(cp => cp.scenes);
+    const decisive = scenes.find(scene => scene.effective_result === "failed") ?? scenes.find(scene => !scene.complete) ?? scenes.at(-1);
+    const reason = item.source === "real" ? (decisive?.result_ref ? decisive.reason : log.cases[index].reason)
+      : `${decisive?.reason ?? "场景尚待执行"}；Mock 前端补测，不证明真实后端${item.complete ? "" : "；执行未完成"}`;
+    return { ...item, real_result: log.cases[index].result, reason };
   });
-  return {
-    cases,
-    counts: {
-      total: cases.length,
-      real_passed: cases.filter(item => item.real_result === "passed").length,
-      effective_passed: cases.filter(item => item.effective_result === "passed").length,
-      failed: cases.filter(item => item.effective_result === "failed").length,
-      undetermined: cases.filter(item => item.effective_result === "undetermined").length,
-      not_executed: cases.filter(item => item.effective_result === "not_executed").length
-    }
-  };
+  return { cases, progress, counts: { total: cases.length, real_passed: cases.filter(item => item.real_result === "passed").length,
+    effective_passed: cases.filter(item => item.effective_result === "passed").length,
+    failed: cases.filter(item => item.effective_result === "failed").length,
+    undetermined: cases.filter(item => item.effective_result === "undetermined").length,
+    not_executed: cases.filter(item => item.effective_result === "not_executed").length } };
 }
-
 export const mockFallbackVersion = MOCK_VERSION;

@@ -11,6 +11,7 @@ import { TargetLock } from "./lib/target-lock.mjs";
 import { MockScenarioError } from "./lib/mock-scenario.mjs";
 import { loadMockProxyBinding } from "./lib/mock-runtime.mjs";
 import { loadProxyAuthorization } from "./lib/proxy-authorization.mjs";
+import { loadDiscoveryBinding } from "./lib/mock-discovery.mjs";
 import { loadBrowserProxyBinding } from "./lib/proxy-browser-binding.mjs";
 
 export const BODY_LIMIT_BYTES = 5 * 1024 * 1024;
@@ -202,6 +203,10 @@ export async function probeMockChannels(client, targetId, sessionId, coverage) {
   const [targets, page] = await Promise.all([
     client.command("Target.getTargets"), client.command("Page.getFrameTree", {}, sessionId)
   ]);
+  return validateMockChannels(targets, page, targetId);
+}
+
+function validateMockChannels(targets, page, targetId) {
   const own = targets.targetInfos?.find(target => target.targetId === targetId && target.type === "page");
   if (!own || !page.frameTree?.frame?.id) fail("MOCK_CHANNEL_UNVERIFIED", "无法只读核验 Mock Target 与页面框架");
   if (page.frameTree.childFrames?.length) fail("MOCK_CHANNEL_UNVERIFIED", "存在未覆盖子框架，拒绝模拟场景");
@@ -231,6 +236,7 @@ export class ProxyListener {
     diagnostic = () => {},
     stateSink = async () => {},
     mockScenarioEngine = null,
+    discovery = null,
     mockProxyCycleId = null,
     mockReceiptSink = async () => {},
     mockAssertAuthorized = async () => {},
@@ -249,6 +255,8 @@ export class ProxyListener {
     this.diagnostic = diagnostic;
     this.stateSink = stateSink;
     this.mockScenarioEngine = mockScenarioEngine;
+    this.discovery = discovery;
+    this.requiresIsolation = Boolean(mockScenarioEngine || discovery);
     this.mockProxyCycleId = mockProxyCycleId;
     this.mockReceiptSink = mockReceiptSink;
     this.mockAssertAuthorized = mockAssertAuthorized;
@@ -256,6 +264,8 @@ export class ProxyListener {
     this.browserAssertBound = browserAssertBound;
     this.mockChannelCoverage = mockChannelCoverage;
     this.mockLedgerUncertain = false;
+    this.mockRootFrameId = null;
+    this.uncoveredFrameObserved = false;
     this.requestQueue = Promise.resolve();
     this.acceptingMockRequests = true;
     this.prepareOwnedTargetForCleanup = prepareOwnedTargetForCleanup;
@@ -271,7 +281,7 @@ export class ProxyListener {
     this.state = "configured";
     this.stopping = null;
     this.transportLost = false;
-    this.isolation = mockScenarioEngine ? "not_started" : "not_applicable";
+    this.isolation = this.requiresIsolation ? "not_started" : "not_applicable";
     this.cleanupFacts = { page_isolated: false, interception_disabled: false, detached: false, lock_released: false, real_response_restored: null };
     this.counts = {
       requestMatched: 0, responseMatched: 0, continued: 0, fulfilled: 0, ruleErrors: 0,
@@ -313,9 +323,26 @@ export class ProxyListener {
       this.state = "attached";
       await this.#persist();
       await this.client.command("Network.enable", {}, this.sessionId);
+      if (this.requiresIsolation) {
+        // Subscribe before the first frame-tree probe. A paused root Document
+        // can prevent Page.getFrameTree from replying in Chrome; frame lifecycle
+        // events preserve the single-frame boundary while that request waits.
+        this.unsubscribers.push(this.client.on(this.sessionId, "Page.frameAttached", () => { this.uncoveredFrameObserved = true; }));
+        this.unsubscribers.push(this.client.on(this.sessionId, "Page.frameNavigated", ({ frame }) => {
+          if (frame?.parentId || (this.mockRootFrameId && frame?.id !== this.mockRootFrameId)) this.uncoveredFrameObserved = true;
+        }));
+        this.unsubscribers.push(this.client.on(this.sessionId, "Page.frameDetached", ({ frameId }) => {
+          if (frameId === this.mockRootFrameId) this.uncoveredFrameObserved = true;
+        }));
+        await this.client.command("Page.enable", {}, this.sessionId);
+      }
       if (this.mockScenarioEngine) {
         await this.mockAssertAuthorized();
-        await probeMockChannels(this.client, this.targetId, this.sessionId, this.mockChannelCoverage);
+        await this.#probeChannels(this.mockChannelCoverage);
+      }
+      if (this.discovery) {
+        await this.discovery.assertAuthorized();
+        await this.#probeChannels(this.discovery.channelCoverage);
       }
       // Register every lifecycle and pause handler before Fetch.enable. CDP may
       // emit requestPaused as soon as interception is enabled; registering
@@ -325,27 +352,27 @@ export class ProxyListener {
       this.unsubscribers.push(this.client.on("", "Target.detachedFromTarget", event => {
         if ((event.sessionId === this.sessionId || event.targetId === this.targetId) && this.state === "active") {
           this.transportLost = true;
-          if (this.mockScenarioEngine) this.isolation = "isolation_unknown";
+          if (this.requiresIsolation) this.isolation = "isolation_unknown";
           this.stop().catch(() => {});
         }
       }));
       this.unsubscribers.push(this.client.on(this.sessionId, "Inspector.detached", () => {
         if (this.state !== "active") return;
         this.transportLost = true;
-        if (this.mockScenarioEngine) this.isolation = "isolation_unknown";
+        if (this.requiresIsolation) this.isolation = "isolation_unknown";
         this.stop().catch(() => {});
       }));
       this.unsubscribers.push(this.client.on("", "__transport_closed__", event => {
         this.transportLost = true;
-        if (this.mockScenarioEngine) this.isolation = "isolation_unknown";
-        this.#recordError("CDP_DISCONNECTED", this.mockScenarioEngine ? "CDP 断连，隔离未知；停止业务操作" : (event.reason ?? "CDP transport closed"));
+        if (this.requiresIsolation) this.isolation = "isolation_unknown";
+        this.#recordError("CDP_DISCONNECTED", this.requiresIsolation ? "CDP 断连，隔离未知；停止业务操作" : (event.reason ?? "CDP transport closed"));
         this.stop().catch(() => {});
       }));
       const ordinaryPatterns = this.rules.flatMap(rule => ["Request", "Response"].map(requestStage => ({
         urlPattern: `${rule.match.protocol}//${rule.match.hostname}*${rule.match.path_prefix}*`,
         requestStage
       })));
-      const patterns = [...ordinaryPatterns, ...(this.mockScenarioEngine?.requestPatterns() ?? [])].filter((pattern, index, all) =>
+      const patterns = [...ordinaryPatterns, ...(this.mockScenarioEngine?.requestPatterns() ?? []), ...(this.discovery ? [{ urlPattern: "*", requestStage: "Request" }] : [])].filter((pattern, index, all) =>
         all.findIndex(candidate => candidate.urlPattern === pattern.urlPattern && candidate.requestStage === pattern.requestStage) === index
       );
       this.fetchEnableDispatched = true;
@@ -355,13 +382,13 @@ export class ProxyListener {
       this.state = "fetch_enabled";
       this.started = true;
       this.state = "active";
-      if (this.mockScenarioEngine) this.isolation = "intercepting";
+      if (this.requiresIsolation) this.isolation = "intercepting";
       await this.#persist();
       return this.status();
     } catch (error) {
       this.#recordError(error.code ?? "PROXY_START_FAILED", error.message);
       this.state = "degraded";
-      if (this.mockScenarioEngine && this.fetchEnableDispatched) {
+      if (this.requiresIsolation && this.fetchEnableDispatched) {
         this.acceptingMockRequests = false;
         await this.stop().catch(() => {});
         throw error;
@@ -388,13 +415,18 @@ export class ProxyListener {
     if (this.mockScenarioEngine) {
       if (this.mockLedgerUncertain) fail("MOCK_LEDGER_UNCERTAIN", "Mock 回执日志导入失败，必须核验补记后恢复");
       await this.mockAssertAuthorized();
-      await probeMockChannels(this.client, this.targetId, this.sessionId, this.mockChannelCoverage);
+      await this.#probeChannels(this.mockChannelCoverage);
+    }
+    if (this.discovery) {
+      await this.discovery.assertAuthorized();
+      await this.#probeChannels(this.discovery.channelCoverage);
+      this.discovery.assertProbed();
     }
     return this.status();
   }
 
   async recoverIsolation({ client }) {
-    if (!this.transportLost || !this.mockScenarioEngine) fail("MOCK_RECOVERY_INVALID", "只有隔离未知的 Mock 代理可执行此恢复");
+    if (!this.transportLost || !this.requiresIsolation) fail("MOCK_RECOVERY_INVALID", "只有隔离未知的 Mock 代理可执行此恢复");
     const { targetInfo } = await client.command("Target.getTargetInfo", { targetId: this.targetId });
     if (targetInfo?.targetId !== this.targetId || targetInfo.type !== "page" || targetInfo.url !== "about:blank") {
       fail("MOCK_CLEANUP_NOT_ISOLATED", "恢复前必须由 MCP 将同一自有 Target 安全导航到 about:blank");
@@ -423,7 +455,7 @@ export class ProxyListener {
 
   async #stop() {
     this.acceptingMockRequests = false;
-    if (this.transportLost && this.mockScenarioEngine) {
+    if (this.transportLost && this.requiresIsolation) {
       this.state = "isolation_unknown";
       this.isolation = "isolation_unknown";
       await this.#persist().catch(() => {});
@@ -432,7 +464,7 @@ export class ProxyListener {
     this.state = "stopping";
     await this.#persist().catch(() => {});
     if (this.client && this.sessionId) {
-      if (this.mockScenarioEngine) {
+      if (this.requiresIsolation) {
         try {
           if (this.prepareOwnedTargetForCleanup) {
             await this.prepareOwnedTargetForCleanup({ targetId: this.targetId, sessionId: this.sessionId });
@@ -478,6 +510,28 @@ export class ProxyListener {
     return this.status();
   }
 
+  async #probeChannels(coverage, pausedEvent) {
+    if (this.uncoveredFrameObserved) fail("MOCK_CHANNEL_UNVERIFIED", "已发现未覆盖框架变化，必须安全退出并重新核验");
+    let checked;
+    if (pausedEvent?.resourceType === "Document") {
+      if (!coverage || coverage.target_id !== this.targetId || !this.mockRootFrameId || pausedEvent.frameId !== this.mockRootFrameId) {
+        fail("MOCK_CHANNEL_UNVERIFIED", "暂停文档不属于已核验的唯一根框架");
+      }
+      // Target enumeration remains live, including worker/child Target checks.
+      // This does not authorize a URL: the strict scenario/discovery matcher
+      // still decides whether to fulfill, safely pass through, or block it.
+      const targets = await this.client.command("Target.getTargets");
+      checked = validateMockChannels(targets, { frameTree: { frame: { id: this.mockRootFrameId } } }, this.targetId);
+    } else {
+      checked = await probeMockChannels(this.client, this.targetId, this.sessionId, coverage);
+    }
+    if (this.uncoveredFrameObserved || (this.mockRootFrameId && checked.frame_id !== this.mockRootFrameId)) {
+      fail("MOCK_CHANNEL_UNVERIFIED", "核验期间框架边界发生变化，停止模拟业务请求");
+    }
+    this.mockRootFrameId = checked.frame_id;
+    return checked;
+  }
+
   #queuePaused(event) {
     // State persistence and authoritative receipt import form one serial lane
     // for this single Target, including duplicate Fetch delivery handling.
@@ -499,12 +553,30 @@ export class ProxyListener {
         this.#recordError(error.code ?? "PROXY_BROWSER_BINDING", error.message);
         return;
       }
+      if (this.discovery && !responseStage) {
+        try {
+          if (!this.acceptingMockRequests) fail("MOCK_STOPPING", "发现阶段正在退出");
+          await this.#probeChannels(this.discovery.channelCoverage, event);
+          const outcome = await this.discovery.capture(event.request);
+          if (!outcome.passthrough) {
+            await this.client.command("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" }, this.sessionId);
+            this.counts.mockBlocked += 1;
+            await this.discovery.record(event.request, outcome);
+            return;
+          }
+          await this.discovery.record(event.request, outcome);
+        } catch (error) {
+          await this.client.command("Fetch.failRequest", { requestId: event.requestId, errorReason: "BlockedByClient" }, this.sessionId);
+          this.#recordError(error.code ?? "MOCK_DISCOVERY_BLOCKED", error.message);
+          return;
+        }
+      }
       if (this.mockScenarioEngine && !responseStage) {
         try {
           if (!this.acceptingMockRequests) fail("MOCK_STOPPING", "Mock 正在退出，停止新模拟业务请求");
           if (this.mockLedgerUncertain) fail("MOCK_LEDGER_UNCERTAIN", "Mock 回执日志导入失败，必须核验补记后恢复");
           await this.mockAssertAuthorized();
-          await probeMockChannels(this.client, this.targetId, this.sessionId, this.mockChannelCoverage);
+          await this.#probeChannels(this.mockChannelCoverage, event);
           const outcome = await this.mockScenarioEngine.handle({
             url: event.request.url,
             method: event.request.method,
@@ -523,12 +595,12 @@ export class ProxyListener {
             await this.mockAssertAuthorized();
             try { await this.mockReceiptSink(structuredClone(outcome)); }
             catch (error) { this.mockLedgerUncertain = true; throw error; }
-            await this.client.command("Fetch.fulfillRequest", {
+            await this.#releasePaused("Fetch.fulfillRequest", {
               requestId: event.requestId,
               responseCode: outcome.response.status,
               responseHeaders,
               body: Buffer.from(outcome.response.body, "utf8").toString("base64")
-            }, this.sessionId);
+            });
             this.counts.fulfilled += 1;
             this.counts.mockFulfilled += 1;
             return;
@@ -561,8 +633,8 @@ export class ProxyListener {
         }
       }
       if (!rule) {
+        await this.#releasePaused(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId });
         this.counts.continued += 1;
-        await this.client.command(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }, this.sessionId);
       } else if (responseStage) await this.#handleResponse(event, rule);
       else await this.#handleRequest(event, rule);
     } catch (error) {
@@ -575,30 +647,40 @@ export class ProxyListener {
         url: sanitizeUrl(event.request.url),
         stage: responseStage ? "response" : "request"
       });
-      if (authorizationFailed || (this.mockScenarioEngine && !responseStage)) {
+      if (authorizationFailed || (this.requiresIsolation && !responseStage)) {
         this.acceptingMockRequests = false;
         this.isolation = "isolation_unknown";
         this.state = "isolation_unknown";
         this.#recordError("MOCK_ISOLATION_UNKNOWN", "CDP 无法确认请求已阻断，隔离未知；停止业务操作");
       } else {
-        await this.client?.command(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }, this.sessionId).catch(() => {});
+        await this.#releasePaused(responseStage ? "Fetch.continueResponse" : "Fetch.continueRequest", { requestId: event.requestId }).catch(() => {});
       }
     } finally {
       await this.#persist().catch(() => {});
     }
   }
 
+  async #releasePaused(method, params) {
+    // No await between this final boundary check and the CDP send. Matching,
+    // authorization and receipt persistence can yield to frame/transport events.
+    if (this.requiresIsolation && (this.transportLost || this.uncoveredFrameObserved || !this.acceptingMockRequests)) {
+      if (!this.transportLost) await this.client.command("Fetch.failRequest", { requestId: params.requestId, errorReason: "BlockedByClient" }, this.sessionId);
+      fail("MOCK_CHANNEL_UNVERIFIED", "释放请求前隔离边界已变化，拒绝继续或交付响应");
+    }
+    return this.client.command(method, params, this.sessionId);
+  }
+
   async #handleRequest(event, rule) {
     const headers = applyHeaderOperations(objectHeaders(event.request.headers), rule.request?.headers);
     const params = { requestId: event.requestId };
     if (rule.request?.headers) params.headers = headers;
-    await this.client.command("Fetch.continueRequest", params, this.sessionId);
+    await this.#releasePaused("Fetch.continueRequest", params);
     this.counts.requestMatched += 1;
   }
 
   async #handleResponse(event, rule) {
     if (!rule.response) {
-      await this.client.command("Fetch.continueResponse", { requestId: event.requestId }, this.sessionId);
+      await this.#releasePaused("Fetch.continueResponse", { requestId: event.requestId });
       this.counts.continued += 1;
       return;
     }
@@ -620,7 +702,7 @@ export class ProxyListener {
       responseHeaders: rewritten.headers
     };
     if (rule.response.body) params.body = rewritten.body.toString("base64");
-    await this.client.command("Fetch.fulfillRequest", params, this.sessionId);
+    await this.#releasePaused("Fetch.fulfillRequest", params);
     this.counts.responseMatched += 1;
     this.counts.fulfilled += 1;
   }
@@ -640,6 +722,7 @@ export async function createProxyListener(config) {
   const browserBinding = await loadBrowserProxyBinding(config);
   const ordinaryAssertAuthorized = await loadProxyAuthorization(config);
   const validated = validateProxyConfig(config);
+  const discovery = await loadDiscoveryBinding(validated);
   const mock = await loadMockProxyBinding(validated);
   const endpoint = validated.endpoint;
   const [version, targets] = await Promise.all([
@@ -667,6 +750,7 @@ export async function createProxyListener(config) {
   };
   return new ProxyListener({
     ...validated,
+    discovery,
     stateSink,
     endpoint,
     browserWebSocketUrl: version.webSocketDebuggerUrl,

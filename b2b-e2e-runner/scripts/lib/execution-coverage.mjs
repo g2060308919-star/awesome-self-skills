@@ -1,3 +1,4 @@
+import { deriveExecutionProgress, scenarioForEvent, validateScenarioPlan, freshContext } from "./execution-progress.mjs";
 import { derivePermissionState } from "./permission-batches.mjs";
 
 const COVERAGE_VERSION = "1.0";
@@ -115,8 +116,9 @@ function currentPermissionGroups(testCases, log) {
 
 function validateDependency(dependency, records, label) {
   rejectUnknown(dependency, new Set([
-    "dependency_id", "step_refs", "checkpoint_refs", "required_fact", "source_refs"
+    "dependency_id", "step_refs", "checkpoint_refs", "required_fact", "source_refs", "condition_kind"
   ]), label);
+  requireValue(dependency.condition_kind === undefined || ["preparation", "required_action"].includes(dependency.condition_kind), "依赖条件类型无效");
   requireValue(string(dependency.dependency_id), `${label}.dependency_id 必须非空`);
   strings(dependency.step_refs, `${label}.step_refs`);
   strings(dependency.checkpoint_refs, `${label}.checkpoint_refs`, { empty: true });
@@ -168,7 +170,7 @@ function validatePlanEvent(testCases, log, event) {
       const scopeLabel = `${label}.scopes[${scopeIndexValue}]`;
       rejectUnknown(scope, new Set([
         "scope_id", "group_ids", "location_ref", "location_status", "step_refs", "source_refs",
-        "known_entry_clue", "location_gap"
+        "known_entry_clue", "location_gap", "scenario_requirements", "assertion_kind", "assertion_domain", "preconditions", "chain_id"
       ]), scopeLabel);
       requireValue(string(scope.scope_id) && !scopeIds.has(scope.scope_id), `${scopeLabel}.scope_id 缺失或重复`);
       scopeIds.add(scope.scope_id);
@@ -200,6 +202,7 @@ function validatePlanEvent(testCases, log, event) {
       dependencyIds.add(dependency.dependency_id);
     }
   }
+  validateScenarioPlan(log, event);
   if (event.action === "initial") {
     requireValue(checkpointIds.size === records.size && [...records.keys()].every(id => checkpointIds.has(id)),
       "coverage_plan.initial 必须精确覆盖全部原检查点，不能缺少或增加");
@@ -260,7 +263,7 @@ function observationPayload(event) {
 function validateContextEvent(testCases, log, event) {
   rejectUnknown(event, new Set([
     "type", "scope_ids", "account_ref", "observed_account_ref", "target_id", "context_ref", "environment_ref",
-    "observed_url", "verification", "switch_status", "fact_refs", "role_observation_refs", "sequence", "at"
+    "observed_url", "verification", "switch_status", "fact_refs", "role_observation_refs", "sequence", "at", "identity_ref", "simulated_permission_ref", "verification_stage"
   ]), "coverage_context");
   const plan = latestPlan(log);
   requireValue(plan, "coverage_context 缺少 coverage_plan");
@@ -285,7 +288,18 @@ function validateContextEvent(testCases, log, event) {
 
   const groups = currentPermissionGroups(testCases, log);
   const requiredGroups = new Set(selected.flatMap(scope => scope.group_ids));
-  if (requiredGroups.size > 0) {
+  requireValue(event.verification_stage === undefined || event.verification_stage === "identity", "coverage_context.verification_stage 无效");
+  if (event.identity_ref !== undefined) {
+    const identity = eventAt(log, event.identity_ref);
+    requireValue(identity?.type === "identity_observation" && freshContext(log, identity), "缺少新鲜真实身份依据");
+    requireValue(["account_ref", "observed_account_ref", "target_id", "context_ref", "environment_ref"].every(key => event[key] === identity[key]), "执行上下文与真实身份不一致");
+  }
+  if (event.simulated_permission_ref !== undefined) {
+    const simulated = eventAt(log, event.simulated_permission_ref);
+    requireValue(simulated?.type === "simulated_permission" && requiredGroups.size === 1 && requiredGroups.has(simulated.group_id) && simulated.identity_ref === event.identity_ref, "模拟权限未绑定本配置和真实身份");
+    requireValue(groups.get(simulated.group_id)?.availability === "unavailable", "模拟权限不能伪记真实资源 ready");
+    requireValue(!event.role_observation_refs?.length, "模拟权限不得冒充真实权限核验");
+  } else if (requiredGroups.size > 0) {
     requireValue(string(event.account_ref), "特殊权限执行上下文必须绑定 account_ref");
     for (const groupId of requiredGroups) {
       const group = groups.get(groupId);
@@ -325,15 +339,15 @@ function validateContextEvent(testCases, log, event) {
   const observed = new URL(event.observed_url);
   for (const scope of selected.filter(item => item.location_status === "known")) {
     const planned = new URL(scope.location_ref);
-    requireValue(observed.origin === planned.origin && observed.pathname === planned.pathname,
+    requireValue(observed.origin === planned.origin && (event.verification_stage === "identity" || observed.pathname === planned.pathname),
       `coverage_context URL 与范围 ${scope.scope_id} 的已知位置不一致`);
   }
   void testCases;
 }
 
 function openScopes(testCases, log, plan) {
-  const records = checkpointRecords(testCases, log);
-  return [...scopeIndex(plan).values()].filter(scope => records.get(scope.checkpoint_id)?.checkpoint?.result == null);
+  const progress = deriveExecutionProgress(testCases, log);
+  return [...scopeIndex(plan).values()].filter(scope => progress.scenes.some(scene => scene.scope_id === scope.scope_id && !scene.complete));
 }
 
 function openAssistanceCheckpoints(log) {
@@ -419,7 +433,7 @@ function validateReviewEvent(testCases, log, event) {
   }
   requireValue(string(event.choice) && string(event.reason), "coverage_review 必须包含选择和具体原因");
 
-  if (["wait", "final"].includes(event.purpose)) {
+  if (event.purpose === "final") {
     requireValue(event.scope_ids.length === scopes.size && [...scopes.keys()].every(id => event.scope_ids.includes(id)),
       `coverage_review.${event.purpose} 必须覆盖全量执行范围`);
     requireValue(event.checkpoint_ids.length === records.size && [...records.keys()].every(id => event.checkpoint_ids.includes(id)),
@@ -452,17 +466,11 @@ function validateReviewEvent(testCases, log, event) {
       requireValue(hasAssistance || hasDependencyFact, `coverage_review.wait 的阻塞范围 ${scopeId} 缺少开放协作或实际依赖依据`);
     }
   }
-  if (["switch", "batch_end"].includes(event.purpose)) {
-    const contexts = event.fact_refs.filter(Number.isInteger).map(reference => eventAt(log, reference))
-      .filter(item => item?.type === "coverage_context" && string(item.account_ref));
-    requireValue(contexts.length > 0, `coverage_review.${event.purpose} 必须引用当前账号的 coverage_context`);
-    const accounts = new Set(contexts.map(item => item.account_ref));
-    const groups = currentPermissionGroups(testCases, log);
-    const relevant = openScopes(testCases, log, plan).filter(scope =>
-      scope.group_ids.some(groupId => accounts.has(groups.get(groupId)?.account_ref))
-    );
-    requireValue(relevant.every(scope => event.scope_ids.includes(scope.scope_id)),
-      `coverage_review.${event.purpose} 缺少当前账号仍有关联的遗留范围`);
+  if (["switch", "batch_end", "wait"].includes(event.purpose)) {
+    const progress = deriveExecutionProgress(testCases, log);
+    const current = progress.scenes.filter(scene => scene.batch_id === progress.active_batch_id);
+    requireValue(current.every(scene => event.scope_ids.includes(scene.scope_id)), `coverage_review.${event.purpose} 缺少当前连续批次范围`);
+    requireValue(event.scope_ids.every(id => current.some(scene => scene.scope_id === id)), `coverage_review.${event.purpose} 不得跨权限配置`);
   }
 }
 
@@ -520,15 +528,14 @@ function validateCheckpointStart(testCases, log, event) {
     for (const factRef of context.fact_refs ?? []) if (Number.isInteger(factRef)) factRefs.add(factRef);
   }
   requireValue(event.scope_ids.every(scopeId => covered.has(scopeId)), "checkpoint_started 的执行范围缺少匹配的新鲜上下文");
-  const records = checkpointRecords(testCases, log);
+  const progress = deriveExecutionProgress(testCases, log);
   for (const dependency of dependenciesForCheckpoint(log, event.checkpoint_id)) {
+    const preparation = eventAt(log,event.preparation_ref);
+    if (dependency.condition_kind === "preparation" && preparation?.data_source === "mock" && preparation.prepared_dependencies?.some(item => item.dependency_id === dependency.dependency_id)) continue;
     for (const checkpointId of dependency.checkpoint_refs) {
-      requireValue(records.get(checkpointId)?.checkpoint?.result === "passed",
-        `checkpoint_started 的依赖检查点尚未通过：${checkpointId}`);
-      const resultEvent = [...(log.events ?? [])].reverse().find(item =>
-        item.type === "checkpoint_result" && item.checkpoint_id === checkpointId && item.result === "passed");
-      requireValue(resultEvent && factRefs.has(resultEvent.sequence),
-        `checkpoint_started 缺少依赖 ${dependency.dependency_id} 的实际业务事实引用`);
+      const parent = progress.checkpoints.find(item => item.checkpoint_id === checkpointId);
+      requireValue(parent?.complete && parent.effective_result === "passed", `checkpoint_started 的依赖检查点尚未通过：${checkpointId}`);
+      requireValue(parent.scenes.every(scene => factRefs.has(scene.result_ref)), `checkpoint_started 缺少依赖 ${dependency.dependency_id} 的实际业务事实引用`);
     }
   }
 }
@@ -614,24 +621,13 @@ export function deriveCoverageState(testCases, log) {
     if (event.type !== "coverage_context") continue;
     for (const scopeId of event.scope_ids) contexts.set(scopeId, event);
   }
-  const open = [...scopes.values()].filter(scope => records.get(scope.checkpoint_id)?.checkpoint?.result == null);
+  const open = openScopes(testCases, log, plan).filter(scope => deriveExecutionProgress(testCases, log).scenes.some(scene => scene.scope_id === scope.scope_id && scene.batch_id === deriveExecutionProgress(testCases, log).active_batch_id));
   const ready = [];
   const preparable = [];
   for (const scope of open) {
-    if (contexts.get(scope.scope_id)?.verification === "verified") ready.push(scope.scope_id);
+    if (freshContext(log, contexts.get(scope.scope_id)) && !contextInvalidated(contexts.get(scope.scope_id), log)) ready.push(scope.scope_id);
     else preparable.push(scope.scope_id);
   }
-  const groupOrder = [...scopes.values()].map(scope => scope.group_ids.join("+") || "__general__");
-  const returnTasks = [];
-  const lastSeen = new Map();
-  [...scopes.values()].forEach((scope, index) => {
-    const key = groupOrder[index];
-    const previous = lastSeen.get(key);
-    if (previous !== undefined && groupOrder.slice(previous + 1, index).some(group => group !== key)) {
-      returnTasks.push({ scope_id: scope.scope_id, checkpoint_id: scope.checkpoint_id, group_ids: [...scope.group_ids] });
-    }
-    lastSeen.set(key, index);
-  });
   return {
     enabled: true,
     plan_revision: plan.revision,
@@ -641,7 +637,8 @@ export function deriveCoverageState(testCases, log) {
     ready_scope_ids: ready,
     preparable_scope_ids: preparable,
     blocked_scope_ids: [],
-    return_tasks: returnTasks
+    return_tasks: [],
+    execution_progress: deriveExecutionProgress(testCases, log)
   };
 }
 

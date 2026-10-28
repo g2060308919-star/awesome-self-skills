@@ -36,7 +36,7 @@ const permissionPlan = {
 test("AC-02/08/09/10/12/14/15/18: one Run executes ready work, waits, re-verifies, resumes, and preserves side-effect safety", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "permission-resume-"));
   try {
-    const run = await initializeRun({ workspaceRoot: root, casesPath: await createCases(root), workflowProfile: "b2b-e2e-current" });
+    const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath: await createCases(root), workflowProfile: "b2b-e2e-current" });
     let log = JSON.parse(await readFile(path.join(run.runRoot, "execution-log.json")));
     assert.equal(log.events[0].type, "workflow_profile");
     assert.equal(log.events[0].profile, "b2b-e2e-current");
@@ -95,7 +95,7 @@ test("R02: default initialization selects current workflow and unknown profiles 
   const root = await mkdtemp(path.join(os.tmpdir(), "permission-compat-"));
   try {
     const casesPath = await createCases(root);
-    const legacy = await initializeRun({ workspaceRoot: root, casesPath });
+    const legacy = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath });
     const log = JSON.parse(await readFile(path.join(legacy.runRoot, "execution-log.json")));
     assert.equal(log.events[0].profile, "b2b-e2e-current");
     await assert.rejects(
@@ -103,7 +103,7 @@ test("R02: default initialization selects current workflow and unknown profiles 
       error => error.code === "INPUT_CONTRACT"
     );
     await assert.rejects(
-      initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "unknown-profile" }),
+      initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath, workflowProfile: "unknown-profile" }),
       error => error.code === "INPUT_CONTRACT"
     );
   } finally {
@@ -114,7 +114,7 @@ test("R02: default initialization selects current workflow and unknown profiles 
 test("profile and resume markers can only be emitted by their owning commands", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "permission-owned-events-"));
   try {
-    const run = await initializeRun({ workspaceRoot: root, casesPath: await createCases(root), workflowProfile: "b2b-e2e-current" });
+    const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath: await createCases(root), workflowProfile: "b2b-e2e-current" });
     await assert.rejects(
       recordEvent(run.runRoot, { type: "resume_check", resume_count: 1 }),
       error => error.code === "INPUT_CONTRACT"
@@ -125,7 +125,7 @@ test("profile and resume markers can only be emitted by their owning commands", 
 test("AC-15/31: stop-waiting closes only named groups without converting availability or ending other waits", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "permission-stop-waiting-"));
   try {
-    const run = await initializeRun({ workspaceRoot: root, casesPath: await createCases(root), workflowProfile: "b2b-e2e-current" });
+    const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath: await createCases(root), workflowProfile: "b2b-e2e-current" });
     const plan = structuredClone(permissionPlan);
     plan.groups[0].availability = "user_preparation_required";
     plan.groups[0].account_ref = null;
@@ -136,7 +136,7 @@ test("AC-15/31: stop-waiting closes only named groups without converting availab
     await requestFixturePermission(run.runRoot, { group_id: "g-later", checkpoint_ids: ["LATER/s/o"], reason: "等待审阅权限" });
     const stopped = await resolveFixturePermission(run.runRoot, { group_id: "g-ready", checkpoint_ids: ["READY/s/o"], phase: "stop_waiting", description: "用户决定本轮不再等待订单权限" });
     await recordEvent(run.runRoot, { type: "checkpoint_result", resolution_ref: stopped.sequence, exploration_summary: { checkpoint_ids: ["READY/s/o"], missing_fact: "订单权限", known_facts: ["用户停止等待"], attempts: [], not_attempted_reason: "授权身份不可用", cannot_continue_reason: "用户停止等待" }, checkpoint_id: "READY/s/o", result: "undetermined", reason: "用户决定本轮不再等待订单权限", observation: "未执行页面操作", evidence_status: "not_required", permission_group_ids: ["g-ready"] });
-    await assert.rejects(recordEvent(run.runRoot, { type: "run_state", status: "completed" }), /未处理/);
+    await assert.rejects(recordEvent(run.runRoot, { type: "run_state", status: "completed" }), /未处理|未执行|终结依据/);
     const log = JSON.parse(await readFile(path.join(run.runRoot, "execution-log.json")));
     const availability = log.events.find(event => event.type === "permission_plan").groups.find(group => group.group_id === "g-ready").availability;
     assert.equal(availability, "user_preparation_required");

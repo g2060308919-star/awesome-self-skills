@@ -1,3 +1,4 @@
+import { deriveExecutionProgress, assertExecutionComplete, freshContext } from "./execution-progress.mjs";
 import { CURRENT_WORKFLOW } from "./workflow-contract.mjs";
 const PROFILES = new Set([CURRENT_WORKFLOW]);
 const AVAILABILITIES = new Set(["ready", "user_preparation_required", "unavailable"]);
@@ -199,8 +200,9 @@ export function derivePermissionState(testCases, executionLog) {
     }
   }
 
+  const progress = deriveExecutionProgress(testCases, executionLog);
   for (const group of groups) {
-    group.remaining_checkpoint_ids = group.checkpoint_ids.filter(id => checkpoints.get(id)?.checkpoint?.result == null);
+    group.remaining_checkpoint_ids = group.checkpoint_ids.filter(id => !progress.checkpoints.find(item => item.checkpoint_id === id)?.complete);
     group.completed = group.remaining_checkpoint_ids.length === 0;
     const observation = group.last_observation;
     const invalidation = latestInvalidationSequence(group, executionLog, accountChangeSequences);
@@ -217,7 +219,7 @@ export function derivePermissionState(testCases, executionLog) {
   );
   const roleIndependentPending = plan.role_independent_case_ids.some(caseId => {
     const testCase = testCases.cases.find(item => item.case_id === caseId);
-    return testCase.steps.some(step => step.expected.some(oracle => checkpoints.get(`${caseId}/${step.step_id}/${oracle.oracle_id}`)?.checkpoint?.result == null));
+    return testCase.steps.some(step => step.expected.some(oracle => !progress.checkpoints.find(item => item.checkpoint_id === `${caseId}/${step.step_id}/${oracle.oracle_id}`)?.complete));
   });
   return {
     profile,
@@ -254,10 +256,10 @@ function ownersForCheckpoint(state, checkpointId) {
   return state.groups.filter(group => group.checkpoint_ids.includes(checkpointId));
 }
 
-function canRunCheckpoint(state, checkpointId) {
+function canRunCheckpoint(state, checkpointId, log) {
   const owners = ownersForCheckpoint(state, checkpointId);
   if (!owners.length) return true;
-  return owners.every(group => group.availability === "ready" && group.verification === "verified");
+  return owners.every(group => (group.availability === "ready" && group.verification === "verified") || (group.availability === "unavailable" && (log?.events ?? []).some(event => event.type === "coverage_context" && event.simulated_permission_ref && freshContext(log, event) && log.events.find(item => item.sequence === event.simulated_permission_ref)?.group_id === group.group_id)));
 }
 
 function validateExplorationSummary(summary, knownCheckpoints, label) {
@@ -518,11 +520,12 @@ export function validatePermissionEvent(testCases, executionLog, event) {
   }
   if (event.type === "permission_batch") {
     const group = groups.get(event.group_id);
+    if ((event.batch_id ?? event.group_id) === "general") return;
     requireValue(group, `权限批次引用未知权限组：${event.group_id}`);
     requireValue(BATCH_PHASES.has(event.phase), `权限批次 phase 无效：${event.phase}`);
     requireValue(nonEmptyString(event.description), "permission_batch 必须包含 description");
-    if (event.phase === "started") requireValue(group.availability === "ready" && group.verification === "verified", `权限组 ${group.group_id} 未就绪或未经实际核验`);
-    if (event.phase === "waiting") requireValue(group.availability === "user_preparation_required", `权限组 ${group.group_id} 不是待用户准备状态`);
+    if (event.phase === "started") requireValue(group.checkpoint_ids.some(id => canRunCheckpoint(state, id, executionLog)), `权限组 ${group.group_id} 未就绪或未经实际核验`);
+
     return;
   }
   if (event.type === "permission_wait") {
@@ -554,16 +557,16 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     const sourceCase = testCases.cases.find(item => item.case_id === event.case_id);
     requireValue(sourceCase, `未知用例：${event.case_id}`);
     const pendingIds = sourceCase.steps.flatMap(step => step.expected.map(oracle => `${sourceCase.case_id}/${step.step_id}/${oracle.oracle_id}`))
-      .filter(id => checkpoints.get(id)?.checkpoint?.result == null);
+      .filter(id => !deriveExecutionProgress(testCases, executionLog).checkpoints.find(item => item.checkpoint_id === id)?.complete);
     requireValue(pendingIds.length > 0, `用例 ${event.case_id} 没有可开始的未完成检查点`);
-    requireValue(pendingIds.some(id => canRunCheckpoint(state, id)), `用例 ${event.case_id} 所需权限未就绪或未经实际核验`);
+    requireValue(pendingIds.some(id => canRunCheckpoint(state, id, executionLog)), `用例 ${event.case_id} 所需权限未就绪或未经实际核验`);
     return;
   }
   if (event.type === "checkpoint_started") {
     const record = checkpoints.get(event.checkpoint_id);
     requireValue(record, `未知检查点：${event.checkpoint_id}`);
-    requireValue(record.checkpoint?.result == null && record.checkpoint?.status !== "completed", `检查点已经完成：${event.checkpoint_id}`);
-    requireValue(canRunCheckpoint(state, event.checkpoint_id), `检查点 ${event.checkpoint_id} 所需权限未就绪或未经实际核验`);
+    requireValue(!executionLog.events.some(item => item.type === "checkpoint_result" && item.checkpoint_id === event.checkpoint_id && (item.scenario_id ?? null) === (event.scenario_id ?? null)), `检查点场景已经完成：${event.checkpoint_id}`);
+    requireValue(canRunCheckpoint(state, event.checkpoint_id, executionLog), `检查点 ${event.checkpoint_id} 所需权限未就绪或未经实际核验`);
     return;
   }
   if (event.type === "checkpoint_result") {
@@ -582,8 +585,8 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     requireValue(record, `未知检查点：${event.checkpoint_id}`);
     if (event.evidence_refs !== undefined) validateStringArray(event.evidence_refs, "checkpoint_result.evidence_refs", { allowEmpty: true });
     if (["passed", "failed"].includes(event.result)) {
-      requireValue(record.checkpoint?.status === "running", `检查点 ${event.checkpoint_id} 必须先实际开始`);
-      requireValue(canRunCheckpoint(state, event.checkpoint_id), `检查点 ${event.checkpoint_id} 所需权限未就绪或未经实际核验`);
+      requireValue(executionLog.events.some(item => item.type === "checkpoint_started" && item.checkpoint_id === event.checkpoint_id && item.execution_id === event.execution_id), `检查点 ${event.checkpoint_id} 必须先实际开始`);
+      requireValue(canRunCheckpoint(state, event.checkpoint_id, executionLog), `检查点 ${event.checkpoint_id} 所需权限未就绪或未经实际核验`);
     } else if (event.result === "undetermined") {
       validateUndetermined(event, executionLog, record, knownCheckpoints);
       if (record.checkpoint?.status !== "running" && event.permission_group_ids !== undefined) {
@@ -628,8 +631,7 @@ export function validatePermissionEvent(testCases, executionLog, event) {
     return;
   }
   if (event.type === "run_state" && (event.status ?? event.state) === "completed") {
-    const incomplete = [...checkpoints.values()].filter(record => record.checkpoint?.result == null && !testCases.cases[record.case_index].excluded);
-    requireValue(incomplete.length === 0, `仍有 ${incomplete.length} 个未处理检查点，不能完成 Run`);
+    assertExecutionComplete(testCases, executionLog);
   }
   void plan;
 }

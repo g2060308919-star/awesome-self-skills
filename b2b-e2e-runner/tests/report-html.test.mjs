@@ -25,7 +25,7 @@ async function casesFile(root) {
 }
 
 async function preparedRun(root) {
-  const run = await initializeRun({
+  const run = await initializeRun({ mockFallback: "declined",
     workspaceRoot: root,
     casesPath: await casesFile(root),
     workflowProfile: "b2b-e2e-current"
@@ -176,7 +176,7 @@ test("AC-24: a missing, stale, or tampered HTML report fails and regeneration re
 test("R02: a retired Run cannot generate or validate historical Markdown artifacts", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "report-retired-"));
   try {
-    const run = await initializeRun({ workspaceRoot: root, casesPath: await casesFile(root) });
+    const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath: await casesFile(root) });
     const logPath = path.join(run.runRoot, "execution-log.json");
     const log = JSON.parse(await readFile(logPath, "utf8"));
     log.events[0].profile = "permission-batches-html-v1";

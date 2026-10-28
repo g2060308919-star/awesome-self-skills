@@ -7,6 +7,8 @@ import {
   validateCoverageEvent,
   validateCoverageLog
 } from "../scripts/lib/execution-coverage.mjs";
+import { validateProgressEvent } from "../scripts/lib/execution-progress.mjs";
+import { validateExecutionFact } from "../scripts/lib/execution-facts.mjs";
 
 const checkpointIds = ["A/s1/o1", "B/s1/o1", "A/s2/o1"];
 const testCases = {
@@ -84,8 +86,8 @@ function coveragePlan(overrides = {}) {
           known_entry_clue: "从 A 的记录列表进入详情", location_gap: "实际详情路径需在登录后发现"
         }],
         dependencies: [{
-          dependency_id: "dep-approved-record", step_refs: ["B/s1"], checkpoint_refs: ["B/s1/o1"],
-          required_fact: "B 已审核同一业务记录", source_refs: ["snapshot:A/s2"]
+          dependency_id: "dep-created-readback", step_refs: ["A/s1"], checkpoint_refs: ["A/s1/o1"],
+          required_fact: "A 创建的同一业务记录可供回查", source_refs: ["snapshot:A/s2"]
         }]
       }
     ],
@@ -99,6 +101,55 @@ function append(log, event) {
   return stored;
 }
 
+function appendValidated(log, event) {
+  validateCoverageEvent(testCases, log, event);
+  validateProgressEvent(testCases, log, event);
+  validateExecutionFact(testCases, log, event);
+  return append(log, event);
+}
+
+function startScenario(log, checkpointId, contextRef) {
+  const scope = log.events.filter(event => event.type === "coverage_plan").at(-1).items
+    .find(item => item.checkpoint_id === checkpointId).scopes[0];
+  const context = log.events.find(event => event.sequence === contextRef);
+  const input = appendValidated(log, { type: "page_observation", checkpoint_ids: [checkpointId],
+    target_id: context.target_id, context_ref: context.context_ref, description: "组件页面准备输入已核验" });
+  const scenario_id = scope.scope_id;
+  const execution_id = `execution-${checkpointId}`;
+  const preparation = appendValidated(log, { type: "scenario_preparation", checkpoint_id: checkpointId, scenario_id, execution_id,
+    batch_id: [...scope.group_ids].sort().join("+") || "general", context_refs: [contextRef], fact_refs: [input.sequence],
+    data_source: "real", permission_source: "real" });
+  return appendValidated(log, { type: "checkpoint_started", checkpoint_id: checkpointId, scenario_id, execution_id,
+    scope_ids: [scope.scope_id], context_refs: [contextRef], preparation_ref: preparation.sequence });
+}
+
+function completeScenario(log, checkpointId, contextRef) {
+  const start = startScenario(log, checkpointId, contextRef);
+  const { scenario_id, execution_id } = start;
+  const context = log.events.find(event => event.sequence === contextRef);
+  const action = appendValidated(log, { type: "action_dispatched", checkpoint_id: checkpointId, scenario_id, execution_id,
+    action_id: `action-${checkpointId}`, side_effect: false, description: "组件实际执行原检查动作" });
+  const page = appendValidated(log, { type: "page_observation", checkpoint_ids: [checkpointId], scenario_id, execution_id,
+    action_id: action.action_id, target_id: context.target_id, context_ref: context.context_ref, description: "组件页面回读同一记录 REC-1" });
+  const review = appendValidated(log, { type: "coverage_review", review_id: `close-${checkpointId}`, purpose: "checkpoint_close",
+    plan_revision: 1, based_on_sequence: log.events.length, scope_ids: start.scope_ids, checkpoint_ids: [checkpointId],
+    fact_refs: [page.sequence], assistance_refs: [], ready_scope_ids: start.scope_ids, preparable_scope_ids: [], blocked_scope_ids: [],
+    closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [page.sequence] }], choice: "close", reason: "原动作与页面观察完成" });
+  return appendValidated(log, { type: "checkpoint_result", checkpoint_id: checkpointId, scenario_id, execution_id,
+    result: "passed", reason: "原预期已在组件事实中验证", execution_refs: [action.sequence, page.sequence], coverage_review_ref: review.sequence });
+}
+
+test("AC-21: original mandatory A→B→A dependencies are rejected during planning without changing input or log", () => {
+  const log = baseLog();
+  const cyclic = coveragePlan();
+  cyclic.items[2].dependencies = [{ dependency_id: "dep-approved-record", step_refs: ["B/s1"], checkpoint_refs: ["B/s1/o1"],
+    required_fact: "B 已审核同一业务记录", source_refs: ["snapshot:A/s2"], condition_kind: "required_action" }];
+  const before = JSON.stringify({ testCases, log, cyclic });
+  assert.throws(() => validateCoverageEvent(testCases, log, cyclic), /输入冲突.*跨权限返回/);
+  assert.equal(JSON.stringify({ testCases, log, cyclic }), before, "rejection must preserve the original required dependency and every input byte");
+  assert.equal(log.events.some(event => event.type === "coverage_plan"), false);
+});
+
 test("v1.1 AC-48/49/50: initial coverage maps every original checkpoint without a role-by-site cartesian product", () => {
   const log = baseLog();
   const event = coveragePlan();
@@ -109,7 +160,7 @@ test("v1.1 AC-48/49/50: initial coverage maps every original checkpoint without 
   assert.equal(state.plan_revision, 1);
   assert.deepEqual([...state.scopes.keys()], ["scope-a-create-web1", "scope-b-approve-web2", "scope-a-readback-web1"]);
   assert.equal(state.scopes.size, 3, "three semantic scopes stay three instead of becoming six role × site combinations");
-  assert.deepEqual(state.return_tasks.map(item => item.checkpoint_id), ["A/s2/o1"]);
+  assert.deepEqual(state.return_tasks, []);
   assert.doesNotThrow(() => validateCoverageLog(testCases, log));
 });
 
@@ -190,18 +241,7 @@ test("permission recovery: a freshly verified account added after the initial pl
 
   assert.doesNotThrow(() => validateCoverageEvent(testCases, log, context));
   append(log, context);
-  assert.doesNotThrow(() => validateCoverageEvent(testCases, log, {
-    type: "checkpoint_started",
-    checkpoint_id: "A/s1/o1",
-    scope_ids: ["scope-a-create-web1"],
-    context_refs: [7]
-  }));
-  append(log, {
-    type: "checkpoint_started",
-    checkpoint_id: "A/s1/o1",
-    scope_ids: ["scope-a-create-web1"],
-    context_refs: [7]
-  });
+  assert.doesNotThrow(() => startScenario(log, "A/s1/o1", 7));
   assert.doesNotThrow(() => validateCoverageLog(testCases, log));
   assert.doesNotThrow(() => validateCoverageLog(testCases, structuredClone(log)));
 });
@@ -374,7 +414,7 @@ test("permission recovery requires every group in a multi-group scope to share t
   }));
 });
 
-test("permission recovery makes switch and batch-end reviews include every open scope on the current derived account", () => {
+test("permission recovery reviews cover the fixed permission configuration even when another configuration shares its account", () => {
   for (const purpose of ["switch", "batch_end"]) {
     const log = baseLog();
     for (const group of log.events[1].groups) {
@@ -382,8 +422,6 @@ test("permission recovery makes switch and batch-end reviews include every open 
       group.account_ref = null;
       group.preparation_owner = "user";
     }
-    log.cases[0].checkpoints[1].status = "completed";
-    log.cases[0].checkpoints[1].result = "passed";
     append(log, coveragePlan());
     for (const [groupId, targetId, contextRef] of [
       ["role-a", "target-web1", "profile-a"],
@@ -414,15 +452,20 @@ test("permission recovery makes switch and batch-end reviews include every open 
       fact_refs: [8], assistance_refs: [], ready_scope_ids: ["scope-a-create-web1"], preparable_scope_ids: [],
       blocked_scope_ids: [], closures: [], choice: "switch", reason: "仅覆盖了同账号的一部分范围"
     };
-    assert.throws(() => validateCoverageEvent(testCases, log, incomplete), /当前账号仍有关联的遗留范围/);
+    assert.throws(() => validateCoverageEvent(testCases, log, incomplete), /当前连续批次范围/);
+    assert.throws(() => validateCoverageEvent(testCases, log, {
+      ...incomplete, scope_ids: ["scope-a-create-web1", "scope-a-readback-web1", "scope-b-approve-web2"],
+      checkpoint_ids: ["A/s1/o1", "A/s2/o1", "B/s1/o1"],
+      preparable_scope_ids: ["scope-a-readback-web1", "scope-b-approve-web2"]
+    }), /不得跨权限配置/, "a shared account cannot merge distinct permission configurations");
     assert.doesNotThrow(() => validateCoverageEvent(testCases, log, {
       ...incomplete,
       review_id: `${purpose}-complete`,
-      scope_ids: ["scope-a-create-web1", "scope-b-approve-web2"],
-      checkpoint_ids: ["A/s1/o1", "B/s1/o1"],
+      scope_ids: ["scope-a-create-web1", "scope-a-readback-web1"],
+      checkpoint_ids: ["A/s1/o1", "A/s2/o1"],
       ready_scope_ids: ["scope-a-create-web1"],
-      preparable_scope_ids: ["scope-b-approve-web2"],
-      reason: "覆盖同一当前账号关联的全部未完成范围"
+      preparable_scope_ids: ["scope-a-readback-web1"],
+      reason: "覆盖当前 A 权限配置的全部范围；同账号 B 仍是独立批次"
     }));
   }
 });
@@ -462,7 +505,7 @@ test("initially-ready groups and permission-independent scopes preserve their ex
   }));
 });
 
-test("v1.1 AC-51/57/58/65: reviews preserve A→B→A return work and cannot close or wait around uncovered scopes", () => {
+test("AC-51/57/58/65: feasible batch reviews cannot close or wait around uncovered scopes", () => {
   const log = baseLog();
   append(log, coveragePlan());
   for (const [scopeId, account, target, context, roleSequence, url] of [
@@ -483,16 +526,17 @@ test("v1.1 AC-51/57/58/65: reviews preserve A→B→A return work and cannot clo
     });
   }
   const state = deriveCoverageState(testCases, log);
-  assert.deepEqual(state.ready_scope_ids, ["scope-a-create-web1", "scope-b-approve-web2"]);
+  assert.deepEqual(state.ready_scope_ids, ["scope-a-create-web1"]);
+  assert.equal(state.execution_progress.scenes.length, 3, "later permission scopes remain in the full plan");
   assert.deepEqual(state.preparable_scope_ids, ["scope-a-readback-web1"]);
-  assert.deepEqual(state.return_tasks.map(item => item.scope_id), ["scope-a-readback-web1"]);
+  assert.deepEqual(state.return_tasks, []);
 
   const badFinal = {
     type: "coverage_review", review_id: "review-final", purpose: "final", plan_revision: 1,
     based_on_sequence: log.events.length, scope_ids: ["scope-a-create-web1", "scope-b-approve-web2"],
     checkpoint_ids: checkpointIds.slice(0, 2), fact_refs: [4, 6], assistance_refs: [],
     ready_scope_ids: [], preparable_scope_ids: [], blocked_scope_ids: [], closures: [],
-    choice: "finish", reason: "错误地忽略返回任务"
+    choice: "finish", reason: "错误地忽略同批次回读范围"
   };
   assert.throws(() => validateCoverageEvent(testCases, log, badFinal), /全量|范围|检查点/);
 
@@ -521,24 +565,31 @@ test("v1.1 AC-53/63/64: dependent work cannot start until its referenced busines
     type: "checkpoint_started", checkpoint_id: "B/s1/o1", scope_ids: ["scope-b-approve-web2"], context_refs: [5]
   }), /依赖|A\/s1\/o1|业务事实/);
 
-  append(log, { type: "checkpoint_started", checkpoint_id: "A/s1/o1", scope_ids: ["scope-a-create-web1"], context_refs: [5] });
-  append(log, { type: "effect_observed", checkpoint_ids: ["A/s1/o1"], description: "创建得到 REC-1" });
-  append(log, { type: "checkpoint_result", checkpoint_id: "A/s1/o1", result: "passed", reason: "创建成功", sequence: 8 });
-  log.cases[0].checkpoints[0].result = "passed";
-  log.cases[0].checkpoints[0].status = "completed";
+  const roleA = append(log, { type: "role_observation", observation: {
+    group_id: "role-a", account_ref: "account-a", observed_account_ref: "account-a", verification_scope: "execution_context",
+    verification: "verified", target_id: "target-web1", environment_ref: "staging", context_ref: "profile-a",
+    switch_status: "not_required", description: "页面显示 A 账号" } });
+  const contextA = appendValidated(log, { type: "coverage_context", scope_ids: ["scope-a-create-web1"],
+    account_ref: "account-a", observed_account_ref: "account-a", target_id: "target-web1", context_ref: "profile-a",
+    environment_ref: "staging", observed_url: "https://web1.example.test/create", verification: "verified", switch_status: "not_required",
+    fact_refs: [roleA.sequence], role_observation_refs: [roleA.sequence] });
+  const created = completeScenario(log, "A/s1/o1", contextA.sequence);
+  const readbackContext = appendValidated(log, { type: "coverage_context", scope_ids: ["scope-a-readback-web1"],
+    account_ref: "account-a", observed_account_ref: "account-a", target_id: "target-web1", context_ref: "profile-a",
+    environment_ref: "staging", observed_url: "https://web1.example.test/detail/REC-1", verification: "verified", switch_status: "not_required",
+    fact_refs: [roleA.sequence, created.sequence], role_observation_refs: [roleA.sequence] });
+  completeScenario(log, "A/s2/o1", readbackContext.sequence);
   // The B context must explicitly cite the actual dependency fact, not merely
   // exist after A was marked passed.
   assert.throws(() => validateCoverageEvent(testCases, log, {
     type: "checkpoint_started", checkpoint_id: "B/s1/o1", scope_ids: ["scope-b-approve-web2"], context_refs: [5]
   }), /依赖.*事实|fact/i);
-  append(log, {
+  const contextB = appendValidated(log, {
     type: "coverage_context", scope_ids: ["scope-b-approve-web2"], account_ref: "account-b", observed_account_ref: "account-b",
     target_id: "target-web2", context_ref: "profile-b", environment_ref: "staging", observed_url: "https://web2.example.test/review",
-    verification: "verified", switch_status: "not_required", fact_refs: [7, 8], role_observation_refs: [4]
+    verification: "verified", switch_status: "not_required", fact_refs: [4, created.sequence], role_observation_refs: [4]
   });
-  assert.doesNotThrow(() => validateCoverageEvent(testCases, log, {
-    type: "checkpoint_started", checkpoint_id: "B/s1/o1", scope_ids: ["scope-b-approve-web2"], context_refs: [9]
-  }));
+  assert.doesNotThrow(() => startScenario(log, "B/s1/o1", contextB.sequence));
 });
 
 test("v1.1 AC-49/52/65: plan refinement preserves all checkpoint, scope, permission, step, and dependency semantics", () => {
@@ -562,7 +613,7 @@ test("v1.1 AC-49/52/65: plan refinement preserves all checkpoint, scope, permiss
   assert.throws(() => validateCoverageEvent(testCases, log, missing), /全部|完整|精确/);
 });
 
-test("v1.1 AC-48/68: the A10 B8 C5 dual-site fixture stays 23 original checkpoints with return work intact", () => {
+test("AC-48/68: the A10 B8 C5 dual-site fixture retains all 23 original checkpoints in continuous batches", () => {
   const counts = { A: 10, B: 8, C: 5 };
   const cases = [];
   const groups = [];
@@ -642,7 +693,9 @@ test("v1.1 AC-48/68: the A10 B8 C5 dual-site fixture stays 23 original checkpoin
     ])),
     counts
   );
-  assert.equal(state.preparable_scope_ids.length, 23);
+  assert.equal(state.preparable_scope_ids.length, 10, "only the current A configuration is scheduled for preparation");
+  assert.equal(state.execution_progress.scenes.filter(scene => !scene.complete).length, 23, "all original work remains pending across the three batches");
+  assert.deepEqual(state.execution_progress.batches.map(batch => [batch.batch_id, batch.scenes.length]), [["role-a", 10], ["role-b", 8], ["role-c", 5]]);
   assert.equal(new Set([...state.scopes.values()].map(scope => scope.checkpoint_id)).size, 23);
 });
 
@@ -669,7 +722,7 @@ test("v1.1 AC-50/53: switching or draining A after only web1 rejects an omitted 
     fact_refs: [5], assistance_refs: [], ready_scope_ids: ["scope-a-create-web1"], preparable_scope_ids: [],
     blocked_scope_ids: [], closures: [], choice: "switch", reason: "错误地只检查了 A/web1"
   };
-  assert.throws(() => validateCoverageEvent(testCases, log, incomplete), /当前账号|遗留范围/);
+  assert.throws(() => validateCoverageEvent(testCases, log, incomplete), /当前连续批次范围/);
 
   const complete = {
     ...incomplete,
@@ -677,7 +730,7 @@ test("v1.1 AC-50/53: switching or draining A after only web1 rejects an omitted 
     scope_ids: ["scope-a-create-web1", "scope-a-readback-web1"],
     checkpoint_ids: ["A/s1/o1", "A/s2/o1"],
     preparable_scope_ids: ["scope-a-readback-web1"],
-    reason: "A 的创建已准备，回查保留为 B 审核后的返回任务"
+    reason: "A 的创建已准备，同批次回查仍需推进，不会跨权限返回"
   };
   assert.doesNotThrow(() => validateCoverageEvent(testCases, log, complete));
 });

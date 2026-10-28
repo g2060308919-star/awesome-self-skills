@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { validateProgressEvent, validateProgressLog, deriveExecutionProgress } from "./lib/execution-progress.mjs";
 import crypto from "node:crypto";
 import { chmod, lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -369,6 +370,7 @@ export async function validateRun(runRoot, { checkReport = true } = {}) {
     }
   }
   validateExecutionFacts(run.testCases, run.log);
+  validateProgressLog(run.testCases, run.log);
   validatePermissionLog(run.testCases, run.log);
   validateCoverageLog(run.testCases, run.log);
   validateMockLog(run.testCases, run.log);
@@ -467,6 +469,7 @@ async function appendEventUnlocked(runRoot, event) {
   validatePermissionEvent(run.testCases, run.log, event);
   validateCoverageEvent(run.testCases, run.log, event);
   validateMockEvent(run.testCases, run.log, event);
+  validateProgressEvent(run.testCases, run.log, event);
   const ids = expectedCheckpointIds(run.testCases);
   const registeredEvidence = new Map((run.log.events ?? []).flatMap(item => item.evidence ?? []).map(item => [item.evidence_id, item]));
   for (const evidence of event.evidence ?? []) {
@@ -524,7 +527,8 @@ async function appendEventUnlocked(runRoot, event) {
     if (!found) throw consistencyError(`未知检查点：${event.checkpoint_id}`);
     const { sourceCase, state, checkpoint } = found;
     checkpoint.status = event.status ?? "completed";
-    checkpoint.result = event.result;
+    const priorResults = run.log.events.filter(item => item.type === "checkpoint_result" && item.checkpoint_id === event.checkpoint_id).map(item => item.result);
+    checkpoint.result = priorResults.includes("failed") ? "failed" : event.result;
     checkpoint.reason = event.reason;
     checkpoint.observations.push(event.observation ?? event.reason);
     checkpoint.evidence_refs = [...new Set([
