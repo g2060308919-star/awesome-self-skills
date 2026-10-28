@@ -407,17 +407,17 @@ test("A17: official binding backfills a verified persisted receipt after a crash
   assert.equal((await fixtureState(run.runRoot)).log.events.filter(event => event.type === "mock_observation").length, 1);
 });
 
-test("A12: official proxy uses the authorized raw-rule digest and rejects synthetic ordinary responses before CDP discovery", async t => {
+test("A12: official proxy uses the authorized raw-rule digest and rejects case-Mock purpose before CDP discovery", async t => {
   const { run, config, discoveryRequests } = await officialFixture(t);
   const rules = [{ match: { protocol: "https:", hostname: "FIXTURE.TEST", path_prefix: "/api/config", methods: ["get"] }, request: { headers: { set: { "x-fixture": "yes" } } } }];
-  await recordEvent(run.runRoot, { type: "proxy_policy", action: "initial", decision: "allowed", decision_source: "user", basis: "Fixture header rule allowed", rules_sha256: proxyRulesDigest(rules) });
-  const ordinary = { ...config, mock_scenario: undefined, rules };
+  await recordEvent(run.runRoot, { type: "proxy_policy", action: "initial", decision: "allowed", decision_source: "user", purpose: "environment_access", basis: "Fixture header rule allowed", rules_sha256: proxyRulesDigest(rules) });
+  const ordinary = { ...config, mock_scenario: undefined, rules, purpose: "environment_access" };
   const listener = await createProxyListener(ordinary);
   t.after(() => listener.stop());
   assert.equal(listener.rules[0].match.hostname, "fixture.test");
   assert.deepEqual(listener.rules[0].match.methods, ["GET"]);
   const count = discoveryRequests();
-  await assert.rejects(createProxyListener({ ...ordinary, response_data_kind: "synthetic_business" }), /合成|场景/);
+  await assert.rejects(createProxyListener({ ...ordinary, purpose: "case_mock", response_data_kind: "non_business" }), /用途|场景/);
   assert.equal(discoveryRequests(), count);
   await listener.stop();
 });

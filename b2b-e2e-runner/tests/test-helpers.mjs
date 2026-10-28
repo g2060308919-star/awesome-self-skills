@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as runtime from "../scripts/run-artifacts.mjs";
+import { deriveExecutionProgress, scenarioForEvent } from "../scripts/lib/execution-progress.mjs";
 import { validatePermissionEvent } from "../scripts/lib/permission-batches.mjs";
 
 // Component fixtures supply deterministic observations through the public APIs.
@@ -88,7 +89,8 @@ async function fixtureContext(runRoot, checkpointId) {
 async function review(runRoot, purpose, { checkpointId, closure, factRefs = [] } = {}) {
   const { snapshot, log } = await fixtureState(runRoot);
   const plan = log.events.find(event => event.type === "coverage_plan");
-  const items = checkpointId ? plan.items.filter(item => item.checkpoint_id === checkpointId) : plan.items;
+  const progress = deriveExecutionProgress(snapshot, log);
+  const items = checkpointId ? plan.items.filter(item => item.checkpoint_id === checkpointId) : purpose === "wait" ? plan.items.filter(item => item.scopes.some(scope => progress.scenes.some(scene => scene.scope_id === scope.scope_id && scene.batch_id === progress.active_batch_id))) : plan.items;
   const scopeIds = items.flatMap(item => item.scopes.map(scope => scope.scope_id));
   const checkpointIds = items.map(item => item.checkpoint_id);
   const closures = closure ? [closure] : [];
@@ -104,7 +106,7 @@ async function review(runRoot, purpose, { checkpointId, closure, factRefs = [] }
       }
     }
   }
-  const completed = new Set(log.events.filter(event => event.type === "checkpoint_result").map(event => event.checkpoint_id));
+  const completed = new Set(progress.checkpoints.filter(item => item.complete).map(item => item.checkpoint_id));
   const openScopeIds = items.filter(item => !completed.has(item.checkpoint_id)).flatMap(item => item.scopes.map(scope => scope.scope_id));
   const event = await runtime.recordEvent(runRoot, {
     type: "coverage_review", review_id: `fixture-review-${log.events.length + 1}`, purpose, plan_revision: plan.revision,
@@ -122,7 +124,7 @@ export async function recordFixtureEvent(runRoot, input, { prepareOnly = false }
   const event = structuredClone(input);
   const { snapshot, log } = await fixtureState(runRoot);
   // Preserve the negative permission assertions before fixture context preparation.
-  if (["case_started", "checkpoint_started", "checkpoint_result"].includes(event.type) || (event.type === "run_state" && event.status !== "running")) validatePermissionEvent(snapshot, log, event);
+  if (["case_started", "checkpoint_started"].includes(event.type)) validatePermissionEvent(snapshot, log, event);
   if (event.type === "role_observation" && event.observation?.verification_scope === undefined && event.observation?.role !== undefined) {
     const role = event.observation;
     delete role.role;
@@ -136,13 +138,27 @@ export async function recordFixtureEvent(runRoot, input, { prepareOnly = false }
   }
   if (["case_started", "checkpoint_started", "checkpoint_result", "run_state"].includes(event.type)) await ensurePlan(runRoot);
   if (event.type === "checkpoint_started" && event.scope_ids === undefined) Object.assign(event, await fixtureContext(runRoot, event.checkpoint_id));
+  if (event.type === "checkpoint_started" && event.preparation_ref === undefined) {
+    const { log: current } = await fixtureState(runRoot);
+    const scene = scenarioForEvent(current,event);
+    const input = await runtime.recordEvent(runRoot,{type:"page_observation",checkpoint_ids:[event.checkpoint_id],description:"组件夹具：前置输入已准备；不是被测功能结果"});
+    const prep = await runtime.recordEvent(runRoot,{type:"scenario_preparation",checkpoint_id:event.checkpoint_id,scenario_id:scene.scenario_id,
+      execution_id:`fixture-execution-${current.events.length}`,batch_id:scene.batch_id,context_refs:event.context_refs,fact_refs:[input.sequence],data_source:"real",permission_source:"real"});
+    Object.assign(event,{scenario_id:scene.scenario_id,execution_id:`fixture-execution-${current.events.length}`,batch_id:scene.batch_id,preparation_ref:prep.sequence});
+  }
+  if (event.type === "checkpoint_result") {
+    const { log: current } = await fixtureState(runRoot);
+    const start = current.events.filter(item => item.type === "checkpoint_started" && item.checkpoint_id === event.checkpoint_id).at(-1);
+    if (start) Object.assign(event,{scenario_id:start.scenario_id,execution_id:start.execution_id,batch_id:start.batch_id});
+  }
   if (event.type === "checkpoint_result" && event.coverage_review_ref === undefined) {
     let basis;
     let kind;
     if (event.resolution_ref) { basis = [event.resolution_ref]; kind = "user_decision"; }
     else if (event.exploration_ref) { basis = [event.exploration_ref]; kind = "exploration_insufficient"; }
     else {
-      const observation = await runtime.recordEvent(runRoot, { type: "page_observation", checkpoint_ids: [event.checkpoint_id], description: event.observation ?? event.reason });
+      if (["passed","failed"].includes(event.result) && !(await fixtureState(runRoot)).log.events.some(item => item.type === "action_dispatched" && item.execution_id === event.execution_id)) await runtime.recordEvent(runRoot,{type:"action_dispatched", action_id:`fixture-action:${event.execution_id}`,checkpoint_id:event.checkpoint_id,scenario_id:event.scenario_id,execution_id:event.execution_id,side_effect:false,description:"组件夹具实际导航触发事件"});
+      const observation = await runtime.recordEvent(runRoot, { type: "page_observation", checkpoint_ids: [event.checkpoint_id], scenario_id:event.scenario_id,execution_id:event.execution_id, description: event.observation ?? event.reason });
       basis = [observation.sequence];
       kind = event.result === "undetermined" ? "exploration_insufficient" : "observed";
     }

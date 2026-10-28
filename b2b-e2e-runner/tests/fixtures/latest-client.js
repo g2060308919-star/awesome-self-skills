@@ -1,7 +1,8 @@
 /* Local non-production UI fixture. All business actions use visible semantic controls. */
 (() => {
   const $ = id => document.getElementById(id);
-  let name = '', date = '', uploadId = null, worker = null, registration = null;
+  let name = '', date = '', uploadId = null, worker = null, registration = null, conditionalAction = 0;
+  let environmentReady = !new URL(location.href).searchParams.has('environment');
   const request = async (route, body) => {
     const response = await fetch(route, { method: body === undefined ? 'GET' : 'POST', headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     const value = await response.json();
@@ -10,8 +11,32 @@
   };
   const action = (id, callback) => $(id).addEventListener('click', async () => { try { await callback(); $('status').textContent = 'Action completed'; } catch (error) { $('status').textContent = error.message; } });
   function identity(value) { $('identity').textContent = value.role ? `Signed in: ${value.role}` : 'Not signed in'; $('workspace').hidden = !value.role; }
-  request('/fixture-session').then(identity).catch(error => { $('status').textContent = error.message; });
-  action('login', async () => { identity(await request('/fixture-session', { role: $('role').value })); await list(); });
+  async function initializeEnvironment() {
+    if (environmentReady) return;
+    $('login').disabled = true;
+    const response = await fetch('/environment-config');
+    const body = await response.json();
+    environmentReady = response.ok && response.headers.get('x-fixture-response') === 'ready' && body.loginEnabled === true && body.deployment === 'local-approved';
+    $('environment-status').textContent = environmentReady ? 'Environment access ready: request header, response header and body accepted' : 'Environment access blocked';
+    $('login').disabled = !environmentReady;
+  }
+  initializeEnvironment().then(() => request('/fixture-session')).then(identity).catch(error => { $('status').textContent = error.message; });
+  action('login', async () => { if (!environmentReady) throw new Error('Environment access blocked'); identity(await request('/fixture-session', { role: $('role').value })); await list(); });
+  action('permission-load', async () => {
+    const value = await request('/api/frontend-permissions');
+    if (typeof value.canApprove !== 'boolean') throw new Error('Invalid frontend permission contract');
+    $('permission-approve').hidden = !value.canApprove;
+    $('permission-status').textContent = `Frontend approve permission: ${value.canApprove ? 'available' : 'unavailable'}; input source: ${value.source}`;
+  });
+  action('permission-approve', async () => { $('permission-result').textContent = JSON.stringify(await request('/api/frontend-approve', {})); });
+  $('conditional-missing-dispatch').addEventListener('change', () => { $('conditional-fault').textContent = `Missing-dispatch defect ${$('conditional-missing-dispatch').checked ? 'enabled' : 'disabled'}`; });
+  action('conditional-submit', async () => {
+    const current = ++conditionalAction; const value = $('conditional-name').value.trim();
+    if (!value) { $('conditional-result').textContent = `Conditional action ${current} complete: Name is required; no request dispatched`; return; }
+    if ($('conditional-missing-dispatch').checked) { $('conditional-result').textContent = `Conditional action ${current} complete: Valid name accepted; handler ended without dispatch`; return; }
+    try { const result = await request('/api/conditional', { name: value }); $('conditional-result').textContent = `Conditional action ${current} complete: ${JSON.stringify(result)}`; }
+    catch (error) { $('conditional-result').textContent = `Conditional action ${current} complete: ${error.message}`; throw error; }
+  });
   $('record-name').addEventListener('blur', () => { name = $('record-name').value; $('name-readback').textContent = name || 'Not committed'; });
   $('record-date').addEventListener('blur', event => { if (event.relatedTarget !== $('confirm-date')) $('record-date').value = date; });
   action('confirm-date', async () => {
@@ -46,6 +71,7 @@
   action('mock-read', () => mock('read'));
   action('mock-update', () => mock('update', { name: 'Mock updated' }));
   action('mock-double', async () => { const first = await mock('create', { name: 'Mock draft' }); const second = await mock('create', { name: 'Mock draft' }); $('mock-result').textContent = JSON.stringify({ first, second }, null, 2); });
+  action('mock-unclassified-get', async () => { try { await mock('unsafe-get'); } catch (error) { $('mock-result').textContent = `unsafe-get: ${error.message}`; throw error; } });
   action('mock-unknown', () => mock('unknown', {}));
   action('mock-extra', () => mock('create', { name: 'Mock draft', undeclared: true }));
   action('mock-type', () => mock('create', { name: 123 }));

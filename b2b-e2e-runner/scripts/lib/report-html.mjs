@@ -186,6 +186,8 @@ function caseDetail(detail) {
       `<div class="comparison-row observed"><span>实际观察</span><div>${list(item.observations)}</div></div></div>` +
       `<dl class="checkpoint-meta"><dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
       `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd><dt>验证来源</dt><dd>${escapeHtml(item.verification_source_label)}：${escapeHtml(item.verification_source_description)}</dd><dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
+      `<p>执行完整性：${item.execution_complete ? "必测场景已处理完整" : "仍有未完成场景"}</p>` +
+      ((item.scenarios ?? []).length ? `<ul>${item.scenarios.map(scene => `<li>${escapeHtml(scene.scenario_id)}：${escapeHtml(scene.reason)}；数据输入 ${escapeHtml(scene.data_source ?? "未准备")}，权限输入 ${escapeHtml(scene.permission_source ?? "未准备")}；${scene.complete ? "已处理" : "未完成"}${scene.permission_source === "mock" ? "（仅模拟前端权限，不证明服务端授权）" : ""}</li>`).join("")}</ul>` : "") +
       (item.evidence.length ? `<ul class="evidence">${item.evidence.map(evidenceItem).join("")}</ul>` : "<p class=\"evidence-gap\">未关联可展示的关键图片。</p>") +
       `</article>`).join("")}</div></div></li>`).join("");
   const actual = detail.actual_records.length

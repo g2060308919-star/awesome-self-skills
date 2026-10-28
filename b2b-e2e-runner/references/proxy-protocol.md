@@ -16,7 +16,7 @@
 
 同一批问题分别确认账号覆盖、Mock 决定、普通代理规则。`mock_policy` 和 `proxy_policy` 首次使用 `initial`，以后 `changed` / `revoked` 均引用同类最新 `previous_decision_ref`，来自用户明确决定。`proxy_policy.rules_sha256` 绑定实际规范化规则，规则变化须重新明确授权；`mock_policy` 只授权完整声明式模拟场景。
 
-允许 Mock 且无其他普通代理规则时，不需要另行授权 Mock 使用的 Fetch。仅允许普通代理不允许合成业务数据：普通响应 body 修改必须明确 `response_data_kind: non_business`，合成业务状态必须走获准的完整 Mock 场景；不接受用普通 Response 阶段替换绕过授权或声称写入隔离。未回答、拒绝和撤回都不能继续对应修改，撤回需要安全清理后才能恢复真实业务。
+允许 Mock 且无其他普通代理规则时，不需要另行授权 Mock 使用的 Fetch。仅允许普通代理不允许合成业务数据：基础配置和 proxy_policy 必须明确 `purpose: environment_access` 并绑定原始规则摘要；用户确认的环境访问响应可含业务形状字段，不再用 non_business 标签决定授权。为具体用例生成测试状态必须走获准的完整 Mock 场景；不接受用普通 Response 阶段替换绕过授权或声称写入隔离。未回答、拒绝和撤回都不能继续对应修改，撤回需要安全清理后才能恢复真实业务。
 
 一个代理实例只精确绑定一个 `targetId`，通过浏览器 WebSocket 建立该 Target 的扁平 Session，只处理该 Session 的 `Fetch.requestPaused`。Fetch 不得在 BrowserContext 或整个 Chrome 上启用。先用 CDP pattern 缩小范围，再按 protocol、完整 hostname、URL pathname prefix 和标准化 method 精确匹配；重定向重新匹配。普通代理的不匹配流量原样继续；Mock 的保护范围内未知业务流量必须阻断，不能使用这条普通代理规则透传。即使其他页面请求完全相同的接口，也不得受影响。
 
@@ -30,7 +30,7 @@
   "environment": "staging",
   "run_id": "RUN_ID",
   "run_root": "<ABSOLUTE_CURRENT_RUN_ROOT>",
-  "response_data_kind": "non_business",
+  "purpose": "environment_access",
   "target_id": "CDP_TARGET_ID",
   "lock_root": "RUN_PRIVATE_TEMP_LOCK_ROOT",
   "rules": [{
@@ -95,3 +95,18 @@ CDP transport 断连后，客户端须先标记连接终止，再通知代理清
 ## 真实验证与恢复
 
 内部计数不是证据。Runner 在执行依赖代理的检查点前，自动从服务器回显/Network 原始事件证明请求头实际发出，从页面观察证明状态、响应头/body 生效，并证明同 Target 不匹配请求、至少一个其他页面、刷新/导航和停止后原响应。无法安全触发另一页面真实请求时，只能记录 Target 级隔离事实和可执行模拟证据，不得虚构结果。验证结果写入报告并在最终对话展示，不列入执行前用户确认。代理中断时暂停受影响检查点，重新附着并复核；恢复成功后仅继续未派发或已证明未提交且可重试的动作；已确认效果或效果不明的写入绝不重放。不能恢复则判 `undetermined` 并写代理事实，不能直接判产品 `failed`。
+
+
+## 场景建立前的受控发现
+
+`createProxyListener` 可接 `discovery: {discovery_id, checkpoint_ids, context_ref, safe_probe: {url, method: "GET"}, passthrough: []}`。本阶段不传 mock_scenario、candidate、attempt 或最终场景摘要。必须已有运行中 Run、明确 allowed、bound 自有 Target 及覆盖这些检查点的新鲜真实身份上下文；worker/子框架检查复用正式 Mock 通道保护。安全探针自身仍在 Request 阶段阻断；探针未被观察前任何请求都不透传。
+
+MCP 实际触发探针后，未知业务 Request 捕获并 failRequest，记录同 Target/context/checkpoint 的 network_observation（kind 为 discovery_probe/discovery_request），不生成 Mock 回执或产品结果。透传只支持精确 `{url,method:"GET",side_effect_free:true,basis_refs:[事件序号]}`，依据来自已知真实观察或用户契约；GET 本身不证明无副作用。发现过程同样在断连时隔离未知，安全退出后恢复基础代理和登录态，再补齐正式场景及通道证明。没有安全探针或无法证明通道则求助。
+
+Mock 命中使用声明的最终响应，不叠加第二轮 Response 改写；匹配的基础规则要求的环境响应头必须在 Mock 响应显式满足，缺失/冲突启用前拒绝。已知安全透传继续基础规则。停止/重新绑定代理进程可复用原 Chrome/Target/登录态，不强制热更新，也不让用户重复填写已确认规则。
+
+### 暂停主文档时的通道核验
+
+正式场景和受控发现启用前通过 Page.getFrameTree 取得实际根 frameId，并先订阅 Page 框架生命周期。仅当 Fetch 暂停的 Document 确切属于该已核验根框架、未观察到子框架或根身份变化时，使用该根记录与最新 Target 枚举核验；避免在 Chrome 已暂停主文档时再次调用 Page.getFrameTree 形成等待循环。仍逐请求检查关联 worker/子 Target、当前授权及严格场景匹配；未知 URL/未知或子 frameId 继续阻断。其他请求与业务动作前保留完整 frame-tree 探测。框架边界变化后安全退出并重新核验，不能把导航当作扩大拦截范围的授权。
+
+每次 continue/fulfill 发送前还须同步复核框架变化、传输状态及停止标记，覆盖异步匹配、授权和回执导入期间发生的边界变化；核验后的异步等待不构成继续释放请求的依据。

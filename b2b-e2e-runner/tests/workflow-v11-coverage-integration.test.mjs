@@ -1,3 +1,4 @@
+import { recordFixtureEvent, fixtureState } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
@@ -43,41 +44,44 @@ test("v1.1 AC-61/62/63/66: record and replay require scope-bound starts, fact-bo
   try {
     const run = await createCoverageRun(root);
     await assert.rejects(recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: checkpointId }), /scope_ids|执行范围/);
-    await recordEvent(run.runRoot, {
+    await recordFixtureEvent(run.runRoot, {
       type: "checkpoint_started", checkpoint_id: checkpointId,
       scope_ids: ["scope-order-detail"], context_refs: [5]
     });
-    await recordEvent(run.runRoot, {
-      type: "page_observation", checkpoint_ids: [checkpointId], description: "订单详情显示 REQ-9002",
+    const start = (await fixtureState(run.runRoot)).log.events.at(-1);
+    const execution = {scenario_id:start.scenario_id,execution_id:start.execution_id};
+    await recordEvent(run.runRoot,{type:"action_dispatched",...execution,checkpoint_id:checkpointId,action_id:"detail-navigation",side_effect:false});
+    const page = await recordEvent(run.runRoot, {
+      type: "page_observation", ...execution, checkpoint_ids: [checkpointId], description: "订单详情显示 REQ-9002",
       scope_ids: ["scope-order-detail"], context_ref: 5
     });
     await assert.rejects(recordEvent(run.runRoot, {
-      type: "checkpoint_result", checkpoint_id: checkpointId, result: "passed", reason: "页面显示订单号",
+      type: "checkpoint_result", ...execution, checkpoint_id: checkpointId, result: "passed", reason: "页面显示订单号",
       observation: "订单号 REQ-9002 可见", evidence_status: "not_required"
     }), /execution_refs|coverage_review_ref/);
-    await recordEvent(run.runRoot, {
+    const close = await recordEvent(run.runRoot, {
       type: "coverage_review", review_id: "close-order", purpose: "checkpoint_close", plan_revision: 1,
-      based_on_sequence: 7, scope_ids: ["scope-order-detail"], checkpoint_ids: [checkpointId],
-      fact_refs: [7], assistance_refs: [], ready_scope_ids: ["scope-order-detail"], preparable_scope_ids: [], blocked_scope_ids: [],
-      closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [7] }],
+      based_on_sequence: page.sequence, scope_ids: ["scope-order-detail"], checkpoint_ids: [checkpointId],
+      fact_refs: [page.sequence], assistance_refs: [], ready_scope_ids: ["scope-order-detail"], preparable_scope_ids: [], blocked_scope_ids: [],
+      closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [page.sequence] }],
       choice: "close", reason: "页面真实观察足以判断原预期"
     });
-    await recordEvent(run.runRoot, {
-      type: "checkpoint_result", checkpoint_id: checkpointId, result: "passed", reason: "页面显示订单号 REQ-9002",
+    const result = await recordEvent(run.runRoot, {
+      type: "checkpoint_result", ...execution, checkpoint_id: checkpointId, result: "passed", reason: "页面显示订单号 REQ-9002",
       observation: "订单详情真实显示订单号 REQ-9002", evidence_status: "not_required",
-      execution_refs: [7], coverage_review_ref: 8
+      execution_refs: [page.sequence], coverage_review_ref: close.sequence
     });
     await assert.rejects(recordEvent(run.runRoot, {
-      type: "run_state", status: "completed", coverage_review_ref: 8
+      type: "run_state", status: "completed", coverage_review_ref: close.sequence
     }), /final|最终/);
-    await recordEvent(run.runRoot, {
+    const final = await recordEvent(run.runRoot, {
       type: "coverage_review", review_id: "final-audit", purpose: "final", plan_revision: 1,
-      based_on_sequence: 9, scope_ids: ["scope-order-detail"], checkpoint_ids: [checkpointId],
-      fact_refs: [7, 9], assistance_refs: [], ready_scope_ids: [], preparable_scope_ids: [], blocked_scope_ids: [],
-      closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [7, 9] }],
+      based_on_sequence: result.sequence, scope_ids: ["scope-order-detail"], checkpoint_ids: [checkpointId],
+      fact_refs: [page.sequence,result.sequence], assistance_refs: [], ready_scope_ids: [], preparable_scope_ids: [], blocked_scope_ids: [],
+      closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [page.sequence,result.sequence] }],
       choice: "finish", reason: "全量原检查点与执行范围已逐项核对"
     });
-    await recordEvent(run.runRoot, { type: "run_state", status: "completed", coverage_review_ref: 10 });
+    await recordEvent(run.runRoot, { type: "run_state", status: "completed", coverage_review_ref: final.sequence });
     await assert.doesNotReject(validateRun(run.runRoot, { checkReport: false }));
     const log = JSON.parse(await readFile(path.join(run.runRoot, "execution-log.json"), "utf8"));
     assert.equal(log.run.status, "completed");
@@ -105,7 +109,7 @@ test("v1.1 AC-55/56/67: an execution-context change invalidates only future work
       observed_url: "https://staging.example.test/orders/REQ-9002", verification: "verified", switch_status: "not_required",
       fact_refs: [6]
     });
-    await assert.doesNotReject(recordEvent(run.runRoot, {
+    await assert.doesNotReject(recordFixtureEvent(run.runRoot, {
       type: "checkpoint_started", checkpoint_id: checkpointId,
       scope_ids: ["scope-order-detail"], context_refs: [7]
     }));

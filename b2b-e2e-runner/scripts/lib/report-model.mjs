@@ -1,3 +1,4 @@
+import { deriveExecutionProgress } from "./execution-progress.mjs";
 import { executionProvenance } from "./execution-facts.mjs";
 import { derivePermissionState } from "./permission-batches.mjs";
 import { deriveMockState, projectEffectiveResults } from "./mock-fallback.mjs";
@@ -155,6 +156,9 @@ function semanticEvent(event) {
   if (event.type === "mock_attempt") return { ...base, stage: "Mock 补测", description: `补测尝试 ${event.attempt_id}`, outcome: ({ started: "已开始", paused: "已暂停", resumed: "已恢复", scenario_updated: "场景已更新", finished: "已完成", aborted: "已中止" })[event.action] ?? "状态未记录" };
   if (event.type === "mock_observation") return { ...base, stage: "Mock 请求事实", description: event.request_facts?.join("；") ?? "已记录请求事实", outcome: ({ mocked: "已在上游前返回模拟响应", blocked: "已阻止未知请求", passthrough: "已按明确依据安全透传" })[event.disposition] ?? "处置未记录" };
   if (event.type === "mock_checkpoint" && event.action === "result") return { ...base, stage: "Mock 检查点", description: event.observation ?? "已记录前端补测观察", outcome: resultLabels[event.result] ?? "结果未记录" };
+  if (event.type === "scenario_preparation") return { ...base, stage: "场景准备", description: `数据来源：${event.data_source}；权限来源：${event.permission_source}`, outcome: "前置输入已准备，尚不代表产品结果" };
+  if (event.type === "identity_observation") return { ...base, stage: "实际身份", description: "已核验实际浏览器身份与环境", outcome: "不代表被测权限效果通过" };
+  if (event.type === "simulated_permission") return { ...base, stage: "前端权限模拟", description: event.input_description, outcome: "真实权限资源仍不可提供" };
   if (event.type === "coverage_review") return { ...base, stage: "执行覆盖审查", description: event.reason ?? "已复核执行范围", outcome: ({ checkpoint_close: "检查点已审查", final: "最终覆盖已审查", wait: "等待范围已审查", resume: "恢复范围已审查", switch: "切换范围已审查", batch_end: "批次结束已审查" })[event.purpose] ?? "已审查" };
   return { ...base, stage: "其他记录", description: "存在一条无法生成语义摘要的执行记录", outcome: "请查看机器账本" };
 }
@@ -247,6 +251,7 @@ function evidenceById(executionLog) {
 }
 
 function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, permissionGroups, projection, mockState) {
+  const progress = deriveExecutionProgress({ cases: [testCase] }, executionLog);
   let checkpointIndex = 0;
   const steps = testCase.steps.map(step => ({
     step_id: step.step_id,
@@ -254,6 +259,7 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     expected: step.expected.map(oracle => {
       const checkpoint = state.checkpoints[checkpointIndex++];
       const id = checkpointId(testCase.case_id, step.step_id, oracle.oracle_id);
+      const effective = progress.checkpoints.find(item => item.checkpoint_id === id);
       const controls = (executionLog.events ?? []).filter(event => event.type === "control_effect" && event.checkpoint_ids.includes(id));
       const sourceEvent = [...(executionLog.events ?? [])].reverse().find(event => event.type === "checkpoint_result" && event.checkpoint_id === id);
       const verificationSource = controls.length ? "mock_affected" : sourceEvent?.verification_source ?? "unknown";
@@ -262,14 +268,16 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
         checkpoint_id: checkpointId(testCase.case_id, step.step_id, oracle.oracle_id),
         text: oracle.text,
         status: checkpoint.status,
-        result: checkpoint.result,
-        result_label: checkpoint.result ? resultLabels[checkpoint.result] : "待处理",
-        reason: checkpoint.reason ?? "未记录",
+        result: effective.effective_result,
+        execution_complete: effective.complete,
+        scenarios: effective.scenes,
+        result_label: !effective.complete && !effective.scenes.some(scene => scene.executed) && checkpoint.result == null ? "待处理" : resultLabels[effective.effective_result],
+        reason: effective.scenes.find(scene => scene.effective_result === "failed")?.reason ?? effective.scenes.at(-1)?.reason ?? checkpoint.reason ?? "未记录",
         observations: checkpoint.observations?.length ? [...checkpoint.observations] : ["未记录"],
         evidence_status: checkpoint.evidence_status,
         evidence_status_label: evidenceStatusLabels[checkpoint.evidence_status] ?? "证据状态未记录",
-        verification_source_label: verificationSource === "real" ? "纯真实" : verificationSource === "mock_affected" ? "含模拟或控制影响" : "来源未确认",
-        verification_source_description: controls.map(event => event.description).join("；") || "根据原检查点实际执行事实判断；配置本身不证明页面行为",
+        verification_source_label: effective.source === "mock" ? "含数据或前端权限模拟" : verificationSource === "real" ? "纯真实" : verificationSource === "mock_affected" ? "含模拟或控制影响" : "来源未确认",
+        verification_source_description: effective.source === "mock" ? "逐场景区分数据与权限输入来源；不证明真实后端保存或服务端授权" : controls.map(event => event.description).join("；") || "根据原检查点实际执行事实判断；配置本身不证明页面行为",
         evidence: (checkpoint.evidence_refs ?? []).map(id => evidence.get(id)).filter(Boolean),
         blocker: checkpoint.blocker ?? "未记录",
         permission_group_ids: checkpoint.permission_group_ids ? [...checkpoint.permission_group_ids] : []
@@ -324,7 +332,8 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     for (const [checkpointId, result] of attempt.checkpoint_results) {
       mockRecords.push({
         attempt_id: attempt.attempt_id,
-        checkpoint_id: checkpointId,
+        checkpoint_id: result.checkpoint_id,
+        scenario_id: result.scenario_id,
         result: result.result,
         result_label: resultLabels[result.result],
         observation: result.observation,
@@ -352,6 +361,7 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     real_result_label: resultLabels[state.result],
     result_source: projection?.source ?? "real",
     reason: `${effectiveReason}${controlsUsed ? "；含模拟或控制影响（不证明写入隔离）" : ""}${provenance.adjustments.length ? "；准备数据调整后继续原断言验证" : ""}${provenance.supplementary.length ? "；另有补充观察（不覆盖原结果）" : ""}`,
+    execution_complete: projection?.complete ?? false,
     provenance,
     steps,
     permissions,
@@ -366,7 +376,7 @@ export function buildReportModel(testCases, executionLog) {
   const evidence = evidenceById(executionLog);
   const derivedPermission = derivePermissionState(testCases, executionLog);
   const mockEnabled = executionLog.extensions?.mock_fallback?.schema_version === "1.0";
-  const effectiveProjection = mockEnabled ? projectEffectiveResults(testCases, executionLog) : null;
+  const effectiveProjection = projectEffectiveResults(testCases, executionLog);
   const projectedByCase = new Map((effectiveProjection?.cases ?? []).map(item => [item.case_id, item]));
   const mockState = mockEnabled ? deriveMockState(testCases, executionLog) : null;
   const caseDetails = testCases.cases.map((testCase, index) => buildCaseDetail(
@@ -401,7 +411,7 @@ export function buildReportModel(testCases, executionLog) {
     "mcp_preflight", "role_observation", "assistance", "blocker", "sample_selected", "sample_replaced",
     "permission_availability", "permission_batch", "permission_wait", "proxy_state", "cleanup_state", "resume_check", "evidence_capture",
     "data_gap", "mock_candidate", "mock_attempt", "mock_observation", "mock_checkpoint", "coverage_review",
-    "browser_session", "proxy_policy", "mock_policy", "preparation_adjustment", "form_interaction", "supplementary_attempt"
+    "browser_session", "proxy_policy", "mock_policy", "preparation_adjustment", "form_interaction", "supplementary_attempt", "scenario_preparation", "identity_observation", "simulated_permission"
   ]);
   const importantEvents = (executionLog.events ?? []).filter(event => importantTypes.has(event.type)).map(event => structuredClone(event));
   const roles = executionLog.browser?.role_observations ?? [];
@@ -432,7 +442,8 @@ export function buildReportModel(testCases, executionLog) {
       updated_at: executionLog.events?.at(-1)?.at ?? executionLog.run.started_at,
       event_count: executionLog.events?.length ?? 0,
       last_sequence: executionLog.events?.at(-1)?.sequence ?? 0,
-      is_final: executionLog.run.status === "completed",
+      is_final: executionLog.run.status === "completed" && effectiveProjection.progress.complete,
+      execution_complete: effectiveProjection.progress.complete,
       workflow_profile: profile,
       display_timezone: displayTimezone,
       boundary_at_label: readableTimeInZone(executionLog.events?.at(-1)?.at ?? executionLog.run.started_at, displayTimezone),

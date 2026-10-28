@@ -100,11 +100,15 @@ test("permission recovery is accepted by the public Run API and deterministic lo
       environment_ref: "staging", observed_url: "https://staging.example.test/review", verification: "verified",
       switch_status: "not_required", fact_refs: [5, 6], role_observation_refs: [6]
     });
+    const input = await productionRecordEvent(run.runRoot,{type:"page_observation",checkpoint_ids:["RECOVER/s/o"],description:"组件夹具前置记录可用，不代表被测权限成功"});
+    const execution = {checkpoint_id:"RECOVER/s/o",scenario_id:"scope-recover",execution_id:"recovered-execution",batch_id:"g-recover"};
+    const prepared = await productionRecordEvent(run.runRoot,{type:"scenario_preparation",...execution,context_refs:[coverage.sequence],fact_refs:[input.sequence],data_source:"real",permission_source:"real"});
     await productionRecordEvent(run.runRoot, {
-      type: "checkpoint_started", checkpoint_id: "RECOVER/s/o",
+      type: "checkpoint_started", ...execution,preparation_ref:prepared.sequence, checkpoint_id: "RECOVER/s/o",
       scope_ids: ["scope-recover"], context_refs: [coverage.sequence]
     });
-    const observationEvent = await productionRecordEvent(run.runRoot, {
+    await productionRecordEvent(run.runRoot,{type:"action_dispatched",...execution,action_id:"recover-navigation",side_effect:false});
+    const observationEvent = await productionRecordEvent(run.runRoot, { ...execution,
       type: "page_observation", checkpoint_ids: ["RECOVER/s/o"], scope_ids: ["scope-recover"],
       context_ref: coverage.sequence, description: "审阅页面显示目标内容"
     });
@@ -117,7 +121,7 @@ test("permission recovery is accepted by the public Run API and deterministic lo
       choice: "close", reason: "后补账号范围已完成真实页面观察"
     });
     await productionRecordEvent(run.runRoot, {
-      type: "checkpoint_result", checkpoint_id: "RECOVER/s/o", result: "passed",
+      type: "checkpoint_result", ...execution, checkpoint_id: "RECOVER/s/o", result: "passed",
       reason: "审阅页面显示目标内容", observation: "当前虚构账号下目标内容可见", evidence_status: "not_required",
       execution_refs: [observationEvent.sequence], coverage_review_ref: review.sequence
     });

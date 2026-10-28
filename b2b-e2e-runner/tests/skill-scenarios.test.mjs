@@ -73,7 +73,7 @@ test("PBH AC-01/03/04/05/30/32: role requirements are classified without fixed n
     "现在能用 / 之后准备 / 本次提供不了",
     "没有可执行工作或必要登录信息时不得初始化正式 Run",
     "只追问仍未明确的分类或当前批次实际缺失的登录字段",
-    "全部权限均明确无法提供",
+    "全部测试权限均明确无法提供",
     "角色、权限组和账号不要求一一对应",
     "不预设角色名称、组数或账号数量上限"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
@@ -101,8 +101,8 @@ test("R05 A11–A13: one preflight batch asks independent Mock and ordinary prox
 test("PBH AC-08/09/10/12/14/15/16/31: waiting and resume loop is contextual, repeatable, and never automates permission work", async () => {
   const [skill, workflow, , proxy, artifact] = await sources();
   for (const phrase of [
-    "先完成所有当前已就绪且可执行的工作",
-    "每批结束或准备状态更新后重新计算剩余工作",
+    "先完成当前固定权限批次内所有可执行场景",
+    "用统一派生进度计算当前批次的剩余场景",
     "不限定等待次数或批次数",
     "自然语言",
     "一次说明多个权限组",

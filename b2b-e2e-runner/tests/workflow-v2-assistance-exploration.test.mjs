@@ -18,7 +18,7 @@ async function createRun(root) {
       { case_id: "INDEPENDENT", module: "公共", title: "独立检查", preconditions: [], steps: [{ step_id: "s", action: "查看公共状态", expected: [{ oracle_id: "o", text: "页面显示可用" }] }] }
     ]
   }));
-  const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+  const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
   await recordEvent(run.runRoot, {
     type: "permission_plan", version: "1.0", groups: [], role_independent_case_ids: ["BLOCKED", "INDEPENDENT"]
   });
@@ -201,7 +201,7 @@ test("AC-23/28: a v2 permission wait must reference the same open assistance ite
         steps: [{ step_id: "s", action: "核对权限页面", expected: [{ oracle_id: "o", text: "显示授权信息" }] }]
       }]
     }));
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+    const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
       await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [],
       groups: [{
@@ -243,7 +243,7 @@ test("AC-26/28: v2 stop_waiting ends only its permission scope without the legac
         steps: [{ step_id: "s", action: "核对目标", expected: [{ oracle_id: "o", text: "显示目标信息" }] }]
       }]
     }));
-    const run = await initializeRun({ workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
+    const run = await initializeRun({ mockFallback: "declined", workspaceRoot: root, casesPath, workflowProfile: "b2b-e2e-current" });
       await recordEvent(run.runRoot, {
       type: "permission_plan", version: "1.0", role_independent_case_ids: [],
       groups: [{

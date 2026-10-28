@@ -42,7 +42,7 @@ export function validateExecutionFact(cases,log,event) {
  const events=log.events??[];
  requireValue(!["activity_start", "activity_end", "activity_complete", "retake_link"].includes(event.type), "旧活动计时或跨 Run 补测事件不受支持；当前任务不迁移旧流程");
  if(['checkpoint_result','checkpoint_started'].includes(event.type)) {
-  requireValue(!events.some(item=>item.type==='checkpoint_result' && item.checkpoint_id===event.checkpoint_id && (item.status??'completed')==='completed'),'原检查点已终结，不可覆盖；请追加补充尝试');
+  requireValue(!events.some(item=>item.type==='checkpoint_result' && item.checkpoint_id===event.checkpoint_id && (event.scenario_id === undefined || (item.scenario_id ?? null)===(event.scenario_id ?? null)) && (item.status??'completed')==='completed'),'原检查点已终结，不可覆盖；请追加补充尝试');
  }
  if(event.type==='browser_session') return validateBrowserSession(log,event);
  if(event.type==='proxy_policy') return validateProxyPolicy(log,event);
@@ -78,9 +78,15 @@ export function validateExecutionFact(cases,log,event) {
   requireValue(!events.some(item=>item.checkpoint_id===event.checkpoint_id && ['checkpoint_semantics','checkpoint_started','checkpoint_result'].includes(item.type)),'检查点语义必须在执行前登记且不可覆写'); return;
  }
  if(event.type==='mock_channel_coverage') {
-  keys(event,['target_id','context_ref','scenario_hash','covered_route_ids','request_refs','uncovered_channels','channels']);
+  keys(event,['target_id','context_ref','scenario_hash','covered_route_ids','request_refs','uncovered_channels','channels','route_bindings']);
   requireValue(text(event.target_id) && text(event.context_ref) && /^[a-f0-9]{64}$/.test(event.scenario_hash),'通道绑定标识缺失');
   refs(log,event.request_refs,'通道覆盖',{types:['network_observation']});
+  if(event.route_bindings !== undefined) {
+   requireValue(Array.isArray(event.route_bindings) && new Set(event.route_bindings.map(item=>item.route_id)).size===event.route_bindings.length,'route_bindings 必须是唯一映射');
+   for(const binding of event.route_bindings) {
+    requireValue(binding && Object.keys(binding).every(key=>['route_id','request_ref'].includes(key)) && text(binding.route_id) && event.request_refs.includes(binding.request_ref),'通道路由映射引用无效');
+   }
+  }
   requireValue(Array.isArray(event.uncovered_channels) && Array.isArray(event.channels) && Array.isArray(event.covered_route_ids),'通道核验结构无效'); return;
  }
  scope(cases,event.checkpoint_ids);

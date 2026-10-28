@@ -25,8 +25,9 @@ export async function startLatestWorkflowFixture({ port = 0 } = {}) {
   const observationFile = path.join(root, 'observation.json');
   const uploads = new Map();
   const records = [{ id: 'real-expired-seed', name: 'Expired seed', date: '2000-01-01', status: 'expired' }];
+  const environmentRequests = [];
   const counts = {}; const faults = new Map(); let mockRecord = null;
-  const snapshot = () => structuredClone({ counts, records, mockRecord, uploadCount: uploads.size });
+  const snapshot = () => structuredClone({ counts, records, mockRecord, environmentRequests, uploadCount: uploads.size });
   const persist = () => { writeFileSync(observationFile + '.tmp', JSON.stringify(snapshot(), null, 2), { mode: 0o600 }); renameSync(observationFile + '.tmp', observationFile); };
   persist();
   const server = http.createServer(async (request, response) => {
@@ -54,6 +55,11 @@ export async function startLatestWorkflowFixture({ port = 0 } = {}) {
       persist();
       if (fault?.delayMs) await new Promise(resolve => setTimeout(resolve, fault.delayMs));
       if (fault?.status) return send(fault.status, { error: 'Controlled fixture failure' });
+      if (route === '/environment-config' && request.method === 'GET') {
+        const accepted = request.headers['x-fixture-access'] === 'local-approved';
+        environmentRequests.push({ requestHeaderAccepted: accepted });
+        return send(accepted ? 200 : 403, { loginEnabled: false, deployment: 'locked', requestHeaderAccepted: accepted }, { 'x-fixture-response': 'unprepared' });
+      }
       if (route === '/fixture-probe' && request.method === 'GET') return send(200, { safe: true, channel: url.searchParams.get('channel') || 'page', source: 'real-fixture' });
       if (route === '/fixture-control' && request.method === 'POST') {
         const body = await readBody(request);
@@ -73,7 +79,14 @@ export async function startLatestWorkflowFixture({ port = 0 } = {}) {
       const role = /(?:^|;\s*)fixture-role=(admin|user)(?:;|$)/.exec(request.headers.cookie || '')?.[1];
       if (route === '/fixture-session' && request.method === 'GET') return send(200, { role: role || null });
       if (!role) return send(401, { error: 'Select a fixture role first' });
+      if (route === '/api/frontend-permissions' && request.method === 'GET') return send(200, { canApprove: false, source: 'real-fixture' });
       if (request.method === 'POST' && role !== 'admin') return send(403, { error: 'Administrator role required for real write' });
+      if (route === '/api/conditional' && request.method === 'POST') {
+        const body = await readBody(request);
+        if (typeof body.name !== 'string' || !body.name.trim() || Object.keys(body).length !== 1) return send(422, { error: 'Exactly one nonempty string name required' });
+        return send(200, { accepted: true, name: body.name });
+      }
+      if (route === '/api/frontend-approve' && request.method === 'POST') return send(403, { error: 'Real server approve permission unavailable' });
       if (route === '/api/confirm-date' && request.method === 'POST') {
         const { date } = await readBody(request);
         return validDate(date) ? send(200, { date }) : send(422, { error: 'Use a real YYYY-MM-DD date' });

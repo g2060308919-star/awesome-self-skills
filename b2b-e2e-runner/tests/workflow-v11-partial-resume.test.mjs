@@ -1,3 +1,4 @@
+import { recordFixtureEvent } from "./test-helpers.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -70,7 +71,7 @@ test("v1.1 AC-11/37/59: resolving one assistance scope resumes it without waitin
     await assert.doesNotReject(recordEvent(run.runRoot, {
       type: "run_state", status: "running", reason: "恢复已释放的 A 范围", coverage_review_ref: 12
     }));
-    await assert.doesNotReject(recordEvent(run.runRoot, {
+    await assert.doesNotReject(recordFixtureEvent(run.runRoot, {
       type: "checkpoint_started", checkpoint_id: "A/s/o", scope_ids: ["scope-a"], context_refs: [11]
     }));
   } finally {

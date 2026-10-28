@@ -21,7 +21,7 @@
 
 ## 覆盖完整性与 Mock 有效投影
 
-新 Run 的结果字段非空不等于执行完整。每个检查点必须先通过 `coverage_plan` 建立全部必要范围和依赖；开始时引用新鲜 `coverage_context`；终结时引用覆盖所有必要站点/步骤的 `checkpoint_close` 审查；最终 `coverage_review.final` 逐项核对全部原检查点。A→B→A 的返回任务、独立可推进工作、未解除协作和实际依赖不能被“当前页面做完了”或自由文本原因跳过。阶段报告可以显示 pending/null 的待继续范围，但不能反写终结结果。
+新 Run 的结果字段非空不等于执行完整。每个检查点必须先通过 `coverage_plan` 建立全部必要范围和依赖；开始时引用新鲜 `coverage_context`；终结时引用覆盖所有必要站点/步骤的 `checkpoint_close` 审查；最终 `coverage_review.final` 逐项核对全部原检查点。原必需动作造成 A→B→A 环属于输入冲突；当前批次的独立工作、未解除协作和实际依赖不能被自由文本跳过。阶段报告可以显示 pending/null 的待继续范围，但不能反写终结结果。
 
 `data_gap` 是真实环境事实，不是 Mock 通过。用户拒绝 Mock 时仍可记录数据缺口并据实得到 `undetermined`。用户允许后，候选须明确 `assertion_domain` 与原断言依据，只有 frontend 可记录 Mock passed，并以同尝试/检查点的 `page_observation_refs` 证明页面消费。只有同一原预期、合法数据缺口、完整前端执行证据及已完成候选收尾才能形成有效 Mock 投影：
 
@@ -29,9 +29,9 @@
 2. 有效 Mock `failed` 表示真实前端在该合成输入下不符合原预期，优先于通过。
 3. 真实 `passed` 保留为纯真实通过。
 4. 真实 `undetermined` 只有缺口和补测范围精确一致、没有其他必要阻塞时，才可投影为带来源的 passed/failed。
-5. 配置、代理、状态、清理或证据关联错误不是产品失败；真实后端持久化、真实数据创建等后端专属断言继续 `undetermined`。
+5. 配置、代理、状态或证据关联错误不是产品失败。允许模式含真实后端专属断言或预排除时先处理输入冲突，不能用 undetermined 满足全量门槛。拒绝模式保持合法四态。
 
-原 `cases[].checkpoints` 和 `cases[].result` 始终保存原始真实结果，不被 Mock 回写。报告模型一次性计算有效投影，仍只输出四态、每条输入用例一行、原顺序不变。含 Mock 的原因醒目标注“Mock 前端补测”，概览分别显示纯真实通过和含 Mock 通过；详情同时显示原始真实结果、真实数据缺口、补测页面/请求事实和“不证明真实后端”的边界。HTML 与 `chatTableMarkdown` 必须共享这个唯一 rows/counts 模型。
+原 `cases[].checkpoints` 和 `cases[].result` 始终保存原始真实结果，不被 Mock 回写。所有执行消费者共用 `deriveExecutionProgress` 的同一有效投影，仍只输出四态、每条输入用例一行、原顺序不变。含 Mock 的原因醒目标注“Mock 前端补测”，概览分别显示纯真实通过和含 Mock 通过；详情同时显示原始真实结果、真实数据缺口、补测页面/请求事实和“不证明真实后端”的边界。HTML 与 `chatTableMarkdown` 必须共享这个唯一 rows/counts 模型。
 
 原因必须是语义化中文事实，说明期望、实际、位置和影响；不能只写错误码、`false`、`timeout` 或“与预期不符”。通过也要写观察事实。
 
@@ -82,3 +82,12 @@ ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因
 最终对话中的四态统计和五列表格必须使用已校验 `deliver` 命令返回的 `counts` 与 `chatTableMarkdown`（内部复用 `report`），不得依据记忆重新汇总或判定。对话表头、展示 ID、模块、场景、结果、原因和顺序与 HTML 共享模型完全一致；每条输入用例恰好一行，即使用例很多也不能省略通过项。报告链接不能替代对话内全量表格。报告生成或一致性校验失败时，不得宣称 Run 完成或拼造表格。
 
 最终顺序为：Run 根目录和四态数量；完整五列表格；未通过、无法确定与关键截图缺口；代理验证与自动清理结果（未使用时写“本次未使用代理”）；单一 `report.html` 链接和一致性结果。CLI 的 `reportPath` 和 `htmlReportPath` 均指向 `report.html`，`reportFormat` 固定为 `html-only-v1`。密码及其他认证秘密不得出现在最终回复。
+
+
+### 场景级完整性
+
+结果与完整性分别派生。原检查点由全部 required scenario 汇总：任一有效失败仍显示 failed，但未测的其他场景仍阻止正常完成。每场景完整执行来自准备事实、同 execution 的 start/action、随后页面/请求观察和原断言结果；通过与失败都适用，不能把配置或回执视为执行。真实与 Mock 历史保留，缓存并非独立结果权威。
+
+允许模式批次及全轮必须全部场景实际执行并明确 passed/failed，开放协作、未完成尝试及未知结果不能 drained/completed。拒绝模式已完成可测工作且合法探索/协作收尾后可以 undetermined，原预排除仍 not_executed；未回答不能按拒绝收尾。具名 chain_id 的合成状态只能由同一相容 attempt/hash支撑，不能拼接或进入真实写链；独立互斥场景可分别执行。准备性质的依赖输入不能冒充原要求实际操作已完成。
+
+详情逐场景显示完整性、原结果原因及 data_source/permission_source，模拟前端权限不证明真实服务端授权。基础代理影响仍单独记录。截图缺口继续独立；HTML、counts和对话表使用同一投影，原顺序/ID/expected不变。阶段及明确中止不能标为全量完成。

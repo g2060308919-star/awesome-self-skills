@@ -7,6 +7,7 @@ import {
   validateMockEvent,
   validateMockLog
 } from "../scripts/lib/mock-fallback.mjs";
+import { validateProgressEvent, validateProgressLog, deriveExecutionProgress } from "../scripts/lib/execution-progress.mjs";
 import { buildReportModel } from "../scripts/lib/report-model.mjs";
 import { renderChatTableMarkdown } from "../scripts/lib/report.mjs";
 import { buildHtmlReport } from "../scripts/lib/report-html.mjs";
@@ -73,46 +74,50 @@ function addGapAndCandidate(log) {
   });
 }
 
-function addCompletedAttempt(log, result = "passed") {
-  append(log, {
-    type: "coverage_context", scope_ids: ["scope-1"], account_ref: null, observed_account_ref: null,
+function addCompletedAttempt(log, result = "passed", { scenarioId = "scope-1", attemptId = "attempt-1", candidateId = "candidate-1" } = {}) {
+  const record = event => { validateProgressEvent(testCases, log, event); return append(log, event); };
+  const context = record({ type: "coverage_context", scope_ids: ["scope-1"], account_ref: null, observed_account_ref: null,
     target_id: "target-1", context_ref: "context-1", environment_ref: "staging", observed_url: "https://fixture.example.test/app",
-    verification: "verified", switch_status: "not_required", fact_refs: [5]
-  });
-  append(log, {
-    type: "mock_attempt", attempt_id: "attempt-1", candidate_ids: ["candidate-1"], case_id: "CASE-1", action: "started",
-    scenario_revision: 1, scenario_hash: "b".repeat(64), state_version: 0, context_refs: [8], proxy_cycle_refs: ["proxy-cycle-1"],
-    candidate_checkpoint_ids: [checkpointId], supporting_checkpoint_ids: []
-  });
-  append(log, {
-    type: "mock_observation", attempt_id: "attempt-1", receipt_id: "receipt-1", route_id: "route-1", request_id: "request-1",
-    disposition: "mocked", request_facts: ["POST /api/items matched exact body"], response_facts: ["201 with ITEM-1"],
-    state_before_version: 0, state_after_version: 1, evidence_refs: [], proxy_cycle_ref: "proxy-cycle-1"
-  });
-  append(log, {
-    type: "mock_checkpoint", attempt_id: "attempt-1", checkpoint_id: checkpointId, action: "started",
-    scope_ids: ["scope-1"], context_refs: [8]
-  });
-  append(log, { type: "page_observation", attempt_id: "attempt-1", checkpoint_ids: [checkpointId], description: "组件夹具页面消费事实：显示 ITEM-1" });
-  log.events.push({
-    type: "coverage_review", review_id: "mock-close", purpose: "checkpoint_close", plan_revision: 1,
-    based_on_sequence: 12, scope_ids: ["scope-1"], checkpoint_ids: [checkpointId], fact_refs: [10], assistance_refs: [],
+    verification: "verified", switch_status: "not_required", fact_refs: [5] });
+  const attempt = { attempt_id: attemptId, candidate_ids: [candidateId], case_id: "CASE-1", scenario_revision: 1,
+    scenario_hash: "b".repeat(64), context_refs: [context.sequence], proxy_cycle_refs: ["proxy-cycle-1"] };
+  record({ type: "mock_attempt", ...attempt, action: "started", state_version: 0, candidate_checkpoint_ids: [checkpointId], supporting_checkpoint_ids: [] });
+  const execution = { checkpoint_id: checkpointId, scenario_id: scenarioId, execution_id: `execution:${attemptId}`, batch_id: "general" };
+  const input = record({ type: "network_observation", ...execution, checkpoint_ids: [checkpointId], description: "组件夹具输入已按提供契约准备，尚不判断页面效果" });
+  const prep = record({ type: "scenario_preparation", ...execution, context_refs: [context.sequence], fact_refs: [input.sequence],
+    data_source: "mock", permission_source: "real", attempt_id: attemptId, scenario_hash: attempt.scenario_hash, state_version: 0 });
+  const bound = { ...execution, attempt_id: attemptId, preparation_ref: prep.sequence };
+  record({ type: "mock_checkpoint", ...bound, action: "started", scope_ids: ["scope-1"], context_refs: [context.sequence] });
+  record({ type: "action_dispatched", ...bound, action_id: `open:${attemptId}`, side_effect: false, description: "组件夹具实际触发详情页面导航" });
+  const receipt = record({ type: "mock_observation", scenario_id: scenarioId, execution_id: execution.execution_id, attempt_id: attemptId, receipt_id: `receipt:${attemptId}`, route_id: "route-1", request_id: `request:${attemptId}`,
+    disposition: "mocked", request_facts: ["GET /api/items matched exact route"], response_facts: ["200 with ITEM-1"],
+    state_before_version: 0, state_after_version: 1, evidence_refs: [], proxy_cycle_ref: "proxy-cycle-1" });
+  const page = record({ type: "page_observation", ...bound, checkpoint_ids: [checkpointId], description: result === "passed" ? "组件夹具页面消费事实：显示 ITEM-1" : "组件夹具页面消费事实：未显示 ITEM-1" });
+  const review = record({ type: "coverage_review", review_id: `mock-close:${attemptId}`, purpose: "checkpoint_close", plan_revision: 1,
+    based_on_sequence: log.events.length, scope_ids: ["scope-1"], checkpoint_ids: [checkpointId], fact_refs: [receipt.sequence, page.sequence], assistance_refs: [],
     ready_scope_ids: ["scope-1"], preparable_scope_ids: [], blocked_scope_ids: [],
-    closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [10] }],
-    choice: "close", reason: "Mock 页面和请求事实足以判断前端原预期", sequence: 13, at: "2026-09-20T00:00:13.000Z"
-  });
-  append(log, {
-    type: "mock_checkpoint", attempt_id: "attempt-1", checkpoint_id: checkpointId, action: "result", result,
+    closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [receipt.sequence, page.sequence] }],
+    choice: "close", reason: "Mock 页面和请求事实足以判断前端原预期" });
+  const outcome = record({ type: "mock_checkpoint", ...bound, action: "result", result,
     observation: result === "passed" ? "前端显示 ITEM-1" : "前端未显示 ITEM-1", reason: result === "passed" ? "Mock 前端链路符合原预期" : "Mock 前端链路不符合原预期",
-    evidence_refs: [], request_refs: ["receipt-1"], execution_refs: [10], page_observation_refs: [12], coverage_review_ref: 13
-  });
-  append(log, {
-    type: "mock_attempt", attempt_id: "attempt-1", candidate_ids: ["candidate-1"], case_id: "CASE-1", action: "finished",
-    scenario_revision: 1, scenario_hash: "b".repeat(64), state_version: 1, context_refs: [8], proxy_cycle_refs: ["proxy-cycle-1"]
-  });
-  append(log, {
-    type: "mock_disposition", candidate_id: "candidate-1", outcome: "supplemented", attempt_id: "attempt-1", basis_refs: [14, 15]
-  });
+    evidence_refs: [], request_refs: [receipt.receipt_id], execution_refs: [receipt.sequence, page.sequence], page_observation_refs: [page.sequence], coverage_review_ref: review.sequence });
+  const finished = record({ type: "mock_attempt", ...attempt, action: "finished", state_version: 1 });
+  record({ type: "mock_disposition", candidate_id: candidateId, outcome: "supplemented", attempt_id: attemptId, basis_refs: [outcome.sequence, finished.sequence] });
+}
+
+function addRealFailure(log) {
+  const record = event => { validateProgressEvent(testCases, log, event); return append(log, event); };
+  const context = record({ type: "coverage_context", scope_ids: ["scope-1"], account_ref: null, observed_account_ref: null,
+    target_id: "target-1", context_ref: "context-1", environment_ref: "staging", observed_url: "https://fixture.example.test/app", verification: "verified", switch_status: "not_required", fact_refs: [5] });
+  const identity = { checkpoint_id: checkpointId, scenario_id: "scope-1", execution_id: "real-failure", batch_id: "general" };
+  const input = record({ type: "network_observation", ...identity, checkpoint_ids: [checkpointId], description: "真实接口返回正确输入" });
+  const preparation = record({ type: "scenario_preparation", ...identity, data_source: "real", permission_source: "real", context_refs: [context.sequence], fact_refs: [input.sequence] });
+  record({ type: "checkpoint_started", ...identity, preparation_ref: preparation.sequence, context_refs: [context.sequence], scope_ids: ["scope-1"] });
+  record({ type: "action_dispatched", ...identity, action_id: "real-open", side_effect: false, description: "实际导航打开详情" });
+  const page = record({ type: "page_observation", ...identity, checkpoint_ids: [checkpointId], description: "真实前端未显示正确记录" });
+  record({ type: "checkpoint_result", ...identity, preparation_ref: preparation.sequence, result: "failed", reason: "真实链路失败", execution_refs: [page.sequence] });
+  log.cases[0].result = "failed";
+  Object.assign(log.cases[0].checkpoints[0], { result: "failed", reason: "真实链路失败" });
 }
 
 test("v1.1 AC-03/33/36/38: a data gap becomes one traceable candidate and closes only after a finished matching attempt", () => {
@@ -127,7 +132,7 @@ test("v1.1 AC-03/33/36/38: a data gap becomes one traceable candidate and closes
   assert.doesNotThrow(() => validateMockLog(testCases, log));
 });
 
-test("v1.1 AC-02/04/10/35/39: declined or revoked policy, real failures, and forged gap references cannot become candidates", () => {
+test("v1.1 AC-02/04/10/35/39: declined or revoked policy and forged gaps fail closed; later supplementation cannot erase a real failure", () => {
   const declined = baseLog("declined");
   append(declined, {
     type: "data_gap", gap_id: "gap-1", checkpoint_ids: [checkpointId], real_blocker_refs: [5], exploration_refs: [5],
@@ -142,15 +147,17 @@ test("v1.1 AC-02/04/10/35/39: declined or revoked policy, real failures, and for
   assert.throws(() => addGapAndCandidate(revoked), /允许|政策/);
 
   const failed = baseLog();
-  failed.cases[0].checkpoints[0].result = "failed";
-  failed.cases[0].result = "failed";
-  append(failed, {
-    type: "data_gap", gap_id: "gap-1", checkpoint_ids: [checkpointId], real_blocker_refs: [5], exploration_refs: [5],
-    missing_conditions: ["缺数据"], known_request_facts: ["空响应"], not_started_dependencies: ["需要记录 ID"]
-  });
+  failed.events.find(event => event.type === "coverage_plan").items[0].scopes[0].scenario_requirements = ["scope-1", "remaining-independent"].map(scenario_id => ({
+    scenario_id, step_refs: ["CASE-1/s"], source_refs: ["snapshot:CASE-1/s"], preconditions: [], assertion_kind: "ui", assertion_domain: "frontend", chain_id: null
+  }));
+  addRealFailure(failed);
   assert.throws(() => append(failed, {
-    type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "candidate-1", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["gap-1"], purpose: "覆盖真实失败"
-  }), /真实失败/);
+    type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "forged", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["missing-gap"], purpose: "补测"
+  }), /数据缺口/);
+  addGapAndCandidate(failed);
+  addCompletedAttempt(failed, "passed");
+  assert.equal(projectEffectiveResults(testCases, failed).cases[0].effective_result, "failed", "真实前端失败不能被后来的 Mock 通过洗掉");
+  assert.equal(failed.cases[0].result, "failed");
 });
 
 test("v1.1 AC-34/36/37: unknown attempts, receipts, cross-case checkpoints, and duplicate terminal results fail closed", () => {
@@ -174,7 +181,7 @@ test("v1.1 AC-41/42/43: effective projection keeps real failures, allows valid d
   addCompletedAttempt(passed, "passed");
   let projection = projectEffectiveResults(testCases, passed);
   assert.deepEqual(projection.cases[0], {
-    case_id: "CASE-1", real_result: "undetermined", effective_result: "passed", source: "mock", reason: "Mock 前端链路符合原预期"
+    case_id: "CASE-1", real_result: "undetermined", effective_result: "passed", complete: true, source: "mock", reason: "Mock 前端链路符合原预期；Mock 前端补测，不证明真实后端"
   });
 
   const mockFailed = baseLog();
@@ -185,13 +192,12 @@ test("v1.1 AC-41/42/43: effective projection keeps real failures, allows valid d
   assert.equal(projection.cases[0].source, "mock");
 
   const realFailed = baseLog();
-  realFailed.cases[0].checkpoints[0].result = "failed";
-  realFailed.cases[0].checkpoints[0].reason = "真实链路失败";
-  realFailed.cases[0].result = "failed";
+  addRealFailure(realFailed);
   projection = projectEffectiveResults(testCases, realFailed);
   assert.equal(projection.cases[0].effective_result, "failed");
   assert.equal(projection.cases[0].source, "real");
-  assert.equal(projection.cases[0].reason, "真实链路失败");
+  assert.match(projection.cases[0].reason, /真实链路失败/);
+  assert.equal(realFailed.cases[0].checkpoints[0].reason, "真实链路失败");
 });
 
 test("v1.1 AC-38/44: completion rejects open candidates, running attempts, and open assistance", () => {
@@ -248,43 +254,24 @@ test("v1.1 AC-02/03: a declined Mock choice never makes the report claim that a 
   assert.doesNotMatch(html, /有效通过中.*Mock 前端补测/);
 });
 
-test("v1.1 AC-41: passing checkpoints from different Mock attempts cannot be spliced into one passed case", () => {
-  const cases = {
-    schema_version: "2.0",
-    suite: { name: "不可拼接场景", target_urls: ["https://fixture.example.test"] },
-    cases: [{
-      case_id: "CASE-MIX", module: "订单", title: "同一场景的两个检查点", preconditions: [],
-      steps: [
-        { step_id: "s1", action: "创建", expected: [{ oracle_id: "o1", text: "显示已创建" }] },
-        { step_id: "s2", action: "读取", expected: [{ oracle_id: "o2", text: "显示同一记录" }] }
-      ]
-    }]
-  };
-  const log = {
-    extensions: { execution_coverage: { schema_version: "1.0" }, mock_fallback: { schema_version: "1.0" } },
-    cases: [{
-      case_id: "CASE-MIX", result: "undetermined", reason: "真实数据缺失",
-      checkpoints: [
-        { step_id: "s1", oracle_id: "o1", result: "undetermined", reason: "缺创建数据" },
-        { step_id: "s2", oracle_id: "o2", result: "undetermined", reason: "缺读取数据" }
-      ]
-    }],
-    events: [
-      { type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "c1", case_id: "CASE-MIX", checkpoint_ids: ["CASE-MIX/s1/o1"], gap_ids: ["g1"] },
-      { type: "mock_candidate", assertion_domain: "frontend", assertion_basis: "原断言验证页面展示与交互", candidate_id: "c2", case_id: "CASE-MIX", checkpoint_ids: ["CASE-MIX/s2/o2"], gap_ids: ["g2"] },
-      { type: "mock_attempt", action: "started", attempt_id: "a1", case_id: "CASE-MIX", candidate_ids: ["c1"], candidate_checkpoint_ids: ["CASE-MIX/s1/o1"], supporting_checkpoint_ids: [], scenario_revision: 1, scenario_hash: "a".repeat(64), state_version: 0, context_refs: [1], proxy_cycle_refs: ["cycle-1"] },
-      { type: "mock_checkpoint", action: "result", attempt_id: "a1", checkpoint_id: "CASE-MIX/s1/o1", result: "passed", reason: "尝试一通过" },
-      { type: "mock_attempt", action: "finished", attempt_id: "a1", context_refs: [1], proxy_cycle_refs: ["cycle-1"], state_version: 1 },
-      { type: "mock_disposition", candidate_id: "c1", outcome: "supplemented", attempt_id: "a1" },
-      { type: "mock_attempt", action: "started", attempt_id: "a2", case_id: "CASE-MIX", candidate_ids: ["c2"], candidate_checkpoint_ids: ["CASE-MIX/s2/o2"], supporting_checkpoint_ids: [], scenario_revision: 1, scenario_hash: "b".repeat(64), state_version: 0, context_refs: [1], proxy_cycle_refs: ["cycle-2"] },
-      { type: "mock_checkpoint", action: "result", attempt_id: "a2", checkpoint_id: "CASE-MIX/s2/o2", result: "passed", reason: "尝试二通过" },
-      { type: "mock_attempt", action: "finished", attempt_id: "a2", context_refs: [1], proxy_cycle_refs: ["cycle-2"], state_version: 1 },
-      { type: "mock_disposition", candidate_id: "c2", outcome: "supplemented", attempt_id: "a2" }
-    ]
-  };
-  const projection = projectEffectiveResults(cases, log);
-  assert.equal(projection.cases[0].effective_result, "undetermined");
-  assert.match(projection.cases[0].reason, /不能拼接|同一.*尝试/);
+test("v1.1 AC-41: a named state chain cannot splice different attempts, while independent scenarios may use separate attempts", () => {
+  for (const chainId of ["shared-business-record", null]) {
+    const log = baseLog();
+    log.events.find(event => event.type === "coverage_plan").items[0].scopes[0].scenario_requirements = ["branch-a", "branch-b"].map(scenario_id => ({
+      scenario_id, step_refs: ["CASE-1/s"], source_refs: ["snapshot:CASE-1/s"], preconditions: [], assertion_kind: "ui", assertion_domain: "frontend", chain_id: chainId
+    }));
+    addGapAndCandidate(log);
+    addCompletedAttempt(log, "passed", { scenarioId: "branch-a" });
+    append(log, { type: "mock_candidate", candidate_id: "candidate-2", case_id: "CASE-1", checkpoint_ids: [checkpointId], gap_ids: ["gap-1"],
+      assertion_domain: "frontend", assertion_basis: "原断言第二必测分支", purpose: "执行剩余分支" });
+    addCompletedAttempt(log, "passed", { scenarioId: "branch-b", attemptId: "attempt-2", candidateId: "candidate-2" });
+    assert.doesNotThrow(() => validateMockLog(testCases, log));
+    assert.doesNotThrow(() => validateProgressLog(testCases, log));
+    const projection = projectEffectiveResults(testCases, log);
+    assert.equal(projection.cases[0].effective_result, chainId ? "undetermined" : "passed");
+    assert.equal(projection.cases[0].complete, chainId === null);
+    assert.equal(deriveExecutionProgress(testCases, log).scenes.every(scene => scene.executed), true, "不能用缺少执行事实制造拒绝拼接");
+  }
 });
 
 test('R05 A13: declined→allowed→revoked→allowed decisions append with exact previous decision',()=>{
