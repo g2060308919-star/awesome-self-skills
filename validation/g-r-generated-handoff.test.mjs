@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { canonicalStringify } from '../generate-test-cases-engineering/src/canonical.mjs';
-import { advanceStrict, constructV4Action, prepareV4Source } from '../generate-test-cases-engineering/src/entry.mjs';
+import { advanceStrict, constructIndependentReviewCompletionV4, constructV4Action, prepareStageArtifact, prepareV4Source } from '../generate-test-cases-engineering/src/entry.mjs';
 import { latestV4Contract } from '../generate-test-cases-engineering/src/v4-contract.mjs';
 import { stageV4PrdCollectionObservation } from '../generate-test-cases-engineering/src/prd-source-collection-v4.mjs';
 import { createV4RunDirectory } from '../generate-test-cases-engineering/src/run-bootstrap-v4.mjs';
@@ -57,8 +57,42 @@ test('official G Case Document and test-confirmed Execution Plan reach R init-g'
   }, [{ item_id: 'body', raw_response_bytes: bytes, capture_bytes: bytes }]);
   for (const stage of ['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']) {
     await mkdir(path.join(g.run_directory, 'staging'), { recursive: true });
+    let artifact = fixture.artifacts[stage];
+    if (stage === 'case_drafts') {
+      const { schema_version, source_revision, case_context_digest, ...payload } = artifact;
+      void schema_version; void source_revision; void case_context_digest;
+      const preparedDraft = await prepareStageArtifact(g.run_directory, reply, { stage, payload });
+      assert.equal(preparedDraft.status, 'prepared', JSON.stringify(preparedDraft));
+      artifact = preparedDraft.artifact;
+      fixture.artifacts.case_drafts = artifact;
+    }
     await writeFile(path.join(g.run_directory, 'staging', STAGE_FILES[stage]),
-      `${canonicalStringify(fixture.artifacts[stage])}\n`);
+      `${canonicalStringify(artifact)}\n`);
+    reply = await advanceStrict(g.run_directory);
+  }
+  if (reply.status === 'need_revision' && reply.review_request) {
+    const request = reply.review_request;
+    fixture.artifacts.case_drafts.independent_review = constructIndependentReviewCompletionV4(reply, {
+      target_assessments: request.source_first_targets.map(target => {
+        const candidate = request.review_target_projection.cases.find(item =>
+          item.oracles.some(oracle => oracle.claim_ids.some(id => target.source_claim_ids.includes(id))));
+        assert.ok(candidate, '复核必须对应到来源支持的用例');
+        return {
+          target_id: target.target_id, disposition: 'verified',
+          affected_items: [{ item_kind: 'case', item_id: candidate.case_id }],
+          source_claim_ids: target.source_claim_ids, decision_ids: target.decision_ids,
+          rationale: '测试样例已按当前材料逐项核对来源目标、步骤和预期。',
+          required_recheck: { status: 'passed', affected_items: [{ item_kind: 'case', item_id: candidate.case_id }] }
+        };
+      }), findings: []
+    });
+    const { schema_version, source_revision, case_context_digest, ...payload } = fixture.artifacts.case_drafts;
+    void schema_version; void source_revision; void case_context_digest;
+    const reviewed = await prepareStageArtifact(g.run_directory, reply, { stage: 'case_drafts', payload });
+    assert.equal(reviewed.status, 'prepared', JSON.stringify(reviewed));
+    fixture.artifacts.case_drafts = reviewed.artifact;
+    await writeFile(path.join(g.run_directory, 'staging', STAGE_FILES.case_drafts),
+      `${canonicalStringify(reviewed.artifact)}\n`);
     reply = await advanceStrict(g.run_directory);
   }
   assert.equal(reply.status, 'finished', JSON.stringify(reply));
@@ -161,7 +195,9 @@ test('official G Case Document and test-confirmed Execution Plan reach R init-g'
     runner_projection: forgedPlan.runner_projection,
     execution_plan_artifact: { path: 'output/r000/execution-plan.json', digest: hash(forgedBytes) }
   })}\n`);
-  await assert.rejects(loadGCaseDocumentHandoff({ caseManifestPath,
-    planManifestPath: path.join(forgedRun, 'output/current.json'), gCompilerPath, suite }),
-  /G 官方/u);
+  const ignoredPlan = await loadGCaseDocumentHandoff({ caseManifestPath,
+    planManifestPath: path.join(forgedRun, 'output/current.json'), gCompilerPath, suite });
+  assert.deepEqual(ignoredPlan.cases.map(item => item.case_id), caseIds);
+  const withoutPlan = await loadGCaseDocumentHandoff({ caseManifestPath, gCompilerPath, suite });
+  assert.deepEqual(withoutPlan.cases.map(item => item.case_id), caseIds);
 });

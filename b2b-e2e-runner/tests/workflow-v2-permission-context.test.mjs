@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { initializeRun, recordEvent as productionRecordEvent, validateRun } from "../scripts/run-artifacts.mjs";
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 import { derivePermissionState } from "../scripts/lib/permission-batches.mjs";
 
 async function createRun(root) {
@@ -149,12 +150,18 @@ test("AC-19/20: verified execution context allows the tested permission behavior
     await recordEvent(run.runRoot, observation("g-a", "acct-a", "target-a", "context-a"));
     await recordEvent(run.runRoot, { type: "case_started", case_id: "CTX-A" });
     await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "CTX-A/s/o" });
+    const explanation = reproducibleFailure({
+      operations: "使用已核验账号打开功能，失败发生在观察功能内容。",
+      expected: "显示功能内容",
+      actual: "页面实际显示无权限提示，弹窗未出现",
+      difference: "期望显示功能内容，实际页面显示无权限提示"
+    });
     await assert.doesNotReject(recordEvent(run.runRoot, {
       type: "checkpoint_result",
       checkpoint_id: "CTX-A/s/o",
       result: "failed",
-      reason: "期望显示功能内容，实际页面显示无权限提示",
-      observation: "账号和环境正确，页面实际显示无权限",
+      reason: explanation,
+      observation: explanation,
       evidence_status: "missing"
     }));
     await assert.doesNotReject(validateRun(run.runRoot));

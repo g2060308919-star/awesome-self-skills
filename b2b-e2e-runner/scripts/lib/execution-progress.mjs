@@ -1,5 +1,6 @@
 // The immutable snapshot and event stream are the only progress authority.
 // This module deliberately does not import permission, coverage or Mock reducers.
+import { failureExplanationDeliverable } from './failed-explanation.mjs';
 const text = value => typeof value === 'string' && value.trim().length > 0;
 const definite = result => ['passed', 'failed'].includes(result);
 function requireValue(ok, message) {
@@ -128,13 +129,15 @@ export function deriveExecutionProgress(testCases, log) {
     const selected = valid.find(item => item.result.result === effective) ?? valid.at(-1);
     const open_assistance = [...openHelp.values()].some(ids => ids.has(scene.checkpoint_id));
     const terminal = results.some(event => ['undetermined', 'not_executed'].includes(event.result));
+    const undeterminedResults = results.filter(event => event.result === 'undetermined');
+    const ruleGapComplete = policy === 'allowed' && undeterminedResults.length > 0 && undeterminedResults.every(event => event.mock_rule_gap === true);
     return { ...scene, prepared: events.some(event => event.type === 'scenario_preparation' && belongs(event, scene)),
       executed: valid.length > 0, effective_result: effective, source: selected?.source ?? 'real',
       result_ref: selected?.result.sequence ?? null, execution_id: selected?.result.execution_id ?? null,
       attempt_id: selected?.result.attempt_id ?? null, scenario_hash: selected?.prep.scenario_hash ?? null,
       data_source: selected?.prep.data_source ?? null, permission_source: selected?.prep.permission_source ?? null,
       state_version: selected?.prep.state_version ?? null, reason: selected?.result.reason ?? results.at(-1)?.reason ?? '场景尚待执行', open_assistance,
-      complete: !open_assistance && (valid.length > 0 || (policy === 'declined' && terminal)) };
+      complete: !open_assistance && (valid.length > 0 || (policy === 'declined' && terminal) || ruleGapComplete) };
   });
   // A named state chain cannot be assembled from unrelated attempts/versions.
   for (const chain of new Set(scenes.map(scene => scene.chain_id).filter(Boolean))) {
@@ -183,6 +186,16 @@ export function freshContext(log, context) {
 }
 export function validateProgressEvent(testCases, log, event) {
   const events = log.events ?? [];
+  if (Object.hasOwn(event, 'mock_rule_gap')) {
+    const decision = events.filter(item => item.type === 'mock_policy').at(-1)?.decision;
+    requireValue(event.type === 'checkpoint_result' && event.result === 'undetermined' && event.mock_rule_gap === true && decision === 'allowed',
+      'mock_rule_gap 只允许在允许 Mock 且结果为 undetermined 时为 true');
+    const known = Array.isArray(event.exploration_summary?.known_facts) ? event.exploration_summary.known_facts.join('\n') : '';
+    requireValue(typeof event.exploration_summary?.missing_fact === 'string' && event.exploration_summary.missing_fact.includes('页面结果'),
+      'mock_rule_gap 的 exploration_summary 必须写明缺少哪个接口的哪个页面结果');
+    requireValue(known.includes('唯一字段'), 'mock_rule_gap 必须写明真实请求没有确定出唯一字段');
+    requireValue(/用户没有提供|不在已写入/.test(known), 'mock_rule_gap 必须写明用户没有提供该字段，或该页面结果不在已写入的对应关系里');
+  }
   if (event.type === 'coverage_plan') {
     validateScenarioPlan(log,event);
     const mode = events.filter(item => item.type === 'mock_policy').at(-1)?.decision;
@@ -295,6 +308,10 @@ export function validateProgressEvent(testCases, log, event) {
     const observed = facts(log,refs,'场景观察');
     const pages = observed.filter(item => item.type === 'page_observation' && item.scenario_id === scene.scenario_id && item.execution_id === event.execution_id && item.checkpoint_ids?.includes(scene.checkpoint_id) && item.sequence > action.sequence && (item.attempt_id ?? null) === (start.attempt_id ?? null));
     requireValue(pages.length > 0, 'passed/failed 均须引用本场景真实触发后的页面观察');
+    if (event.result === 'failed') {
+      requireValue(failureExplanationDeliverable(event.reason), '未通过原因必须写明实际操作顺序、预期与页面实际表现、实际表现和预期的差异；缺记录不能记为 failed');
+      requireValue(pages.every(page => failureExplanationDeliverable(page.description)), '未通过的页面观察必须写明实际操作顺序、预期与页面实际表现、实际表现和预期的差异');
+    }
     if (scene.assertion_kind === 'response_consumption' && event.result === 'passed') {
       const response = observed.filter(item => ['network_observation','mock_observation'].includes(item.type) && item.scenario_id === scene.scenario_id && item.execution_id === event.execution_id && item.sequence > action.sequence && (item.type === 'network_observation' ? Number.isInteger(item.response_status) : (item.disposition === 'mocked' && item.attempt_id === event.attempt_id && item.response_facts?.length > 0)));
       requireValue(response.length > 0 && pages.some(page => page.sequence > Math.max(...response.map(item => item.sequence))), '响应消费通过须有同场景匹配响应及随后页面事实');

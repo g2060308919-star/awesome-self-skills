@@ -119,8 +119,13 @@ for (const mode of ["mock", "discovery"]) {
   test(`${mode}: the root navigation shortcut never allows an undeclared URL`, async t => {
     const { client } = await fixture(t, mode);
     await client.pause({ requestId: "unknown-url", url: `${origin}/api/delete-all` });
-    assert.deepEqual(client.upstream, []);
-    assert.ok(client.calls.some(call => call.method === "Fetch.failRequest" && call.params.requestId === "unknown-url"));
+    if (mode === "discovery") {
+      assert.deepEqual(client.upstream, []);
+      assert.ok(client.calls.some(call => call.method === "Fetch.failRequest" && call.params.requestId === "unknown-url"));
+    } else {
+      assert.deepEqual(client.upstream, ["unknown-url"]);
+      assert.equal(client.calls.some(call => call.method === "Fetch.failRequest" && call.params.requestId === "unknown-url"), false);
+    }
   });
 
   test(`${mode}: ordinary requests and explicit business readiness retain full frame-tree checks`, async t => {

@@ -94,15 +94,16 @@ function completeCheckpoint(source, executionLog, checkpointId, result = "passed
     preparation_ref: preparation.sequence, scope_ids: [scope.scope_id], context_refs: [context.sequence] });
   const action = appendFact(source, executionLog, { type: "action_dispatched", checkpoint_id: checkpointId, scenario_id, execution_id,
     action_id: `action-${checkpointId}`, side_effect: false, description: "执行组件检查动作" });
+  const failedExplanation = "实际操作顺序：执行组件检查动作，失败发生在观察页面。\n预期与页面实际表现：预期：检查点通过；页面实际表现：组件页面结果为 failed，弹窗未出现。\n实际表现和预期的差异：组件实际动作与页面事实";
   const observed = appendFact(source, executionLog, { type: "page_observation", checkpoint_ids: [checkpointId], scenario_id,
-    execution_id, action_id: action.action_id, target_id: "target-fixture", context_ref: "profile-fixture", description: `组件页面结果为 ${result}` });
+    execution_id, action_id: action.action_id, target_id: "target-fixture", context_ref: "profile-fixture", description: result === "failed" ? failedExplanation : `组件页面结果为 ${result}` });
   const review = appendFact(source, executionLog, { type: "coverage_review", review_id: `close-${checkpointId}`,
     purpose: "checkpoint_close", plan_revision: 1, based_on_sequence: executionLog.events.length, scope_ids: [scope.scope_id],
     checkpoint_ids: [checkpointId], fact_refs: [observed.sequence], assistance_refs: [], ready_scope_ids: [scope.scope_id],
     preparable_scope_ids: [], blocked_scope_ids: [], closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [observed.sequence] }],
     choice: "close", reason: "动作后页面观察完成" });
   appendFact(source, executionLog, { type: "checkpoint_result", checkpoint_id: checkpointId, scenario_id, execution_id,
-    result, reason: "组件实际动作与页面事实", execution_refs: [action.sequence, observed.sequence], coverage_review_ref: review.sequence });
+    result, reason: result === "failed" ? failedExplanation : "组件实际动作与页面事实", execution_refs: [action.sequence, observed.sequence], coverage_review_ref: review.sequence });
 }
 
 const plan = {

@@ -8,6 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { generateReport } from "../scripts/run-artifacts.mjs";
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 
 const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -68,15 +69,15 @@ test("AC-03/04: Chrome and the test page are prepared automatically", async () =
 
 test("PBH AC-01/03/04/05/30/32: role requirements are classified without fixed names, counts, or account mapping", async () => {
   const [, workflow, resultModel] = await sources();
-  assert.equal(workflow.includes("需要测试的操作 | 需要的权限或角色 | 涉及用例"), true);
+  assert.equal(workflow.includes("请在这个测试浏览器里完成登录，或者把能登录的账号和密码发我，我来填。"), true);
   for (const phrase of [
-    "现在能用 / 之后准备 / 本次提供不了",
     "没有可执行工作或必要登录信息时不得初始化正式 Run",
-    "只追问仍未明确的分类或当前批次实际缺失的登录字段",
     "全部测试权限均明确无法提供",
     "角色、权限组和账号不要求一一对应",
     "不预设角色名称、组数或账号数量上限"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
+  assert.equal(workflow.includes("现在能用 / 之后准备 / 本次提供不了"), false);
+  assert.equal(workflow.includes("需要测试的操作 | 需要的权限或角色 | 涉及用例"), false);
   assert.equal(workflow.includes("其余角色明确无法提供"), false);
   assert.equal(workflow.includes("权限如何申请或切换 | 状态"), false);
   assert.equal(resultModel.includes("待用户准备"), true);
@@ -85,14 +86,14 @@ test("PBH AC-01/03/04/05/30/32: role requirements are classified without fixed n
 
 test("R05 A11–A13: one preflight batch asks independent Mock and ordinary proxy decisions", async () => {
   const [skill, workflow] = await sources();
-  assert.equal(workflow.includes("是否需要代理 | 匹配范围 | 请求修改 | 响应修改 | 作用页面"), true);
+  assert.equal(workflow.includes("打开测试环境时，要不要走代理？"), true);
   for (const phrase of [
     "选择“不需要”后不再询问规则，也不启动普通代理",
-    "选择“需要”后只追问不完整的规则字段",
+    "用户只说「要」但没有给出方式时，只追问代理方式这一项",
     "仅当前测试页面",
     "代理效果、页面隔离、刷新或导航和停止恢复都不是执行前确认项"
   ]) assert.equal(workflow.includes(phrase), true, phrase);
-  assert.match(skill, /同一批.*账号覆盖、Mock 决定和普通代理规则/);
+  assert.match(skill, /同一批开跑前一次性确认尚未记录的登录、Mock 和代理/);
   assert.match(workflow, /允许 Mock、无其他代理规则/);
   assert.match(workflow, /仅允许普通代理、拒绝 Mock/);
   assert.match(workflow, /previous_decision_ref/);
@@ -236,12 +237,18 @@ test("UAT-02: strict expected text remains failed when page shows a broader labe
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await oneCase(root, ["评分"]) });
     await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "UAT-CASE/S1/O1" });
+    const explanation = reproducibleFailure({
+      operations: "打开详情并查看字段，失败发生在核对字段文案。",
+      expected: "评分",
+      actual: "页面字段实际显示“用户评分”，弹窗未出现",
+      difference: "未显示用例要求的“评分”"
+    });
     await recordEvent(run.runRoot, {
       type: "checkpoint_result",
       checkpoint_id: "UAT-CASE/S1/O1",
       result: "failed",
-      reason: "页面字段实际显示“用户评分”，未显示用例要求的“评分”",
-      observation: "详情页标签为“用户评分”",
+      reason: explanation,
+      observation: explanation,
       evidence_status: "partial"
     });
     await recordFixtureScreenshotGaps(run.runRoot);
@@ -266,10 +273,22 @@ test("UAT-04: permission layers aggregate menu pass plus direct/data fail to cas
   const root = await mkdtemp(path.join(os.tmpdir(), "uat-permission-"));
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await oneCase(root, ["菜单隐藏", "直链拒绝", "数据拒绝"]) });
+    const directFailure = reproducibleFailure({
+      operations: "使用普通用户直接打开管理 URL，失败发生在核对页面数据。",
+      expected: "直链拒绝",
+      actual: "页面仍展示管理数据，拒绝弹窗未出现",
+      difference: "普通用户直接访问管理 URL 后页面仍展示管理数据"
+    });
+    const dataFailure = reproducibleFailure({
+      operations: "使用普通用户请求管理数据，失败发生在核对响应。",
+      expected: "数据拒绝",
+      actual: "响应包含业务记录，拒绝提示未出现",
+      difference: "管理数据请求返回 200 且响应包含业务记录"
+    });
     for (const [oracle, result, reason] of [
       ["O1", "passed", "普通用户页面未显示管理菜单"],
-      ["O2", "failed", "普通用户直接访问管理 URL 后页面仍展示管理数据"],
-      ["O3", "failed", "管理数据请求返回 200 且响应包含业务记录"]
+      ["O2", "failed", directFailure],
+      ["O3", "failed", dataFailure]
     ]) {
       await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: `UAT-CASE/S1/${oracle}` });
       await recordEvent(run.runRoot, {

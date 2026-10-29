@@ -82,72 +82,38 @@ export function projectGCaseToRunnerCase(source, moduleName) {
 }
 
 /**
- * Project an already confirmed G Case Document and Execution Plan into the
- * R 2.0 input contract. This does not approve execution or inspect a site.
+ * Project every ordered case in a confirmed G Case Document into the R 2.0
+ * input contract. An execution plan does not add or remove cases.
  */
-export async function loadGCaseDocumentHandoff({ caseManifestPath, planManifestPath, gCompilerPath, suite }) {
-  if (!caseManifestPath || !planManifestPath || !gCompilerPath || !suite) {
-    fail('缺少 G 编译器、交付指针或已确认的测试套件');
+export async function loadGCaseDocumentHandoff({ caseManifestPath, planManifestPath: _ignoredPlanManifest, gCompilerPath, suite }) {
+  void _ignoredPlanManifest;
+  if (!caseManifestPath || !gCompilerPath || !suite) {
+    fail('缺少 G 编译器、Case Document 交付指针或已确认的测试套件');
   }
-  if (![caseManifestPath, planManifestPath].every(item =>
-    path.basename(item) === 'current.json' && path.basename(path.dirname(item)) === 'output')) {
+  if (!(path.basename(caseManifestPath) === 'current.json' && path.basename(path.dirname(caseManifestPath)) === 'output')) {
     fail('只能从 G 当前正式交付指针接入');
   }
-  // G owns the complete schema, semantic and delivery gates. Hash checks
-  // below are defense in depth; they alone cannot authorize a forged plan.
   let compiler;
   try { compiler = await import(pathToFileURL(path.resolve(gCompilerPath)).href); }
   catch { fail('无法加载具备只读交付校验入口的 G 编译器'); }
-  if (typeof compiler.verifyCaseDocumentDeliveryV4 !== 'function'
-    || typeof compiler.verifyExecutionPlanDeliveryV4 !== 'function') {
+  if (typeof compiler.verifyCaseDocumentDeliveryV4 !== 'function') {
     fail('G 编译器版本缺少正式交付校验入口');
   }
   const caseRoot = path.dirname(path.dirname(caseManifestPath));
-  const planRoot = path.dirname(path.dirname(planManifestPath));
   let verifiedCase;
-  let verifiedPlan;
   try {
     verifiedCase = await compiler.verifyCaseDocumentDeliveryV4(caseRoot);
-    verifiedPlan = await compiler.verifyExecutionPlanDeliveryV4(planRoot, {
-      resolve_case_document: async () => ({
-        manifest_bytes: await readFile(caseManifestPath, 'utf8'),
-        bundle_bytes: verifiedCase.artifacts.bundle
-      })
-    });
   } catch {
-    fail('G 官方 Case Document 或 Execution Plan 校验未通过');
+    fail('G 官方 Case Document 校验未通过');
   }
-  const [document, execution] = await Promise.all([
-    readCanonicalArtifact(caseManifestPath, 'bundle'),
-    readCanonicalArtifact(planManifestPath, 'execution_plan_artifact')
-  ]);
+  const document = await readCanonicalArtifact(caseManifestPath, 'bundle');
   if (!same(document.manifest, verifiedCase.manifest)
-    || !same(document.value, JSON.parse(verifiedCase.artifacts.bundle))
-    || !same(execution.manifest, verifiedPlan.manifest)
-    || !same(execution.value, verifiedPlan.execution_plan)) {
+    || !same(document.value, JSON.parse(verifiedCase.artifacts.bundle))) {
     fail('正式校验后交付材料发生变化');
   }
   const bundle = document.value;
-  const plan = execution.value;
-  if (document.manifest.delivery_intent !== 'case_document'
-    || bundle.delivery_intent !== 'case_document'
-    || execution.manifest.delivery_intent !== 'execution_plan'
-    || plan.delivery_intent !== 'execution_plan'
-    || plan.status !== 'finished' || plan.result_kind !== 'execution_ready'
-    || plan.runner_ready !== true || execution.manifest.runner_ready !== true) {
-    fail('没有已完成且可执行的正式执行清单');
-  }
-  const ref = plan.case_document_ref;
-  if (ref?.run_id !== document.manifest.run_id
-    || ref.revision !== document.manifest.revision
-    || ref.revision !== bundle.source_revision
-    || ref.manifest_digest !== hash(document.manifestBytes)
-    || ref.bundle_digest !== document.manifest.bundle.digest) fail('执行清单未绑定当前 Case Document');
-  if (!same(plan.runner_projection, execution.manifest.runner_projection)
-    || !Array.isArray(plan.runner_projection?.case_ids)
-    || plan.runner_projection.case_ids.length === 0
-    || plan.runner_projection.case_ids_digest !== hash(JSON.stringify(plan.runner_projection.case_ids))) {
-    fail('执行投影摘要或交付指针不一致');
+  if (document.manifest.delivery_intent !== 'case_document' || bundle.delivery_intent !== 'case_document') {
+    fail('Case Document 指针或摘要不合法');
   }
   if (!Array.isArray(bundle.ordered_case_ids) || !Array.isArray(bundle.cases)
     || !Array.isArray(bundle.scope_manifest?.modules)
@@ -157,25 +123,22 @@ export async function loadGCaseDocumentHandoff({ caseManifestPath, planManifestP
   }
   const caseById = new Map(bundle.cases.map(item => [item.case_id, item]));
   const moduleById = new Map(bundle.scope_manifest.modules.map(item => [item.module_id, item]));
-  const selected = new Set(plan.runner_projection.case_ids);
-  if (selected.size !== plan.runner_projection.case_ids.length
-    || !same(plan.runner_projection.case_ids, bundle.ordered_case_ids.filter(id => selected.has(id)))) {
-    fail('执行用例不符合原交付顺序');
-  }
-  const planItems = new Map(plan.items?.map(item => [item.case_id, item]) ?? []);
-  const cases = plan.runner_projection.case_ids.map(id => {
+  const cases = bundle.ordered_case_ids.map(id => {
     const source = caseById.get(id);
-    const item = planItems.get(id);
-    if (!source || source.semantic_status !== 'Grounded'
-      || item?.semantic_status !== 'Grounded' || item.disposition !== 'execute'
-      || item.ready !== true) {
-      fail(`用例 ${id} 未获正式执行确认`);
-    }
+    if (!source) fail(`用例 ${id} 不在 Case Document 中`);
     return projectGCaseToRunnerCase(source, moduleById.get(source.module_id)?.name);
   });
   const projected = {
     schema_version: '2.0',
-    suite: { ...structuredClone(suite), g_case_document_ref: structuredClone(ref) },
+    suite: {
+      ...structuredClone(suite),
+      g_case_document_ref: {
+        run_id: document.manifest.run_id,
+        revision: document.manifest.revision,
+        manifest_digest: hash(document.manifestBytes),
+        bundle_digest: document.manifest.bundle.digest
+      }
+    },
     cases
   };
   validateTestCases(projected);

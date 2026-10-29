@@ -14,11 +14,11 @@
 
 ### 两种独立授权
 
-同一批问题分别确认账号覆盖、Mock 决定、普通代理规则。`mock_policy` 和 `proxy_policy` 首次使用 `initial`，以后 `changed` / `revoked` 均引用同类最新 `previous_decision_ref`，来自用户明确决定。`proxy_policy.rules_sha256` 绑定实际规范化规则，规则变化须重新明确授权；`mock_policy` 只授权完整声明式模拟场景。
+同一批开跑前只确认尚未决定的登录、Mock 和代理，问句使用 workflow 里的三句原文。`mock_policy` 和 `proxy_policy` 首次使用 `initial`，以后 `changed` / `revoked` 均引用同类最新 `previous_decision_ref`，来自用户明确决定。`proxy_policy.rules_sha256` 绑定实际规范化规则，规则变化须重新明确授权；`mock_policy` 只授权完整声明式模拟场景。
 
 允许 Mock 且无其他普通代理规则时，不需要另行授权 Mock 使用的 Fetch。仅允许普通代理不允许合成业务数据：基础配置和 proxy_policy 必须明确 `purpose: environment_access` 并绑定原始规则摘要；用户确认的环境访问响应可含业务形状字段，不再用 non_business 标签决定授权。为具体用例生成测试状态必须走获准的完整 Mock 场景；不接受用普通 Response 阶段替换绕过授权或声称写入隔离。未回答、拒绝和撤回都不能继续对应修改，撤回需要安全清理后才能恢复真实业务。
 
-一个代理实例只精确绑定一个 `targetId`，通过浏览器 WebSocket 建立该 Target 的扁平 Session，只处理该 Session 的 `Fetch.requestPaused`。Fetch 不得在 BrowserContext 或整个 Chrome 上启用。先用 CDP pattern 缩小范围，再按 protocol、完整 hostname、URL pathname prefix 和标准化 method 精确匹配；重定向重新匹配。普通代理的不匹配流量原样继续；Mock 的保护范围内未知业务流量必须阻断，不能使用这条普通代理规则透传。即使其他页面请求完全相同的接口，也不得受影响。
+一个代理实例只精确绑定一个 `targetId`，通过浏览器 WebSocket 建立该 Target 的扁平 Session，只处理该 Session 的 `Fetch.requestPaused`。Fetch 不得在 BrowserContext 或整个 Chrome 上启用。先用 CDP pattern 缩小范围，再按 protocol、完整 hostname、URL pathname prefix 和标准化 method 精确匹配；重定向重新匹配。普通代理的不匹配流量原样继续。正式 Mock 场景里未命中 route 的请求也继续到达真实服务器；discovery 的未知请求仍阻断。命中的模拟路由用 `Fetch.fulfillRequest` 交回页面，不到达真实上游。即使其他页面请求完全相同的接口，也不得受影响。
 
 ## 配置
 
@@ -58,17 +58,17 @@ Body mode 还可使用 `{ "mode": "replace_text", "value": "..." }`、`{ "mode":
 
 可选 Mock 复用同一个单 Target 代理实例和锁，不启动第二个 Fetch 监听器。配置通过 `run_root` 与 `mock_scenario` 引用 Run 内场景文件：相对路径、SHA-256、`attempt_id`、状态文件和回执文件；还必须有本次 `proxy_cycle_id` 和引用已验证通道事实的 `mock_channel_coverage_ref`。start 会核对 `mock_fallback@1.0`、当前 `mock_policy: allowed`、running 尝试、Run/case/attempt 归属、候选/支持检查点、场景修订与哈希。路径穿越、符号链接、缺失/成对不一致的状态回执、未知版本或撤回授权均失败关闭。
 
-场景 schema 固定为 `mock-scenario-v1`。match 精确比较 origin（含有效端口）、pathname、method、解码后的 query 有序值数组以及 JSON body 的存在性、类型和值；缺失、空字符串、null、数字与字符串不同。额外 query/body 字段只有显式确认后才能忽略。不能用 HTTP 方法推断读写；POST 可以是查询，GET 也可能有副作用。多规则命中、未知业务请求、合成 ID 未覆盖的请求、模板/状态/持久化失败均在 Request 阶段 `failRequest`，绝不落入普通代理的错误透传。
+场景 schema 固定为 `mock-scenario-v1`。默认 match 精确比较 origin（含有效端口）、pathname、method、解码后的 query 有序值数组以及 JSON body 的存在性、类型和值；缺失、空字符串、null、数字与字符串不同。额外 query/body 字段只有显式 `ignore_unlisted_query` 或 `ignore_unlisted_body` 时才不参与区分，这不构成新接口。不能用 HTTP 方法推断读写；POST 可以是查询，GET 也可能有副作用。多规则命中、携带本次合成值、超过 5 MiB、模板/状态/持久化失败均在 Request 阶段 `failRequest`。正式场景没有命中任何 route 的请求返回 passthrough，由 `Fetch.continueRequest` 到达真实服务器。discovery 不走这条放行。
 
 命中规则时在临时状态副本执行受限 set/delete，生成并校验 JSON 或显式 text 响应，先可靠保存状态版本和去重回执并复核一致，再 `fulfillRequest`；整个流程不访问真实上游。相同 attempt + proxy cycle + Fetch request ID 只提交一次，新浏览器请求不擅自幂等。响应仍受 5 MiB 上限，超限阻断而非透传。规则增加只能发生在无在途事务的检查点边界，已使用 route 的语义不可原地改变；状态丢失或与账本版本不一致时不能假装从中间恢复。
 
-在绑定 Target 的 HTTP(S) Request 层建立完整保护范围，捕获未知 origin/path 后再作声明式分类；仅已知成功路由的窄 pattern 不构成完整隔离。静态资源等安全透传必须有事实来源，未知路由、多命中、额外字段、类型不符或未覆盖合成 ID 一律阻断；不能按 GET/POST 推断副作用。
+在绑定 Target 的 HTTP(S) Request 层处理请求。正式场景未命中 route 的请求继续到达真实服务器。多命中、携带本次合成值、超过 5 MiB 仍阻断。discovery 的未知请求仍阻断。不能按 GET/POST 推断副作用。
 
 模拟业务操作前必须通过 `mock_channel_coverage` 关联实际 `network_observation`、当前 Target/存储上下文、attempt 的上下文引用、场景哈希和每个路由。只接受实际观察到的 `page-http` 通道，不能填一个布尔值替代证据。存在 Service Worker、worker、子 Target 或其他未覆盖通道，或无法证明所有相关业务路由进入该会话时，拒绝场景并说明限制。保持单 Target 架构，不接管 worker 或另一个页面来凑覆盖；WebSocket/SSE/流式不支持。不为取证擅自派发真实写请求。
 
 状态与回执的分别原子写入不等于跨文件数据库事务：中间崩溃、版本或链条不一致必须阻断恢复，不能返回未可靠提交的成功。日志落后时，只能在完整核对 Run/attempt/revision/proxy cycle、状态与回执链后幂等补记已发生事实，不重放业务写入。合法模板仅在上下文和契约一致时复用，身份、环境或契约变化后重新核验；不同尝试的状态不得串用。
 
-本地计数 fixture 的验收必须证明模拟业务写请求的真实上游接收数为零，同时验证页面消费响应、写后读一致、未知请求阻断、另一个 Target 不受影响、刷新/导航和普通规则共存。实际业务报告只能陈述当前 Target 的请求前处理事实；没有服务端证据时不得扩大为整个后端绝无写入。
+本地计数 fixture 的验收必须证明命中模拟路由的业务写请求真实上游接收数为零，同时验证页面消费响应、写后读一致、未命中 route 的请求到达真实服务器、携带合成值的请求阻断、discovery 未知请求阻断、另一个 Target 不受影响、刷新/导航和普通规则共存。实际业务报告只能陈述当前 Target 的请求前处理事实；没有服务端证据时不得扩大为整个后端绝无写入。
 
 ## 生命周期
 

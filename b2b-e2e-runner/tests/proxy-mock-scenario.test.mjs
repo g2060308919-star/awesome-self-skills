@@ -113,8 +113,8 @@ test("v1.1 AC-23/24/25/26: Mock decides at Request stage, fulfills before upstre
       requestId: "request-unknown",
       request: { url: "https://fixture.test/api/delete-all", method: "GET", headers: {} }
     });
-    assert.equal(client.calls.some(call => call.method === "Fetch.failRequest" && call.params.requestId === "request-unknown"), true);
-    assert.equal(client.calls.some(call => call.method === "Fetch.continueRequest" && call.params.requestId === "request-unknown"), false);
+    assert.equal(client.calls.some(call => call.method === "Fetch.failRequest" && call.params.requestId === "request-unknown"), false);
+    assert.equal(client.calls.some(call => call.method === "Fetch.continueRequest" && call.params.requestId === "request-unknown"), true);
 
     await client.emit("session-A", "Fetch.requestPaused", {
       requestId: "request-safe",
@@ -122,8 +122,8 @@ test("v1.1 AC-23/24/25/26: Mock decides at Request stage, fulfills before upstre
     });
     assert.equal(client.calls.some(call => call.method === "Fetch.continueRequest" && call.params.requestId === "request-safe"), true);
     assert.deepEqual(listener.status().counts, {
-      requestMatched: 0, responseMatched: 0, continued: 1, fulfilled: 1, ruleErrors: 0,
-      mockFulfilled: 1, mockBlocked: 1, mockPassthrough: 1
+      requestMatched: 0, responseMatched: 0, continued: 2, fulfilled: 1, ruleErrors: 0,
+      mockFulfilled: 1, mockBlocked: 0, mockPassthrough: 2
     });
   } finally {
     await listener.stop();

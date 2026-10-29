@@ -126,7 +126,7 @@ function validateBodyMatcher(value, label) {
 }
 
 function compileMatch(value, label) {
-  rejectUnknown(value, new Set(["origin", "pathname", "method", "query", "ignored_query_keys", "body"]), label);
+  rejectUnknown(value, new Set(["origin", "pathname", "method", "query", "ignored_query_keys", "body", "ignore_unlisted_query", "ignore_unlisted_body"]), label);
   const compiled = structuredClone(value);
   compiled.origin = normalizeOrigin(value.origin, `${label}.origin`);
   requireValue(nonEmpty(value.pathname) && value.pathname.startsWith("/"), `${label}.pathname 必须是绝对路径`);
@@ -139,6 +139,10 @@ function compileMatch(value, label) {
   }
   strings(value.ignored_query_keys ?? [], `${label}.ignored_query_keys`, { empty: true });
   compiled.ignored_query_keys = [...(value.ignored_query_keys ?? [])];
+  if (value.ignore_unlisted_query !== undefined) requireValue(value.ignore_unlisted_query === true || value.ignore_unlisted_query === false, `${label}.ignore_unlisted_query 必须是布尔值`);
+  if (value.ignore_unlisted_body !== undefined) requireValue(value.ignore_unlisted_body === true || value.ignore_unlisted_body === false, `${label}.ignore_unlisted_body 必须是布尔值`);
+  compiled.ignore_unlisted_query = value.ignore_unlisted_query === true;
+  compiled.ignore_unlisted_body = value.ignore_unlisted_body === true;
   validateBodyMatcher(value.body, `${label}.body`);
   return compiled;
 }
@@ -278,8 +282,12 @@ function matchRequest(match, request, normalizedBody) {
   const actualQuery = queryValues(url);
   const actualKeys = Object.keys(actualQuery).filter(key => !ignored.has(key)).sort();
   const expectedKeys = Object.keys(match.query).sort();
-  if (!deepEqual(actualKeys, expectedKeys)) return false;
-  for (const key of expectedKeys) if (!deepEqual(actualQuery[key], match.query[key])) return false;
+  if (match.ignore_unlisted_query) {
+    for (const key of expectedKeys) if (!actualKeys.includes(key) || !deepEqual(actualQuery[key], match.query[key])) return false;
+  } else {
+    if (!deepEqual(actualKeys, expectedKeys)) return false;
+    for (const key of expectedKeys) if (!deepEqual(actualQuery[key], match.query[key])) return false;
+  }
   const declared = new Set(match.body.rules.map(rule => rule.pointer));
   const allowed = new Set(match.body.allowed_extra_pointers);
   for (const rule of match.body.rules) {
@@ -292,7 +300,7 @@ function matchRequest(match, request, normalizedBody) {
     if (Object.hasOwn(rule, "value") && !deepEqual(found.value, rule.value)) return false;
   }
   const extras = leafPointers(normalizedBody).filter(pointer => !declared.has(pointer) && !allowed.has(pointer));
-  return extras.length === 0;
+  return match.ignore_unlisted_body || extras.length === 0;
 }
 
 function renderTemplate(value, state, requestBody) {
@@ -399,17 +407,15 @@ export class MockScenarioEngine {
       if (matches.length === 0) {
         const safe = this.scenario.passthrough.filter(item => matchRequest(item.match, request, body));
         if (safe.length > 1) fail("MOCK_RULE_CONFLICT", "同一请求匹配多个安全透传条件");
-        if (safe.length === 1) {
-          const syntheticValues = [...new Set([
-            ...this.scenario.provenance.synthetic_values,
-            ...this.scenario.routes.flatMap(route => route.provenance.synthetic_values)
-          ])];
-          if (containsSyntheticValue(request, body, syntheticValues)) {
-            fail("MOCK_REQUEST_BLOCKED", "安全透传请求携带合成业务值，已阻止真实上游访问");
-          }
-          return { disposition: "passthrough", passthrough_id: safe[0].passthrough_id };
+        const syntheticValues = [...new Set([
+          ...this.scenario.provenance.synthetic_values,
+          ...this.scenario.routes.flatMap(route => route.provenance.synthetic_values)
+        ])];
+        if (containsSyntheticValue(request, body, syntheticValues)) {
+          fail("MOCK_REQUEST_BLOCKED", "安全透传请求携带合成业务值，已阻止真实上游访问");
         }
-        fail("MOCK_REQUEST_BLOCKED", "未知业务请求未获明确安全透传依据，已阻止真实上游访问");
+        if (safe.length === 1) return { disposition: "passthrough", passthrough_id: safe[0].passthrough_id };
+        return { disposition: "passthrough" };
       }
       const route = matches[0];
       const before = structuredClone(this.state);

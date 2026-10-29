@@ -11,6 +11,7 @@ import { validateProgressEvent, validateProgressLog, deriveExecutionProgress } f
 import { buildReportModel } from "../scripts/lib/report-model.mjs";
 import { renderChatTableMarkdown } from "../scripts/lib/report.mjs";
 import { buildHtmlReport } from "../scripts/lib/report-html.mjs";
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 
 const checkpointId = "CASE-1/s/o";
 const testCases = {
@@ -92,14 +93,20 @@ function addCompletedAttempt(log, result = "passed", { scenarioId = "scope-1", a
   const receipt = record({ type: "mock_observation", scenario_id: scenarioId, execution_id: execution.execution_id, attempt_id: attemptId, receipt_id: `receipt:${attemptId}`, route_id: "route-1", request_id: `request:${attemptId}`,
     disposition: "mocked", request_facts: ["GET /api/items matched exact route"], response_facts: ["200 with ITEM-1"],
     state_before_version: 0, state_after_version: 1, evidence_refs: [], proxy_cycle_ref: "proxy-cycle-1" });
-  const page = record({ type: "page_observation", ...bound, checkpoint_ids: [checkpointId], description: result === "passed" ? "组件夹具页面消费事实：显示 ITEM-1" : "组件夹具页面消费事实：未显示 ITEM-1" });
+  const failedExplanation = reproducibleFailure({
+    operations: "组件夹具实际触发详情页面导航，失败发生在观察详情。",
+    expected: "显示 ITEM-1",
+    actual: "组件夹具页面消费事实：未显示 ITEM-1，弹窗未出现",
+    difference: "Mock 前端链路不符合原预期"
+  });
+  const page = record({ type: "page_observation", ...bound, checkpoint_ids: [checkpointId], description: result === "passed" ? "组件夹具页面消费事实：显示 ITEM-1" : failedExplanation });
   const review = record({ type: "coverage_review", review_id: `mock-close:${attemptId}`, purpose: "checkpoint_close", plan_revision: 1,
     based_on_sequence: log.events.length, scope_ids: ["scope-1"], checkpoint_ids: [checkpointId], fact_refs: [receipt.sequence, page.sequence], assistance_refs: [],
     ready_scope_ids: ["scope-1"], preparable_scope_ids: [], blocked_scope_ids: [],
     closures: [{ checkpoint_id: checkpointId, closure_kind: "observed", basis_refs: [receipt.sequence, page.sequence] }],
     choice: "close", reason: "Mock 页面和请求事实足以判断前端原预期" });
   const outcome = record({ type: "mock_checkpoint", ...bound, action: "result", result,
-    observation: result === "passed" ? "前端显示 ITEM-1" : "前端未显示 ITEM-1", reason: result === "passed" ? "Mock 前端链路符合原预期" : "Mock 前端链路不符合原预期",
+    observation: result === "passed" ? "前端显示 ITEM-1" : "前端未显示 ITEM-1", reason: result === "passed" ? "Mock 前端链路符合原预期" : failedExplanation,
     evidence_refs: [], request_refs: [receipt.receipt_id], execution_refs: [receipt.sequence, page.sequence], page_observation_refs: [page.sequence], coverage_review_ref: review.sequence });
   const finished = record({ type: "mock_attempt", ...attempt, action: "finished", state_version: 1 });
   record({ type: "mock_disposition", candidate_id: candidateId, outcome: "supplemented", attempt_id: attemptId, basis_refs: [outcome.sequence, finished.sequence] });
@@ -114,8 +121,14 @@ function addRealFailure(log) {
   const preparation = record({ type: "scenario_preparation", ...identity, data_source: "real", permission_source: "real", context_refs: [context.sequence], fact_refs: [input.sequence] });
   record({ type: "checkpoint_started", ...identity, preparation_ref: preparation.sequence, context_refs: [context.sequence], scope_ids: ["scope-1"] });
   record({ type: "action_dispatched", ...identity, action_id: "real-open", side_effect: false, description: "实际导航打开详情" });
-  const page = record({ type: "page_observation", ...identity, checkpoint_ids: [checkpointId], description: "真实前端未显示正确记录" });
-  record({ type: "checkpoint_result", ...identity, preparation_ref: preparation.sequence, result: "failed", reason: "真实链路失败", execution_refs: [page.sequence] });
+  const explanation = reproducibleFailure({
+    operations: "实际导航打开详情，失败发生在观察记录。",
+    expected: "显示正确记录",
+    actual: "真实前端未显示正确记录，弹窗未出现，列表没有目标记录",
+    difference: "真实链路失败"
+  });
+  const page = record({ type: "page_observation", ...identity, checkpoint_ids: [checkpointId], description: explanation });
+  record({ type: "checkpoint_result", ...identity, preparation_ref: preparation.sequence, result: "failed", reason: explanation, execution_refs: [page.sequence] });
   log.cases[0].result = "failed";
   Object.assign(log.cases[0].checkpoints[0], { result: "failed", reason: "真实链路失败" });
 }

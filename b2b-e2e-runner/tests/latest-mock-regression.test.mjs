@@ -178,9 +178,9 @@ test("A18: unknown same-origin and cross-origin HTTP requests actually enter the
   const { client } = await listenerFixture(t);
   await client.request("unknown-same-origin", "https://fixture.test/api/unknown?synthetic_id=mock-1");
   await client.request("unknown-cross-origin", "https://another-fixture.test/api/unknown?synthetic_id=mock-1");
-  assert.deepEqual(client.upstream, [], "unknown requests must be intercepted before they can reach either upstream");
-  assert.deepEqual(client.calls.filter(call => call.method === "Fetch.failRequest").map(call => call.params.requestId),
+  assert.deepEqual(client.calls.filter(call => call.method === "Fetch.continueRequest").map(call => call.params.requestId),
     ["unknown-same-origin", "unknown-cross-origin"]);
+  assert.deepEqual(client.calls.filter(call => call.method === "Fetch.failRequest"), []);
 });
 
 test("A22: transport loss explicitly leaves isolation unknown rather than claiming cleanup", async t => {
@@ -442,12 +442,13 @@ test("A21: cleanup drains the in-flight mock transaction before disabling interc
 
 test("A15/A22: a failed CDP block command never falls through to real upstream", async t => {
   const { client, listener } = await listenerFixture(t);
+  listener.mockScenarioEngine.scenario.provenance.synthetic_values.push("blocked-token");
   const command = client.command.bind(client);
   client.command = async (method, ...args) => {
     if (method === "Fetch.failRequest") throw new Error("fixture CDP block rejected");
     return command(method, ...args);
   };
-  await client.request("cannot-block", "https://fixture.test/api/unknown");
+  await client.request("cannot-block", "https://fixture.test/api/unknown?value=blocked-token");
   assert.deepEqual(client.upstream, []);
   assert.equal(listener.status().isolation, "isolation_unknown");
 });

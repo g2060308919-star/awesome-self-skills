@@ -1,4 +1,5 @@
 import { deriveExecutionProgress, scenarioForEvent, freshContext } from "./execution-progress.mjs";
+import { interfaceIdentity, readJsonPointer, sameInterface } from "./mock-field-mapping.mjs";
 const MOCK_VERSION = "1.0";
 const ATTEMPT_ACTIONS = new Set(["started", "paused", "resumed", "scenario_updated", "finished", "aborted"]);
 const DISPOSITIONS = new Set(["supplemented", "unavailable", "stopped", "unsupported"]);
@@ -356,6 +357,36 @@ function validateDisposition(log, event) {
   }
 }
 
+function validateFieldMapping(log, event) {
+  rejectUnknown(event, new Set([
+    "type", "interface", "bindings", "source", "response_ref", "assistance_ref", "other_interface_results", "sequence", "at"
+  ]), "mock_field_mapping");
+  requireValue(policy(log) === "allowed", "字段对应关系只在允许 Mock 时记录");
+  const identity = interfaceIdentity(event.interface);
+  rejectUnknown(event.interface, new Set(["origin", "pathname", "method"]), "mock_field_mapping.interface");
+  requireValue(event.interface.origin === identity.origin && event.interface.pathname === identity.pathname && String(event.interface.method).toUpperCase() === identity.method, "mock_field_mapping.interface 无效");
+  requireValue(["observed", "user"].includes(event.source), "mock_field_mapping.source 无效");
+  requireValue(Number.isInteger(event.response_ref), "mock_field_mapping.response_ref 必须指向真实响应事件");
+  const responseEvent = eventAt(log, event.response_ref);
+  requireValue(responseEvent?.response_json && typeof responseEvent.response_json === "object" && !Array.isArray(responseEvent.response_json), "没有拿到响应正文时不得写字段对应关系");
+  requireValue(Array.isArray(event.bindings), "mock_field_mapping.bindings 必须是数组");
+  const seen = new Set();
+  for (const binding of event.bindings) {
+    rejectUnknown(binding, new Set(["page_result", "response_pointer"]), "mock_field_mapping.bindings");
+    requireValue(string(binding.page_result) && string(binding.response_pointer), "绑定缺少页面结果或 pointer");
+    requireValue(!seen.has(binding.page_result), "同一页面结果不能绑定两次");
+    seen.add(binding.page_result);
+    requireValue(readJsonPointer(responseEvent.response_json, binding.response_pointer).found, "response_pointer 必须存在于那次真实响应");
+  }
+  if (event.source === "user") {
+    requireValue(Number.isInteger(event.assistance_ref), "source 为 user 时必须引用协助事件");
+    requireValue(eventAt(log, event.assistance_ref)?.type === "assistance", "assistance_ref 必须指向协助事件");
+  } else requireValue(event.assistance_ref === undefined, "source 为 observed 时不得填写 assistance_ref");
+  if (event.other_interface_results !== undefined) strings(event.other_interface_results, "mock_field_mapping.other_interface_results", { empty: true });
+  const prior = (log.events ?? []).filter(item => item.type === "mock_field_mapping" && sameInterface(item.interface, identity));
+  requireValue(prior.length === 0, "一个接口只能写一次 mock_field_mapping");
+}
+
 function validateCompletion(log) {
   const state = stateBefore(log);
   const openCandidates = [...state.candidates.values()].filter(candidate => !candidate.outcome);
@@ -367,9 +398,10 @@ function validateCompletion(log) {
 }
 
 export function validateMockEvent(testCases, log, event) {
-  const mockTypes = new Set(["mock_policy", "mock_candidate", "mock_attempt", "mock_observation", "mock_checkpoint", "mock_disposition"]);
+  const mockTypes = new Set(["mock_policy", "mock_candidate", "mock_attempt", "mock_observation", "mock_checkpoint", "mock_disposition", "mock_field_mapping"]);
   if (mockTypes.has(event.type) && !mockExtension(log)) throw failure(`${event.type} 缺少 mock_fallback 扩展`);
   if (event.type === "mock_policy") return validatePolicy(log, event);
+  if (event.type === "mock_field_mapping") return validateFieldMapping(log, event);
   if (event.type === "data_gap") return validateDataGap(testCases, log, event);
   if (event.type === "mock_candidate") return validateCandidate(testCases, log, event);
   if (event.type === "mock_attempt") return validateAttempt(testCases, log, event);

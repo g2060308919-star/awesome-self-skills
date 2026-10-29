@@ -6,7 +6,7 @@
 
 `init` 排他创建 `<WORKSPACE_ROOT>/b2b-e2e-runs/<timestamp-random>/`，写入 `test-cases.json`、`execution-log.json` 和 `evidence/`。快照写入后以 SHA-256 固化；随后不得修改。源文件变化不影响 Run，重跑必须新建 Run。
 
-已经由 generate-test-cases 正式交付的 Case Document 与 Execution Plan 可使用现成 `g-case-document-handoff.mjs` 适配器，经 `init-g` 进入同一个当前流程。输入必须是两份 `output/current.json` 正式指针、对应 G 编译器路径和已有确认信息形成的 suite JSON；这些由 Runner 定位/整理，不新增用户前置填写流程。适配器先调用 G 的只读正式交付校验，再复核指针/产物摘要、版本配对、执行清单完成且 execution_ready、runner_ready、当前文档修订绑定、Grounded/execute/ready 和原顺序。固定测试值、来源声明、可替换约束、只读准备及原 Oracle 文字保留进不可变 R 快照。
+已经由 generate-test-cases 正式交付的 Case Document 可使用现成 `g-case-document-handoff.mjs` 适配器，经 `init-g` 进入同一个当前流程。输入是 Case Document 的 `output/current.json`、对应 G 编译器路径和已有确认信息形成的 suite JSON；这些由 Runner 定位/整理，不新增用户前置填写流程。`--plan-manifest` 可以省略，传入也不参与筛选。执行清单缺失、未完成、`runner_ready` 不为 true、`result_kind` 不是 `execution_ready`、修订不一致或 `runner_projection` 只含子集，都不能挡住交接或删掉用例。适配器调用 G 的 Case Document 只读正式交付校验，再复核指针、摘要、版本配对，以及 `ordered_case_ids` 与 `cases` 一一对应且顺序一致，然后按这个顺序投影全部用例。结构不完整的用例仍拒绝。固定测试值、来源声明、可替换约束、只读准备及原 Oracle 文字保留进不可变 R 快照。`init --cases` 仍使用文件里的全部用例，已有 `excluded` 预排除语义不变。
 
 G 的 schema/compiler 配对沿用已有适配器：4.0.0/0.5.0、4.2.0/0.7.0、4.3.0/0.8.0、4.3.1/0.8.1、4.3.2/0.8.2、4.3.3/0.8.3；本次未修改生成器或放宽其交付校验。纯投影函数只映射形状，不能取代 G 正式校验，也不授予业务执行权限。`init-g` 仍执行当前 Run 的账号、授权、覆盖和浏览器契约，不提供另一运行版本。
 
@@ -27,7 +27,7 @@ G 的 schema/compiler 配对沿用已有适配器：4.0.0/0.5.0、4.2.0/0.7.0、
 - `coverage_review` 绑定当前计划修订和事件边界；用于 switch、batch_end、wait、resume、checkpoint_close、final，逐项分类范围并用事实引用证明选择。`checkpoint_result` 增加 `execution_refs` 与 `coverage_review_ref`；开始事件增加 `scope_ids` 与 `context_refs`。
 - `data_gap` 记录真实 blocker/探索、缺失条件、已知请求事实和未开始步骤的依赖；`gap_kind` 为 `missing_data`、`preparation_blocked`、`permission_unavailable` 或 `interface_input_unavailable`，准备阻塞可引用实际 `preparation_adjustment`。普通 `undetermined` 可用 `data_gap_ref` 支撑未开始依赖步骤，不再伪造 `resolution_ref`，但必须保留探索引用、`not_attempted_reason` 且没有开放协作。
 
-Mock 层事件包括追加式可变更/可撤回的 `mock_policy`、从合法数据缺口派生的 `mock_candidate`、版本化 `mock_attempt`、去重请求事实 `mock_observation`、不覆盖原检查点的 `mock_checkpoint` 和候选收尾 `mock_disposition`。场景/状态/回执是运行资产，不是第二份产品结果；代理不得直接覆盖 `execution-log.json`，Runner 通过既有 `record` 导入。重复回执幂等，跨 Run、未知证据、过期上下文和无效顺序同时在 record 与重放校验中拒绝。
+Mock 层事件包括追加式可变更/可撤回的 `mock_policy`、从合法数据缺口派生的 `mock_candidate`、版本化 `mock_attempt`、去重请求事实 `mock_observation`、不覆盖原检查点的 `mock_checkpoint`、候选收尾 `mock_disposition`，以及每个接口只写一次的 `mock_field_mapping`。`mock_field_mapping` 含 `interface`（origin、pathname、method）、`bindings`（`page_result` 与真实响应里存在的 `response_pointer`）、`source`（`observed` 或 `user`）和 `response_ref`。`source` 为 `user` 时必须有 `assistance_ref`；`observed` 不填。没有响应正文不得写 observed 绑定。用户标明属于其他接口的页面结果可记在 `other_interface_results`，不进入 bindings。`checkpoint_result.mock_rule_gap` 只在 `result` 为 `undetermined` 且当前 `mock_policy` 为 `allowed` 时出现，并且必须为 true。场景/状态/回执是运行资产，不是第二份产品结果；代理不得直接覆盖 `execution-log.json`，Runner 通过既有 `record` 导入。重复回执幂等，跨 Run、未知证据、过期上下文和无效顺序同时在 record 与重放校验中拒绝。
 
 `mock_candidate` 必须填写 `assertion_domain: frontend|real_backend|real_permission` 与原断言依据 `assertion_basis`；已有 `checkpoint_semantics` 时分类必须匹配。`mock_checkpoint` 的 passed/failed 只允许 frontend 候选，并须有 `page_observation_refs` 引用同 attempt_id、checkpoint_ids 的实际页面观察；观察必须晚于本场景实际开始、触发和引用的关联回执，状态/回执不能代替页面消费证据。请求行为断言可以没有回执，必须有实际观察窗口；响应消费通过必须引用实际响应及后续页面事实。后台或权限专属断言不能由模拟升级为通过。
 
@@ -133,7 +133,7 @@ node <SKILL_ROOT>/scripts/browser-session.mjs bind --run <RUN_ROOT> --storage-co
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --workflow-profile b2b-e2e-current
 node <SKILL_ROOT>/scripts/run-artifacts.mjs init --workspace <WORKSPACE_ROOT> --cases <CASES_JSON> --mock-fallback allowed|declined
-node <SKILL_ROOT>/scripts/run-artifacts.mjs init-g --workspace <WORKSPACE_ROOT> --case-manifest <G_CASE_OUTPUT_CURRENT_JSON> --plan-manifest <G_PLAN_OUTPUT_CURRENT_JSON> --g-compiler <G_COMPILER_MJS> --suite <CONFIRMED_SUITE_JSON>
+node <SKILL_ROOT>/scripts/run-artifacts.mjs init-g --workspace <WORKSPACE_ROOT> --case-manifest <G_CASE_OUTPUT_CURRENT_JSON> --g-compiler <G_COMPILER_MJS> --suite <CONFIRMED_SUITE_JSON>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs record --run <RUN_ROOT> --event <EVENT_JSON>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs resume-check --run <RUN_ROOT>
 node <SKILL_ROOT>/scripts/run-artifacts.mjs validate --run <RUN_ROOT>

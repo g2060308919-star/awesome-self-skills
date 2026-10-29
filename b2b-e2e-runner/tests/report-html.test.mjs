@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 import { generateReport, initializeRun, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
 import { buildReportModel } from "../scripts/lib/report-model.mjs";
 
@@ -43,7 +44,12 @@ async function preparedRun(root) {
   }
   for (const [caseId, result, reason] of [
     ["HTML-PASS", "passed", "订单详情页显示订单号 ORD-42，满足原检查点"],
-    ["HTML-FAIL", "failed", "期望拒绝访问，实际账单页返回数据并显示金额"]
+    ["HTML-FAIL", "failed", reproducibleFailure({
+      operations: "打开账单页，失败发生在核对访问结果。",
+      expected: "拒绝访问",
+      actual: "账单页返回数据并显示金额，拒绝弹窗未出现",
+      difference: "期望拒绝访问，实际账单页返回数据并显示金额"
+    })]
   ]) {
     await recordEvent(run.runRoot, { type: "case_started", case_id: caseId });
     await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: `${caseId}/s/o` });
@@ -76,7 +82,7 @@ test("AC-19/20/21: HTML and chat use one ordered row/count model", async () => {
     assert.equal(model.permission.groups.find(group => group.group_id === "g-pass").verification, "verified");
     for (const row of model.rows) {
       assert.equal(html.includes(row.case_id), true, row.case_id);
-      assert.equal(html.includes(row.reason), true, row.reason);
+      assert.equal(html.includes(row.reason.replaceAll("\n", "<br>")), true, row.reason);
     }
     const chatRows = generated.chatTableMarkdown.split("\n").filter(row => /^\| TC-/.test(row));
     assert.equal(chatRows.length, 4);

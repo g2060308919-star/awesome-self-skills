@@ -6,6 +6,7 @@ import path from 'node:path';
 import {initializeFixtureRun,recordFixtureEvent,fixtureState} from './test-helpers.mjs';
 import {recordEvent,validateRun,generateReport,resumeCheck} from '../scripts/run-artifacts.mjs';
 import {buildReportModel} from '../scripts/lib/report-model.mjs';
+import {reproducibleFailure} from '../scripts/lib/failed-explanation.mjs';
 import {renderChatTableMarkdown} from '../scripts/lib/report.mjs';
 async function fixture(t) {
  const root=await mkdtemp(path.join(os.tmpdir(),'latest-results-')); t.after(()=>rm(root,{recursive:true,force:true}));
@@ -18,7 +19,7 @@ async function fixture(t) {
 test('A24–A27/A33: failed upload preserved, independent ID passes after scoped preparation; report shares exact rows and provenance',async t=>{
  const run=await fixture(t); const cp='COMBINED/s/upload';
  await recordFixtureEvent(run.runRoot,{type:'checkpoint_started',checkpoint_id:cp});
- await recordFixtureEvent(run.runRoot,{type:'checkpoint_result',checkpoint_id:cp,result:'failed',reason:'750x360100000-byte and4000000-byte images rejected',evidence_status:'missing'});
+ await recordFixtureEvent(run.runRoot,{type:'checkpoint_result',checkpoint_id:cp,result:'failed',reason:reproducibleFailure({operations:'上传原图，失败发生在校验图片。',expected:'Accept750x360 image and4MB',actual:'页面拒绝了这两张图片，列表没有新记录',difference:'750x360100000-byte and4000000-byte images rejected'}),evidence_status:'missing'});
  const fact=await recordEvent(run.runRoot,{type:'page_observation',checkpoint_ids:['COMBINED/s/id','ID/s/id'],description:'Component fixture: accepted750x600100000-byte preparation is available; screenshot absent in this component test'});
  await recordEvent(run.runRoot,{type:'preparation_adjustment',adjustment_id:'image',checkpoint_ids:['COMBINED/s/id','ID/s/id'],classification:'preparation',original:{width:750,height:360,bytes:100000},replacement:{width:750,height:600,bytes:100000},basis_refs:[fact.sequence],unchanged_goal_reason:'Both ID assertions depend on real save, not image dimensions or fixed asset identity',support_scope:'ID checkpoints only; upload assertion remains failed',verification_refs:[fact.sequence]});
  for(const checkpoint_id of ['COMBINED/s/id','ID/s/id']) {

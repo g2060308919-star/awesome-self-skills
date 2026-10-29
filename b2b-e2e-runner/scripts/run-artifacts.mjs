@@ -665,7 +665,14 @@ export async function deliverReport(runRoot, { stageRequested = false } = {}) {
     return { deliverable: false, runId: log.run.run_id, delivery,
       nextAction: "仅说明当前进度、阻塞与需要用户完成的动作；继续保存内部阶段产物" };
   }
-  return { deliverable: true, ...await generateReport(runRoot) };
+  const generated = await generateReport(runRoot);
+  if (generated.undeliverableFailureCount > 0) {
+    return {
+      deliverable: false, runId: generated.runId, delivery: generated.delivery,
+      nextAction: "未通过原因缺少实际操作顺序、预期与页面实际表现或差异，不能作为可交付的未通过"
+    };
+  }
+  return { deliverable: true, ...generated };
 }
 
 export async function generateReport(runRoot) {
@@ -696,6 +703,7 @@ export async function generateReport(runRoot) {
       lastSequence: log.events.at(-1)?.sequence ?? 0,
       delivery: reportDelivery(log),
       counts: model.counts,
+      undeliverableFailureCount: model.rows.filter(row => row.result === "failed" && row.failure_deliverable === false).length,
       runId: log.run.run_id
   };
 }

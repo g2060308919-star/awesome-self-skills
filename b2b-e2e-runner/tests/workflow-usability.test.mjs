@@ -5,7 +5,8 @@ const read = name => readFile(new URL(`../${name}`, import.meta.url), "utf8");
 
 test("preflight separates ordinary login from special permissions and accepts a natural reply", async () => {
   const workflow = await read("references/workflow.md");
-  for (const text of ["不创建“通用配置账号”", "现在能用", "之后准备", "本次提供不了", "例如可以这样回复", "role_independent_case_ids", "没有特殊权限组"]) assert.ok(workflow.includes(text), text);
+  for (const text of ["不创建“通用配置账号”", "role_independent_case_ids", "没有特殊权限组", "请在这个测试浏览器里完成登录", "有些用例要看的数据或页面状态", "打开测试环境时，要不要走代理"]) assert.ok(workflow.includes(text), text);
+  for (const text of ["现在能用", "之后准备", "本次提供不了", "例如可以这样回复", "需要测试的操作 | 需要的权限或角色 | 涉及用例"]) assert.equal(workflow.includes(text), false, text);
   assert.ok(!workflow.includes("没有任何已就绪权限组时不得初始化正式 Run；提示先准备至少一个组"));
 });
 

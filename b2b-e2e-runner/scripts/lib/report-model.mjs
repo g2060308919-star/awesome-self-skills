@@ -1,4 +1,5 @@
 import { deriveExecutionProgress } from "./execution-progress.mjs";
+import { renderFailureExplanation } from "./failed-explanation.mjs";
 import { executionProvenance } from "./execution-facts.mjs";
 import { derivePermissionState } from "./permission-batches.mjs";
 import { deriveMockState, projectEffectiveResults } from "./mock-fallback.mjs";
@@ -348,6 +349,13 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
   const effectiveReason = projection?.source === "mock"
     ? `Mock 前端补测：${projection.reason}`
     : (projection?.reason ?? state.reason ?? "缺少必要检查点结果，无法确定");
+  const suffix = `${controlsUsed ? "；含模拟或控制影响（不证明写入隔离）" : ""}${provenance.adjustments.length ? "；准备数据调整后继续原断言验证" : ""}${provenance.supplementary.length ? "；另有补充观察（不覆盖原结果）" : ""}`;
+  const failed = (projection?.effective_result ?? state.result) === "failed";
+  const renderedFailure = failed ? renderFailureExplanation(effectiveReason) : null;
+  const reason = renderedFailure ? `${renderedFailure.text}${suffix}` : `${effectiveReason}${suffix}`;
+  if (renderedFailure) {
+    for (const step of steps) for (const item of step.expected) if (item.result === "failed") item.reason = reason;
+  }
   return {
     anchor: `case-${caseIndex + 1}`,
     display_id: displayId(caseIndex),
@@ -360,7 +368,8 @@ function buildCaseDetail(testCase, state, caseIndex, evidence, executionLog, per
     real_result: state.result,
     real_result_label: resultLabels[state.result],
     result_source: projection?.source ?? "real",
-    reason: `${effectiveReason}${controlsUsed ? "；含模拟或控制影响（不证明写入隔离）" : ""}${provenance.adjustments.length ? "；准备数据调整后继续原断言验证" : ""}${provenance.supplementary.length ? "；另有补充观察（不覆盖原结果）" : ""}`,
+    reason,
+    failure_deliverable: renderedFailure ? renderedFailure.deliverable : true,
     execution_complete: projection?.complete ?? false,
     provenance,
     steps,
@@ -393,7 +402,8 @@ export function buildReportModel(testCases, executionLog) {
     result_label: detail.result_label,
     real_result: detail.real_result,
     result_source: detail.result_source,
-    reason: detail.reason
+    reason: detail.reason,
+    failure_deliverable: detail.failure_deliverable
   }));
   const counts = { passed: 0, failed: 0, undetermined: 0, not_executed: 0 };
   for (const row of rows) counts[row.result] += 1;

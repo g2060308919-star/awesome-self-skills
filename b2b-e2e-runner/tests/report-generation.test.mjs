@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 import {
   generateReport,
   validateRun
@@ -55,9 +56,15 @@ test("AC-007/008/009/15: report exposes the complete ordered five-column table f
   const root = await mkdtemp(path.join(os.tmpdir(), "report-test-"));
   try {
     const run = await initializeRun({ workspaceRoot: root, casesPath: await fixtureCases(root) });
+    const failedReason = reproducibleFailure({
+      operations: "打开权限页面，失败发生在核对返回数据。",
+      expected: "权限不足时不展示数据",
+      actual: "权限页面实际返回 200 并展示数据，弹窗未出现",
+      difference: "权限页面实际返回 200 并展示数据"
+    });
     for (const [checkpoint_id, result, reason] of [
       ["R-01/s1/o1", "passed", "页面显示严格文案"],
-      ["R-02/s1/o1", "failed", "权限页面实际返回 200 并展示数据"],
+      ["R-02/s1/o1", "failed", failedReason],
       ["R-03/s1/o1", "undetermined", "10 个不同结果页均无动态样本"]
     ]) {
       await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id });
@@ -91,7 +98,7 @@ test("AC-007/008/009/15: report exposes the complete ordered five-column table f
       "| ID | 模块 | 测试场景 | 测试结果 | 成功/失败的原因 |",
       "|---|---|---|---|---|",
       "| TC-001 | 订单 | 通过场景 | 通过 | 页面显示严格文案 |",
-      "| TC-002 | 权限 | 失败场景 | 未通过 | 权限页面实际返回 200 并展示数据 |",
+      `| TC-002 | 权限 | 失败场景 | 未通过 | ${failedReason.replaceAll("\n", "<br>")} |`,
       "| TC-003 | 数据 | 无法确定场景 | 无法确定 | 10 个不同结果页均无动态样本 |",
       "| TC-004 | 范围 | 未执行场景 | 未执行 | 整条用例在正式执行前已明确排除 |"
     ]);

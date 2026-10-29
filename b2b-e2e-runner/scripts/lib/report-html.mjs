@@ -179,12 +179,16 @@ function permissionChips(detail) {
   }).join("")}</div>`;
 }
 
+function reasonHtml(value) {
+  return escapeHtml(value).replaceAll("\n", "<br>");
+}
+
 function caseDetail(detail) {
   const steps = detail.steps.map((step, stepIndex) => `<li class="step-item"><span class="step-number" aria-hidden="true">${stepIndex + 1}</span><div class="step-content"><p class="step-source">原步骤 ${escapeHtml(step.step_id)}</p><h4>${escapeHtml(step.action)}</h4>` +
     `<div class="expectation-list">${step.expected.map(item => `<article class="expectation"><p class="oracle-id">检查点 ${escapeHtml(item.oracle_id)}</p>` +
       `<div class="comparison"><div class="comparison-row expected"><span>预期结果</span><p>${escapeHtml(item.text)}</p></div>` +
       `<div class="comparison-row observed"><span>实际观察</span><div>${list(item.observations)}</div></div></div>` +
-      `<dl class="checkpoint-meta"><dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${escapeHtml(item.reason)}</dd>` +
+      `<dl class="checkpoint-meta"><dt>检查结果</dt><dd>${escapeHtml(item.result_label)}</dd><dt>结果原因</dt><dd>${reasonHtml(item.reason)}</dd>` +
       `<dt>证据状态</dt><dd>${escapeHtml(item.evidence_status_label)}</dd><dt>验证来源</dt><dd>${escapeHtml(item.verification_source_label)}：${escapeHtml(item.verification_source_description)}</dd><dt>阻塞</dt><dd>${escapeHtml(item.blocker)}</dd></dl>` +
       `<p>执行完整性：${item.execution_complete ? "必测场景已处理完整" : "仍有未完成场景"}</p>` +
       ((item.scenarios ?? []).length ? `<ul>${item.scenarios.map(scene => `<li>${escapeHtml(scene.scenario_id)}：${escapeHtml(scene.reason)}；数据输入 ${escapeHtml(scene.data_source ?? "未准备")}，权限输入 ${escapeHtml(scene.permission_source ?? "未准备")}；${scene.complete ? "已处理" : "未完成"}${scene.permission_source === "mock" ? "（仅模拟前端权限，不证明服务端授权）" : ""}</li>`).join("")}</ul>` : "") +
@@ -214,7 +218,7 @@ function caseDetail(detail) {
   const preparation = provenance.adjustments.map(item => `<article><h4>准备数据调整</h4><p>原值：${escapeHtml(JSON.stringify(item.original))}</p><p>替代值：${escapeHtml(JSON.stringify(item.replacement))}</p><p>依据事件：${escapeHtml(item.basis_refs.join("、"))}；实际验证事件：${escapeHtml(item.verification_refs.join("、"))}</p><p>${escapeHtml(item.unchanged_goal_reason)}；支持范围：${escapeHtml(item.support_scope)}</p></article>`).join("");
   const supplementary = provenance.supplementary.map(item => `<p>${escapeHtml(item.attempt_id)} · ${escapeHtml(item.source)} · ${escapeHtml(item.description)} · ${escapeHtml(item.result ?? item.phase)}（不覆盖原结果）</p>`).join("");
   const forms = provenance.forms.map(item => `<p>${escapeHtml(item.control_kind)} / ${escapeHtml(item.stage)} / ${escapeHtml(item.method)}：${escapeHtml(item.description)}${item.actual_value !== undefined ? `；可见回读：${escapeHtml(JSON.stringify(item.actual_value))}` : ""}</p>`).join("");
-  return `<div class="case-detail"><section class="detail-outcome ${escapeHtml(detail.result)}"><div class="outcome-heading"><span class="status ${escapeHtml(detail.result)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(detail.result_label)}</span><strong>${escapeHtml(detail.title)}</strong></div><p>${escapeHtml(detail.reason)}</p></section>` +
+  return `<div class="case-detail"><section class="detail-outcome ${escapeHtml(detail.result)}"><div class="outcome-heading"><span class="status ${escapeHtml(detail.result)}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(detail.result_label)}</span><strong>${escapeHtml(detail.title)}</strong></div><p>${reasonHtml(detail.reason)}</p></section>` +
     `<div class="detail-context"><span class="context-chip neutral-chip">${escapeHtml(detail.display_id)}</span><span class="context-chip neutral-chip">模块 · ${escapeHtml(detail.module)}</span>${permissionChips(detail)}</div>` +
     `<details class="full-id"><summary>查看完整原始用例 ID</summary><p>${escapeHtml(detail.case_id)}</p></details>` +
     `<div class="detail-flow"><section class="detail-section"><h3>测试前提</h3>${list(detail.preconditions)}</section>` +
@@ -300,7 +304,7 @@ function buildCurrentHtmlReport(model) {
   const cspHash = crypto.createHash("sha256").update(REPORT_SCRIPT).digest("base64");
   const rows = model.rows.map((row, index) => `<tr class="case-row" data-result="${escapeHtml(row.result)}"${index >= PAGE_SIZE ? " hidden" : ""}><td>${escapeHtml(row.display_id)}</td>` +
     `<td>${escapeHtml(row.module)}</td><td>${escapeHtml(row.title)}</td><td><span class="status ${row.result}"><span class="status-dot" aria-hidden="true"></span>${escapeHtml(row.result_label)}</span></td>` +
-    `<td>${escapeHtml(row.reason)}</td><td><button class="view-button" type="button" aria-label="查看 ${escapeHtml(row.display_id)} 的用例详情" data-open-case="${index}" data-dialog-title="${escapeHtml(`${row.display_id} · ${row.title}`)}">查看</button></td></tr>`).join("");
+    `<td>${reasonHtml(row.reason)}</td><td><button class="view-button" type="button" aria-label="查看 ${escapeHtml(row.display_id)} 的用例详情" data-open-case="${index}" data-dialog-title="${escapeHtml(`${row.display_id} · ${row.title}`)}">查看</button></td></tr>`).join("");
   const templates = model.case_details.map((detail, index) => `<template data-case-detail="${index}">${caseDetail(detail)}</template>`).join("");
   const overview = [
     ["用例总数", model.overview.total, "total"], ["通过数量", model.counts.passed, "passed"], ["失败数量", model.counts.failed, "failed"],

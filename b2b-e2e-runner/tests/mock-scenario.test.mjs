@@ -95,8 +95,7 @@ test("v1.1 AC-15/16/17: origin/path/method/query arrays and JSON body types matc
     request("https://fixture.example.test/api/orders?tenant=north&tag=a&tag=b", "POST", { quantity: 1, name: "x", extra: true }),
     request("https://fixture.example.test/api/orders/?tenant=north&tag=a&tag=b", "POST", { quantity: 1, name: "x" })
   ]) {
-    await assert.rejects(engine.handle(invalid, { proxy_cycle_id: "cycle-1", request_id: crypto.randomUUID() }), error =>
-      error.code === "MOCK_REQUEST_BLOCKED");
+    assert.deepEqual(await engine.handle(invalid, { proxy_cycle_id: "cycle-1", request_id: crypto.randomUUID() }), { disposition: "passthrough" });
   }
 });
 
@@ -112,12 +111,15 @@ test("v1.1 AC-18/24/25: ambiguous or unknown business traffic fails closed; only
   assert.deepEqual(await engine.handle(request("https://fixture.example.test/api/config"), {
     proxy_cycle_id: "cycle-1", request_id: "request-safe"
   }), { disposition: "passthrough", passthrough_id: "safe-config" });
-  await assert.rejects(engine.handle(request("https://fixture.example.test/api/delete-all", "GET"), {
+  assert.deepEqual(await engine.handle(request("https://fixture.example.test/api/delete-all", "GET"), {
     proxy_cycle_id: "cycle-1", request_id: "request-unknown-get"
-  }), error => error.code === "MOCK_REQUEST_BLOCKED", "a mutating GET cannot be inferred safe from its verb");
-  await assert.rejects(engine.handle(request("https://fixture.example.test/api/query", "POST", {}), {
+  }), { disposition: "passthrough" }, "an unmatched request reaches the real server");
+  assert.deepEqual(await engine.handle(request("https://fixture.example.test/api/query", "POST", {}), {
     proxy_cycle_id: "cycle-1", request_id: "request-unknown-post"
-  }), error => error.code === "MOCK_REQUEST_BLOCKED", "a query POST cannot be inferred write-only from its verb");
+  }), { disposition: "passthrough" }, "an unmatched query also reaches the real server");
+  await assert.rejects(engine.handle(request("https://fixture.example.test/api/delete-all?id=ORDER-1", "GET"), {
+    proxy_cycle_id: "cycle-1", request_id: "request-synthetic-unknown"
+  }), error => error.code === "MOCK_REQUEST_BLOCKED", "synthetic values still never reach the real server");
 
   const syntheticPassthrough = scenario();
   syntheticPassthrough.passthrough[0].match.query = { id: ["ORDER-1"] };

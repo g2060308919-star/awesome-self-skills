@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import * as runtime from "../scripts/run-artifacts.mjs";
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 import { CURRENT_WORKFLOW } from "../scripts/lib/workflow-contract.mjs";
 import { fixtureState, recordFixtureEvent, recordFixtureScreenshotGaps } from "./test-helpers.mjs";
 
@@ -169,10 +170,19 @@ async function prepareScenario(runRoot, scenarioId, { batchId = "general", mock 
   return execution;
 }
 
-async function observeScenario(runRoot, execution) {
+function failedExplanation(difference, expected = "显示目标详情") {
+  return reproducibleFailure({
+    operations: "组件夹具导航实际触发该输入的详情展示，失败发生在观察详情。",
+    expected,
+    actual: "页面没有出现预期内容，弹窗未打开，列表没有目标记录",
+    difference
+  });
+}
+
+async function observeScenario(runRoot, execution, description) {
   const actionId = `action:${execution.scenario_id}`;
   await runtime.recordEvent(runRoot, { type: "action_dispatched", ...execution, action_id: actionId, side_effect: false, description: "组件夹具导航实际触发该输入的详情展示" });
-  return runtime.recordEvent(runRoot, { type: "page_observation", ...execution, checkpoint_ids: ["FIRST/s/o"], action_id: actionId, description: `组件夹具页面观察 ${execution.scenario_id}` });
+  return runtime.recordEvent(runRoot, { type: "page_observation", ...execution, checkpoint_ids: ["FIRST/s/o"], action_id: actionId, description: description ?? `组件夹具页面观察 ${execution.scenario_id}` });
 }
 
 async function scenarioResult(runRoot, execution, observation, result) {
@@ -180,14 +190,14 @@ async function scenarioResult(runRoot, execution, observation, result) {
   const review = await runtime.recordEvent(runRoot, { type: "coverage_review", review_id: `scenario-close:${log.events.length}`, purpose: "checkpoint_close", plan_revision: 1,
     based_on_sequence: log.events.length, scope_ids: ["scope:FIRST"], checkpoint_ids: ["FIRST/s/o"], fact_refs: [observation.sequence], assistance_refs: [], ready_scope_ids: ["scope:FIRST"], preparable_scope_ids: [], blocked_scope_ids: [],
     closures: [{ checkpoint_id: "FIRST/s/o", closure_kind: "observed", basis_refs: [observation.sequence] }], choice: "close", reason: "只关闭已触发和观察的当前场景，不省略同 expected 另一分支" });
-  return runtime.recordEvent(runRoot, { type: "checkpoint_result", ...execution, result, reason: result === "failed" ? "原非空名称展示断言失败" : "空名称占位文案符合原断言",
+  return runtime.recordEvent(runRoot, { type: "checkpoint_result", ...execution, result, reason: result === "failed" ? failedExplanation("原非空名称展示断言失败", "原非空名称") : "空名称占位文案符合原断言",
     observation: `页面事实属于 ${execution.scenario_id}`, evidence_status: "missing", execution_refs: [observation.sequence], coverage_review_ref: review.sequence });
 }
 
 test("AC10/19: first required scenario failure preserves failure without completing or blocking the remaining branch", async t => {
   const run = await setup(t, { multiScenario: true });
   const first = await prepareScenario(run.runRoot, "with-name");
-  await scenarioResult(run.runRoot, first, await observeScenario(run.runRoot, first), "failed");
+  await scenarioResult(run.runRoot, first, await observeScenario(run.runRoot, first, failedExplanation("原非空名称展示断言失败", "原非空名称")), "failed");
   await assert.rejects(recordFixtureEvent(run.runRoot, { type: "run_state", status: "completed" }), /场景|覆盖|未完成|未执行/);
   const second = await prepareScenario(run.runRoot, "empty-name");
   await scenarioResult(run.runRoot, second, await observeScenario(run.runRoot, second), "passed");
@@ -218,7 +228,7 @@ async function mockResult(runRoot, execution, page, { requestObservation, result
   const review = await runtime.recordEvent(runRoot, { type: "coverage_review", review_id: `mock-result:${log.events.length}`, purpose: "checkpoint_close", plan_revision: 1,
     based_on_sequence: log.events.length, scope_ids: ["scope:FIRST"], checkpoint_ids: ["FIRST/s/o"], fact_refs: refs, assistance_refs: [], ready_scope_ids: ["scope:FIRST"], preparable_scope_ids: [], blocked_scope_ids: [],
     closures: [{ checkpoint_id: "FIRST/s/o", closure_kind: "observed", basis_refs: refs }], choice: "close", reason: "依据当前场景操作与页面事实判断，不以 Mock 命中作为前提" });
-  return runtime.recordEvent(runRoot, { type: "mock_checkpoint", ...execution, action: "result", result, reason: "按原前端预期判断", observation: "当前场景前端实际观察",
+  return runtime.recordEvent(runRoot, { type: "mock_checkpoint", ...execution, action: "result", result, reason: result === "failed" ? failedExplanation("按原前端预期判断") : "按原前端预期判断", observation: "当前场景前端实际观察",
     evidence_refs: [], request_refs: [], page_observation_refs: [page.sequence], execution_refs: refs, coverage_review_ref: review.sequence });
 }
 
@@ -284,7 +294,7 @@ test("AC14: unavailable real permission remains unavailable while independently 
   const context = await permissionMockContext(run.runRoot);
   await startMockAttempt(run.runRoot, context.context_refs);
   const execution = await prepareScenario(run.runRoot, "scope:FIRST", { batchId: "g1", permissionRef: context.permissionRef, context });
-  const page = await observeScenario(run.runRoot, execution);
+  const page = await observeScenario(run.runRoot, execution, failedExplanation("按原前端预期判断"));
   await mockResult(run.runRoot, execution, page, { result: "failed" });
   await runtime.validateRun(run.runRoot, { checkReport: false });
   const { log } = await fixtureState(run.runRoot);

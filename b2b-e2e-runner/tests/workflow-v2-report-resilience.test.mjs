@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { generateReport, initializeRun, resumeCheck, validateRun } from "../scripts/run-artifacts.mjs";
+import { reproducibleFailure } from "../scripts/lib/failed-explanation.mjs";
 
 async function writeCases(root, count = 1, { hostile = false } = {}) {
   const casesPath = path.join(root, "cases.json");
@@ -153,9 +154,15 @@ test("AC-10/25/29: a stage report stays pending and same-Run recovery preserves 
     await recordEvent(run.runRoot, { type: "run_state", status: "running" });
     await recordEvent(run.runRoot, { type: "case_started", case_id: "CASE-1" });
     await recordEvent(run.runRoot, { type: "checkpoint_started", checkpoint_id: "CASE-1/s/o" });
+    const explanation = reproducibleFailure({
+      operations: "打开目标页面并核对事实，失败发生在观察目标事实。",
+      expected: "显示目标事实",
+      actual: "页面没有显示目标事实，弹窗未出现",
+      difference: "上下文正确，但页面实际未显示目标事实"
+    });
     await recordEvent(run.runRoot, {
       type: "checkpoint_result", checkpoint_id: "CASE-1/s/o", result: "failed",
-      reason: "上下文正确，但页面实际未显示目标事实", observation: "页面显示与原预期不一致", evidence_status: "missing"
+      reason: explanation, observation: explanation, evidence_status: "missing"
     });
     await recordEvent(run.runRoot, {
       type: "evidence_capture", checkpoint_ids: ["CASE-1/s/o"], capture_kind: "screenshot", outcome: "unavailable",
