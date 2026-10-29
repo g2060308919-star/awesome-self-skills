@@ -13,8 +13,8 @@ const REVIEW_DIGEST = `sha256:${'9'.repeat(64)}`;
 
 function summaryFixture() {
   const input = candidateDeliveryInput();
-  input.bundle.schema_version = '4.3.0';
-  input.bundle.compiler_version = '0.8.0';
+  input.bundle.schema_version = '4.3.3';
+  input.bundle.compiler_version = '0.8.3';
   input.bundle.design_assurance_summary = {
     status: 'complete', plan_revision: 3, batch_count: 2, rule_group_count: 4,
     candidate_responsibility_count: 5,

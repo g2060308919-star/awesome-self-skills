@@ -31,7 +31,7 @@ const common = {
   run_id: 'RUN-v4', produced_artifacts: [], non_blocking_diagnostics: []
 };
 const semanticPresentation = {
-  schema_version: '4.0.0', presentation_id: `PRES-${'1'.repeat(64)}`,
+  schema_version: '4.3.3', presentation_id: `PRES-${'1'.repeat(64)}`,
   phase: 'requirements_analysis', supersedes_presentation_id: null,
   answered_part_ids: [], remaining_part_ids: [`QP-${'2'.repeat(64)}`],
   cycle_digest: `sha256:${'3'.repeat(64)}`, run_actions: ['cancel_run'],
@@ -72,7 +72,7 @@ const replies = {
   },
   need_revision: {
     ...common, status: 'need_revision', phase: 'case_design',
-    stage: 'case_drafts', schema_ref: 'case-drafts.schema.json', source_revision: 2,
+    stage: 'behavior_views', schema_ref: 'behavior-views.schema.json', source_revision: 2,
     artifact_path: '/tmp/run/staging/case-drafts.json', artifact_digest: '7'.repeat(64),
     diagnostics: [{
       category: 'schema', code: 'CASE_DRAFT_INVALID', path: '/cases/0',

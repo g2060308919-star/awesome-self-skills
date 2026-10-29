@@ -18,10 +18,10 @@ function baseCheckpoint() {
     ['ip', '评价列表包含 IP 列'],
     ['empty', '评价列表展示可为空的评价字段'],
     ['sort', '评价列表支持排序']
-  ].map(([id, statement]) => ({ fact_id: `FACT-${id}`, statement, claim_ids: [`CLM-${id}`] }));
+  ].map(([id, statement]) => ({ status: 'ambiguous', fact_id: `FACT-${id}`, statement, claim_ids: [`CLM-${id}`] }));
   /** @param {string} id @param {string} missingAspect @param {string} question @param {string[]} options @param {string} [risk] */
   const issue = (id, missingAspect, question, options, risk = 'high') => ({
-    category: 'semantic_gap', code: `${id.toUpperCase()}_UNRESOLVED`, subject_fact_ids: [`FACT-${id}`],
+    category: 'semantic_gap', acceptance_impact: { classification: 'noncritical', criteria: ['does_not_change_required_acceptance'], rationale: '本协议夹具将该展示附项列为非核心，验证保留的 Conditional/暂定处理；关键缺口另有专门反例。' }, code: `${id.toUpperCase()}_UNRESOLVED`, subject_fact_ids: [`FACT-${id}`],
     missing_aspect: missingAspect, scope_ref: `review.${id}`, question,
     why_needed: `需要明确${question}`, decision_impact: `答案决定 ${id} 的测试预期。`,
     unresolved_outcome: `${id} 场景保持待确认。`, answer_options: options, risk_level: risk,
@@ -33,7 +33,7 @@ function baseCheckpoint() {
       expected_unit_ids: ['BLOCK-prd'], reviewed_unit_ids: ['BLOCK-prd']
     },
     fact_ledger_digest: sha('1'), scope_manifest_digest: sha('2'), behavior_views_digest: null,
-    case_drafts_digest: null, facts, diagnostic_candidates: [
+    case_drafts_digest: null, facts, claims: facts.flatMap(fact => fact.claim_ids.map(claim_id => ({claim_id, value: fact.statement}))), diagnostic_candidates: [
       issue('ip', 'meaning', 'IP 列表示网络 IP 还是定位城市？', ['网络 IP', '定位城市']),
       issue('empty', 'empty_value', '空值字段展示为空白还是占位符？', ['空白', '-'], 'medium'),
       issue('sort', 'ordering', '列表默认按时间升序还是降序？', ['升序', '降序'])

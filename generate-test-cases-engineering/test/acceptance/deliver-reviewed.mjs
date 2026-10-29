@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFile,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+const fixtureRoot=fileURLToPath(new URL('../fixtures/remediation/',import.meta.url));
+const runner=process.env.GTC_REMEDIATION_RUNNER??fileURLToPath(new URL('../../skill/generate-test-cases/scripts/test-compiler.mjs',import.meta.url));
+const api=await import(pathToFileURL(runner));
+const sample=process.argv[2]??'comprehensive';
+const catalog=path.resolve(process.argv[3]??'docs/remediation-2026-10-28/acceptance');
+const run=JSON.parse(await readFile(path.join(catalog,sample+'-run.json'),'utf8'));
+const envelope=JSON.parse(await readFile(path.join(fixtureRoot,process.argv[4]??'review-attestations.json'),'utf8')).attestations.find((/** @type {any} */ r)=>r.sample===sample);
+assert.equal(envelope.run_id,run.run_id,'Review belongs to another actual run');
+const text=await readFile(path.join(fixtureRoot,path.basename(envelope.completion_file)),'utf8');
+assert.equal(createHash('sha256').update(text).digest('hex'),envelope.completion_bytes_sha256);
+const dir=run.run_directory;
+let reply=await api.advanceStrict(dir);
+if(reply.status!=='finished'){
+ assert.equal(reply.incomplete_reason.code,'INDEPENDENT_REVIEW_REQUIRED');
+ assert.equal(reply.review_request.review_target_digest,envelope.review_target_digest,'Review content changed; real re-review required');
+ const artifact=JSON.parse(await readFile(path.join(dir,'staging/case-drafts.json'),'utf8'));
+ const {schema_version,source_revision,case_context_digest,...payload}=artifact;
+ payload.independent_review=api.constructIndependentReviewCompletionV4(reply,JSON.parse(text));
+ const candidate=await api.prepareStageArtifact(dir,reply,{stage:'case_drafts',payload});
+ assert.equal(candidate.status,'prepared',JSON.stringify(candidate));
+ assert.equal(candidate.artifact.case_context_digest,case_context_digest,'Review-only update must retain context');
+ await writeFile(path.join(dir,'staging/case-drafts.json'),JSON.stringify(candidate.artifact,null,2));
+ reply=await api.advanceStrict(dir);
+}
+assert.equal(reply.status,'finished',JSON.stringify(reply));
+const verified=await api.verifyCaseDocumentDeliveryV4(dir);
+assert.equal(verified.manifest.run_id,run.run_id);
+assert.equal(verified.manifest.review_target_digest,envelope.review_target_digest);
+await writeFile(path.join(dir,'delivery-verification.json'),JSON.stringify({reply,verification:{passed:true,manifest:verified.manifest},attestation:envelope},null,2));
+console.log(JSON.stringify({sample,run_id:run.run_id,status:reply.status,verification:'passed',manifest:path.join(dir,'output/current.json')}));

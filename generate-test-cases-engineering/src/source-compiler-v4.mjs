@@ -5,7 +5,7 @@ import { validateAgainstSchema, validateUniqueStableIds } from './schema-validat
 import { canonicalizeAuditedSourceCapture } from './source-capture-audit.mjs';
 import { canonicalizeSourceCapture, canonicalizeSourceUrl, sourceAcquisitionInventory, sourceByteDigest, hasSourceProviderContract } from './source-canonicalization.mjs';
 import { compileCanonicalSourceStructure } from './source-locators-v4.mjs';
-import { validateEvidenceGraph, validateV4EvidenceSourceBoundary } from './evidence.mjs';
+import { validateV4EvidenceSourceBoundary } from './evidence.mjs';
 import { acceptProvidedArtifact, createArtifactRequest, createArtifactResumeRef, validateProvideArtifactEvent } from './source-events.mjs';
 
 /** @param {string} code */
@@ -295,11 +295,6 @@ export function compileSourceEvidence(artifacts, system) {
     if (validateAgainstSchema(pack, sourceSchema).length || validateAgainstSchema(claims, evidenceSchema).length
       || pack.schema_version !== claims.schema_version) return rejected('SOURCE_SCHEMA_INVALID');
     if (pack.source_revision !== claims.source_revision) return rejected('SOURCE_REVISION_MISMATCH');
-    if (pack.schema_version === '3.0.0') {
-      const evidence = validateEvidenceGraph(pack, claims);
-      return evidence.diagnostics.length ? { status: 'rejected', diagnostics: evidence.diagnostics }
-        : { status: 'accepted', source_pack: structuredClone(pack), evidence, acquisitions: [], diagnostics: [] };
-    }
     if (!hasOnly(system, ['provider_registry', 'expiry_registry', 'subject_registry', 'acquisitions', 'artifact_context', 'artifact_bindings', 'read_artifact_bytes', 'non_normative_asset_proofs', 'verified_source_receipts', 'verified_acquisition_records', 'verified_collection_receipts'])
       || !Array.isArray(system.acquisitions)) return rejected('SOURCE_COMPILER_STATE_INVALID');
     if (system.artifact_context && system.artifact_context.run_id !== pack.run_instance_id) return rejected('ARTIFACT_RUN_MISMATCH');

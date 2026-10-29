@@ -9,7 +9,7 @@ import {
 } from '../../src/revision-transaction-v4.mjs';
 import { verifyCaseDocumentDeliveryV4 } from '../../src/canonical-delivery-v4.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
-import { GENERAL_QUALITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
 import currentPointerSchema from '../../skill/generate-test-cases/scripts/schemas/current-pointer.schema.json' with { type: 'json' };
 import {
   appendRequest, withRun
@@ -18,10 +18,10 @@ import {
 test('AT27/AT28: a newer 4.3 non-ready revision revokes older ready current authority', async () => {
   await withRun(async directory => {
     const run = await ensureV4RunInstance(directory, {
-      delivery_intent: 'case_document', contract: GENERAL_QUALITY_V4_CONTRACT
+      delivery_intent: 'case_document', contract: RELIABILITY_V4_CONTRACT
     });
     await commitRevisionTransactionV4(directory, appendRequest('final', null, 0, {
-      run_id: run.run_id, contract: GENERAL_QUALITY_V4_CONTRACT
+      run_id: run.run_id, contract: RELIABILITY_V4_CONTRACT
     }));
     const readyBytes = await readFile(path.join(directory, 'output/current.json'), 'utf8');
     const ready = JSON.parse(readyBytes);
@@ -30,7 +30,7 @@ test('AT27/AT28: a newer 4.3 non-ready revision revokes older ready current auth
 
     const checkpoint = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
     await commitRevisionTransactionV4(directory, appendRequest('pre_case_pending', 0, 1, {
-      run_id: run.run_id, contract: GENERAL_QUALITY_V4_CONTRACT,
+      run_id: run.run_id, contract: RELIABILITY_V4_CONTRACT,
       base_checkpoint_text: checkpoint
     }));
     const firstStale = JSON.parse(await readFile(path.join(directory, 'output/current.json'), 'utf8'));
@@ -39,7 +39,7 @@ test('AT27/AT28: a newer 4.3 non-ready revision revokes older ready current auth
       () => verifyCaseDocumentDeliveryV4(directory), /CANONICAL_MANIFEST_INVALID/u
     );
     assert.deepEqual(firstStale, {
-      status: 'stale', schema_version: '4.3.0', compiler_version: '0.8.0',
+      status: 'stale', schema_version: '4.3.3', compiler_version: '0.8.3',
       run_id: run.run_id, active_revision: 1, reason: 'higher_revision_not_ready',
       previous_ready_revision: 0,
       previous_ready_manifest_digest: `sha256:${createHash('sha256').update(readyBytes).digest('hex')}`
@@ -47,7 +47,7 @@ test('AT27/AT28: a newer 4.3 non-ready revision revokes older ready current auth
 
     const newerCheckpoint = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
     await commitRevisionTransactionV4(directory, appendRequest('pre_case_pending', 1, 2, {
-      run_id: run.run_id, contract: GENERAL_QUALITY_V4_CONTRACT,
+      run_id: run.run_id, contract: RELIABILITY_V4_CONTRACT,
       base_checkpoint_text: newerCheckpoint
     }));
     assert.deepEqual(JSON.parse(await readFile(path.join(directory, 'output/current.json'), 'utf8')), {

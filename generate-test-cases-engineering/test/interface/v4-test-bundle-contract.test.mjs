@@ -1,3 +1,4 @@
+import {candidateDeliveryInput} from '../helpers/v4-candidate-delivery-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
@@ -7,8 +8,10 @@ import { evaluateJourney } from '../helpers/run-journey.mjs';
 const schema = JSON.parse(await readFile(new URL('../../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json', import.meta.url), 'utf8'));
 /** @returns {Record<string, unknown>} */
 const minimalDocument = () => ({
-  schema_version: '4.0.0',
-  compiler_version: '0.5.0',
+  design_assurance_summary:candidateDeliveryInput().bundle.design_assurance_summary,
+  independent_review_summary:candidateDeliveryInput().bundle.independent_review_summary,
+  schema_version: '4.3.3',
+  compiler_version: '0.8.3',
   delivery_intent: 'case_document',
   source_revision: 0,
   result_kind: 'delivered_cases',
@@ -104,23 +107,7 @@ test('v4 canonical bundle closes scope, coverage, root, exclusion and risk-ledge
   assert.deepEqual(validateAgainstSchema({ ...base, risk_review_ledger: [risk] }, schema), []);
 });
 
-test('v3 historical bundle goldens retain their complete legacy contract', async () => {
-  const directory = new URL('../golden/journeys/', import.meta.url);
-  const files = (await readdir(directory)).filter((/** @type {string} */ name) => name.endsWith('.json'));
-  assert.ok(files.length >= 10);
-  for (const name of files) {
-    const legacy = JSON.parse(await readFile(new URL(name, directory), 'utf8'));
-    assert.deepEqual(validateAgainstSchema(legacy, schema), [], name);
-    assert.notDeepEqual(validateAgainstSchema({ ...legacy, delivery_intent: 'case_document' }, schema), [], name);
-    const incomplete = structuredClone(legacy);
-    delete incomplete.execution_plan;
-    assert.notDeepEqual(validateAgainstSchema(incomplete, schema), [], name);
-  }
-});
-
-test('v3 coverage intermediate validation still produces the reviewed legacy bundle', async () => {
-  const expected = JSON.parse(await readFile(new URL('../golden/journeys/all-e3.json', import.meta.url), 'utf8'));
-  const result = await evaluateJourney('all-e3');
-  assert.equal(result.status, 'finished', JSON.stringify(result));
-  assert.deepEqual(result.bundle, expected);
+test('historical bundle is rejected without conversion',async()=>{
+ const legacy=JSON.parse(await readFile(new URL('../golden/journeys/all-e3.json',import.meta.url),'utf8'));
+ assert.notDeepEqual(validateAgainstSchema(legacy,schema),[]);
 });

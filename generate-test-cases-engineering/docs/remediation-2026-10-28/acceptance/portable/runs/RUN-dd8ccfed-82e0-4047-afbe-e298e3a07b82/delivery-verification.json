@@ -1,0 +1,111 @@
+{
+  "reply": {
+    "status": "finished",
+    "phase": "delivery",
+    "run_id": "RUN-dd8ccfed-82e0-4047-afbe-e298e3a07b82",
+    "delivery_intent": "case_document",
+    "result_kind": "delivered_cases",
+    "produced_artifacts": [
+      {
+        "kind": "case_document",
+        "path": "output/r000/test-bundle.json",
+        "digest": "sha256:a292271131435d1531274b74f59ee52d8d0ad89451dfdaa2324af928e8be4d0b"
+      },
+      {
+        "kind": "business_markdown",
+        "path": "output/r000/test-cases.md",
+        "digest": "sha256:013ed437c5853756fa9b02ad9623056d987c57e443daab1ba1859554ad052a17"
+      },
+      {
+        "kind": "execution_worksheet",
+        "path": "output/r000/execution-worksheet.csv",
+        "digest": "sha256:68bc1ac4966338a4d801057e5a371d469c96da4873aa5b4230ba047885cce67a"
+      },
+      {
+        "kind": "business_html",
+        "path": "output/r000/test-cases.html",
+        "digest": "sha256:61171b64d7e03eceb03d4b7d4ff743ab1fafba0e4330c46376e553b130213059"
+      },
+      {
+        "kind": "case_table",
+        "path": "output/r000/case-table.txt",
+        "digest": "sha256:c0618680f777beb18ef353459119e872b006ffaccef02b437c2efd335e7c99fe"
+      },
+      {
+        "kind": "source_reading_summary",
+        "path": "output/r000/source-reading.json",
+        "digest": "sha256:8668dee150187c04d89ae11baf87cf41fa29304db53f971cf74b2a77770900f3"
+      }
+    ],
+    "incomplete_reason": null,
+    "user_next_steps": [
+      {
+        "action": "read_artifact",
+        "description": "优先查看 HTML 人工功能测试用例；对话 Table、JSON、CSV 与 Markdown 来自同一规范投影。"
+      }
+    ],
+    "recovery": {
+      "mode": "create_new_run",
+      "description": "原始资料或实质范围改变时创建新运行；当前 canonical 交付保持不可变。"
+    },
+    "non_blocking_diagnostics": []
+  },
+  "verification": {
+    "passed": true,
+    "manifest": {
+      "authority": "canonical",
+      "blocked_root_count": 0,
+      "bundle": {
+        "digest": "sha256:a292271131435d1531274b74f59ee52d8d0ad89451dfdaa2324af928e8be4d0b",
+        "path": "output/r000/test-bundle.json"
+      },
+      "case_count": 137,
+      "chat_table": {
+        "digest": "sha256:c0618680f777beb18ef353459119e872b006ffaccef02b437c2efd335e7c99fe",
+        "format": "commonmark-table",
+        "path": "output/r000/case-table.txt"
+      },
+      "closed_for_delivery_root_count": 0,
+      "compiler_version": "0.8.3",
+      "completed_at": "2026-10-28T21:38:07.380Z",
+      "delivery_intent": "case_document",
+      "execution_worksheet": {
+        "digest": "sha256:68bc1ac4966338a4d801057e5a371d469c96da4873aa5b4230ba047885cce67a",
+        "format": "csv",
+        "path": "output/r000/execution-worksheet.csv"
+      },
+      "exploratory_count": 9,
+      "html": {
+        "digest": "sha256:61171b64d7e03eceb03d4b7d4ff743ab1fafba0e4330c46376e553b130213059",
+        "format": "html",
+        "path": "output/r000/test-cases.html"
+      },
+      "markdown": {
+        "digest": "sha256:013ed437c5853756fa9b02ad9623056d987c57e443daab1ba1859554ad052a17",
+        "path": "output/r000/test-cases.md"
+      },
+      "not_applicable_count": 0,
+      "primary_readable": "html",
+      "render_options": {
+        "include_audit_appendix": false
+      },
+      "result_kind": "delivered_cases",
+      "review_target_digest": "sha256:6d07530261a38d540010819ca304eb9ca7302b71ce6eb50659dfb08212d28293",
+      "revision": 0,
+      "run_id": "RUN-dd8ccfed-82e0-4047-afbe-e298e3a07b82",
+      "schema_version": "4.3.3",
+      "source_reading": {
+        "digest": "sha256:8668dee150187c04d89ae11baf87cf41fa29304db53f971cf74b2a77770900f3",
+        "format": "json",
+        "path": "output/r000/source-reading.json"
+      }
+    }
+  },
+  "attestation": {
+    "sample": "comprehensive",
+    "run_id": "RUN-dd8ccfed-82e0-4047-afbe-e298e3a07b82",
+    "review_target_digest": "sha256:6d07530261a38d540010819ca304eb9ca7302b71ce6eb50659dfb08212d28293",
+    "completion_file": "portable-comprehensive-review-completion.json",
+    "completion_bytes_sha256": "9af593496b3ea0fc800bff2386127d0220512e9b2b01bcc1e107a340ccf3f576"
+  }
+}

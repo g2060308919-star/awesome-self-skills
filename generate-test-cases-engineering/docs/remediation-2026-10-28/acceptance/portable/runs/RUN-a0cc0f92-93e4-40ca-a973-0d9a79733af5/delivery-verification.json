@@ -1,0 +1,111 @@
+{
+  "reply": {
+    "status": "finished",
+    "phase": "delivery",
+    "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+    "delivery_intent": "case_document",
+    "result_kind": "delivered_cases",
+    "produced_artifacts": [
+      {
+        "kind": "case_document",
+        "path": "output/r000/test-bundle.json",
+        "digest": "sha256:6394a0de04a7e455bb0a1ea1499076747d744326cc33d5ba39f2dca0b2543a80"
+      },
+      {
+        "kind": "business_markdown",
+        "path": "output/r000/test-cases.md",
+        "digest": "sha256:16d49a962fa3c54bd919d39d99bdff77ba504dc3d8322efdeb6c6ac3755854e3"
+      },
+      {
+        "kind": "execution_worksheet",
+        "path": "output/r000/execution-worksheet.csv",
+        "digest": "sha256:04a8de14c3ba8ec1a72e2f0e84c215d59ae6ac8394aeef47e07a42be31b566d2"
+      },
+      {
+        "kind": "business_html",
+        "path": "output/r000/test-cases.html",
+        "digest": "sha256:c08a8c90ec1cba52e80fb3b85826454ecf6e3ca30099bd9acd47ba449fe84b47"
+      },
+      {
+        "kind": "case_table",
+        "path": "output/r000/case-table.txt",
+        "digest": "sha256:12e22e3ff7234d7890fe07d82dca5e210b4f0280b04450f06667fe4534bd1812"
+      },
+      {
+        "kind": "source_reading_summary",
+        "path": "output/r000/source-reading.json",
+        "digest": "sha256:3803e281b05b8e964ff59950284d1fd3f354988be1862d5601b34f1d68d3a6d9"
+      }
+    ],
+    "incomplete_reason": null,
+    "user_next_steps": [
+      {
+        "action": "read_artifact",
+        "description": "优先查看 HTML 人工功能测试用例；对话 Table、JSON、CSV 与 Markdown 来自同一规范投影。"
+      }
+    ],
+    "recovery": {
+      "mode": "create_new_run",
+      "description": "原始资料或实质范围改变时创建新运行；当前 canonical 交付保持不可变。"
+    },
+    "non_blocking_diagnostics": []
+  },
+  "verification": {
+    "passed": true,
+    "manifest": {
+      "authority": "canonical",
+      "blocked_root_count": 0,
+      "bundle": {
+        "digest": "sha256:6394a0de04a7e455bb0a1ea1499076747d744326cc33d5ba39f2dca0b2543a80",
+        "path": "output/r000/test-bundle.json"
+      },
+      "case_count": 17,
+      "chat_table": {
+        "digest": "sha256:12e22e3ff7234d7890fe07d82dca5e210b4f0280b04450f06667fe4534bd1812",
+        "format": "commonmark-table",
+        "path": "output/r000/case-table.txt"
+      },
+      "closed_for_delivery_root_count": 0,
+      "compiler_version": "0.8.3",
+      "completed_at": "2026-10-28T21:38:01.228Z",
+      "delivery_intent": "case_document",
+      "execution_worksheet": {
+        "digest": "sha256:04a8de14c3ba8ec1a72e2f0e84c215d59ae6ac8394aeef47e07a42be31b566d2",
+        "format": "csv",
+        "path": "output/r000/execution-worksheet.csv"
+      },
+      "exploratory_count": 9,
+      "html": {
+        "digest": "sha256:c08a8c90ec1cba52e80fb3b85826454ecf6e3ca30099bd9acd47ba449fe84b47",
+        "format": "html",
+        "path": "output/r000/test-cases.html"
+      },
+      "markdown": {
+        "digest": "sha256:16d49a962fa3c54bd919d39d99bdff77ba504dc3d8322efdeb6c6ac3755854e3",
+        "path": "output/r000/test-cases.md"
+      },
+      "not_applicable_count": 0,
+      "primary_readable": "html",
+      "render_options": {
+        "include_audit_appendix": false
+      },
+      "result_kind": "delivered_cases",
+      "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+      "revision": 0,
+      "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+      "schema_version": "4.3.3",
+      "source_reading": {
+        "digest": "sha256:3803e281b05b8e964ff59950284d1fd3f354988be1862d5601b34f1d68d3a6d9",
+        "format": "json",
+        "path": "output/r000/source-reading.json"
+      }
+    }
+  },
+  "attestation": {
+    "sample": "minimal",
+    "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+    "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+    "completion_file": "portable-minimal-review-completion.json",
+    "completion_bytes_sha256": "2bf0ebad4830659e1cc7ff1b0271a5d2cfa93325ae4c2c8dae7692990e0590ff"
+  }
+}

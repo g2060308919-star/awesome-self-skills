@@ -1,0 +1,533 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "case-context.schema.json",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "basis": {
+      "type": "object",
+      "properties": {
+        "source_pack_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "evidence_claims_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "behavior_views_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "source_pack_digest",
+        "evidence_claims_digest",
+        "behavior_views_digest"
+      ],
+      "additionalProperties": false
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/e_v4Fact"
+      }
+    },
+    "fact_modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fact_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "module_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "fact_id",
+          "module_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/e_scopeModule"
+      }
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/o_outcome"
+      }
+    },
+    "formal_test_points": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/o_formalTestPoint"
+      }
+    },
+    "supporting_observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/o_supportingObservation"
+      }
+    },
+    "ordering_registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "business_flows",
+        "page_actions",
+        "dependency_rules"
+      ],
+      "properties": {
+        "business_flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/r_businessFlow"
+          },
+          "minItems": 0
+        },
+        "page_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/r_pageAction"
+          },
+          "minItems": 0
+        },
+        "dependency_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/r_dependencyRule"
+          },
+          "minItems": 0
+        }
+      }
+    },
+    "context_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "run_id",
+    "source_revision",
+    "basis",
+    "facts",
+    "fact_modules",
+    "modules",
+    "outcomes",
+    "formal_test_points",
+    "supporting_observations",
+    "ordering_registry",
+    "context_digest"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "e_v4Text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "e_v4IdSet": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/e_v4Text"
+      }
+    },
+    "e_v4Fact": {
+      "type": "object",
+      "required": [
+        "fact_id",
+        "statement",
+        "status",
+        "acceptance_role",
+        "claim_ids",
+        "module_refs",
+        "field_path"
+      ],
+      "properties": {
+        "fact_id": {
+          "$ref": "#/$defs/e_v4Text"
+        },
+        "statement": {
+          "$ref": "#/$defs/e_v4Text"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "conflicted",
+            "ambiguous",
+            "diagnostic"
+          ]
+        },
+        "acceptance_role": {
+          "enum": [
+            "primary_acceptance",
+            "dependency_contract",
+            "context_only"
+          ]
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/e_v4IdSet"
+        },
+        "module_refs": {
+          "$ref": "#/$defs/e_v4IdSet"
+        },
+        "field_path": {
+          "type": "string",
+          "pattern": "^/(?:[^/~]|~0|~1)+(?:/(?:[^/~]|~0|~1)+)*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "e_scopeModule": {
+      "type": "object",
+      "required": [
+        "module_id",
+        "name",
+        "role",
+        "claim_ids"
+      ],
+      "properties": {
+        "module_id": {
+          "$ref": "#/$defs/e_v4Text"
+        },
+        "name": {
+          "$ref": "#/$defs/e_v4Text"
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "upstream",
+            "downstream",
+            "external"
+          ]
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/e_v4IdSet"
+        }
+      },
+      "additionalProperties": false
+    },
+    "o_text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "o_idArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/o_text"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "o_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/o_text"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "o_acceptanceRole": {
+      "enum": [
+        "primary_acceptance",
+        "dependency_contract",
+        "context_only"
+      ]
+    },
+    "o_jsonValue": {
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/o_jsonValue"
+          },
+          "minItems": 0
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/o_jsonValue"
+          }
+        }
+      ]
+    },
+    "o_condition": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/o_jsonValue"
+      }
+    },
+    "o_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome_id",
+        "fact_id",
+        "condition",
+        "expected",
+        "acceptance_role",
+        "claim_ids"
+      ],
+      "properties": {
+        "outcome_id": {
+          "type": "string",
+          "pattern": "^OUT-[0-9a-f]{64}$"
+        },
+        "fact_id": {
+          "$ref": "#/$defs/o_text"
+        },
+        "condition": {
+          "$ref": "#/$defs/o_condition"
+        },
+        "expected": {
+          "$ref": "#/$defs/o_text"
+        },
+        "acceptance_role": {
+          "$ref": "#/$defs/o_acceptanceRole"
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/o_idArray"
+        }
+      }
+    },
+    "o_formalTestPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formal_test_point_id",
+        "outcome_id",
+        "semantic_gap_refs"
+      ],
+      "properties": {
+        "formal_test_point_id": {
+          "type": "string",
+          "pattern": "^TP-[0-9a-f]{64}$"
+        },
+        "outcome_id": {
+          "$ref": "#/$defs/o_text"
+        },
+        "semantic_gap_refs": {
+          "$ref": "#/$defs/o_refs"
+        }
+      }
+    },
+    "o_supportingObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supporting_observation_id",
+        "outcome_id",
+        "surface",
+        "assertion",
+        "claim_ids"
+      ],
+      "properties": {
+        "supporting_observation_id": {
+          "type": "string",
+          "pattern": "^OBS-[0-9a-f]{64}$"
+        },
+        "outcome_id": {
+          "$ref": "#/$defs/o_text"
+        },
+        "surface": {
+          "enum": [
+            "ui",
+            "request",
+            "response",
+            "persistence",
+            "event",
+            "callback",
+            "compensation",
+            "side_effect",
+            "external_observation"
+          ]
+        },
+        "assertion": {
+          "$ref": "#/$defs/o_text"
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/o_idArray"
+        }
+      }
+    },
+    "r_text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "r_idArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/r_text"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "r_locatorOrderKey": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ],
+      "minItems": 4,
+      "items": false
+    },
+    "r_basis": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "claim_ids"
+          ],
+          "properties": {
+            "kind": {
+              "const": "evidence"
+            },
+            "claim_ids": {
+              "$ref": "#/$defs/r_idArray"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "decision_ids"
+          ],
+          "properties": {
+            "kind": {
+              "const": "decision"
+            },
+            "decision_ids": {
+              "$ref": "#/$defs/r_idArray"
+            }
+          }
+        }
+      ]
+    },
+    "r_businessFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flow_id",
+        "module_id",
+        "locator_order_key",
+        "claim_ids"
+      ],
+      "properties": {
+        "flow_id": {
+          "type": "string",
+          "pattern": "^FLOW-[0-9a-f]{64}$"
+        },
+        "module_id": {
+          "$ref": "#/$defs/r_text"
+        },
+        "locator_order_key": {
+          "$ref": "#/$defs/r_locatorOrderKey"
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/r_idArray"
+        }
+      }
+    },
+    "r_pageAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "flow_id",
+        "locator_order_key",
+        "claim_ids"
+      ],
+      "properties": {
+        "action_id": {
+          "type": "string",
+          "pattern": "^ACTION-[0-9a-f]{64}$"
+        },
+        "flow_id": {
+          "$ref": "#/$defs/r_text"
+        },
+        "locator_order_key": {
+          "$ref": "#/$defs/r_locatorOrderKey"
+        },
+        "claim_ids": {
+          "$ref": "#/$defs/r_idArray"
+        }
+      }
+    },
+    "r_dependencyRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dependency_rule_id",
+        "predecessor_outcome_id",
+        "successor_outcome_id",
+        "basis"
+      ],
+      "properties": {
+        "dependency_rule_id": {
+          "type": "string",
+          "pattern": "^DEP-[0-9a-f]{64}$"
+        },
+        "predecessor_outcome_id": {
+          "$ref": "#/$defs/r_text"
+        },
+        "successor_outcome_id": {
+          "$ref": "#/$defs/r_text"
+        },
+        "basis": {
+          "$ref": "#/$defs/r_basis"
+        }
+      }
+    }
+  }
+}

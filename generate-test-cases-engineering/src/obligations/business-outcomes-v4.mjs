@@ -215,7 +215,7 @@ export function assembleObligationsArtifactV4(compiled, ledger, context) {
    */
   const canonicalReview = input => Object.fromEntries(Object.entries(normalize(input)).map(([key, value]) => [key,
     Array.isArray(value) && key.endsWith('_ids') ? canonicalIds(value) : value && typeof value === 'object' && !Array.isArray(value) ? canonicalReview(value) : value]));
-  const artifact = { schema_version: '4.0.0', source_revision: compiled.source_revision, outcomes: structuredClone(compiled.outcomes),
+  const artifact = { schema_version: '4.3.3', source_revision: compiled.source_revision, outcomes: structuredClone(compiled.outcomes),
     formal_test_points: structuredClone(compiled.formal_test_points), supporting_observations: structuredClone(compiled.supporting_observations),
     risk_review_ledger: /** @type {any[]} */ (ledger).map(canonicalReview).sort((a, b) => compareScalar(a.module_id, b.module_id) || compareScalar(a.risk_kind, b.risk_kind)),
     not_applicable_records: sorted(context.not_applicable_records.map(canonicalReview), 'not_applicable_record_id'),

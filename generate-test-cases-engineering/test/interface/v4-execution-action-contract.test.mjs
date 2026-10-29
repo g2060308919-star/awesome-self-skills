@@ -141,13 +141,13 @@ test('unimplemented reopen is not advertised and stale or phase-inappropriate ev
 
 test('v4 execution events pass the full Source Pack discriminator but cannot enter v3 or Case Document', async () => {
   const schema=JSON.parse(await readFile(new URL('../../skill/generate-test-cases/scripts/schemas/source-pack.schema.json',import.meta.url),'utf8'));
-  assert.deepEqual(validateAgainstSchema(buildJourney('all-e3').source_pack,schema),[]);
+  assert.notDeepEqual(validateAgainstSchema(buildJourney('all-e3').source_pack,schema),[]);
   const source=sourceBoundaryFixture().pack;
   source.delivery_intent='execution_plan';
   source.case_document_ref=context().case_document_ref;
   source.execution_events=[{event_type:'pause_execution',...context()}];
   assert.deepEqual(validateAgainstSchema(source,schema),[]);
   source.schema_version='3.0.0';assert.notDeepEqual(validateAgainstSchema(source,schema),[]);
-  source.schema_version='4.0.0';source.delivery_intent='case_document';delete source.case_document_ref;
+  source.schema_version='4.3.3';source.delivery_intent='case_document';delete source.case_document_ref;
   assert.notDeepEqual(validateAgainstSchema(source,schema),[]);
 });

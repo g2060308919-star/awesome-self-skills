@@ -2601,7 +2601,8 @@ function buildBundleTrusted(context) {
   const canonicalBundle = JSON.parse(canonicalStringify(bundle));
   // This reconciler produces v3 semantics, not the v4 Case Document envelope.
   // Keep the root definitions so legacy local references still resolve.
-  const legacyBundleSchema = testBundleSchema.$defs.legacyBundle;
+  const legacyBundleSchema = /** @type {Record<string,any>} */ (testBundleSchema.$defs).legacyBundle;
+  if (!legacyBundleSchema) throw new TypeError('CURRENT_PROTOCOL_REQUIRED');
   const intermediateSchema = /** @type {any} */ (structuredClone({
     ...legacyBundleSchema, $defs: testBundleSchema.$defs
   }));

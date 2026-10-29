@@ -1,0 +1,16 @@
+TAP version 13
+# Subtest: AT-15: stale snapshots and damaged answer history stay same-run revisions while exact replay and subsequent answers preserve decisions
+ok 1 - AT-15: stale snapshots and damaged answer history stay same-run revisions while exact replay and subsequent answers preserve decisions
+  ---
+  duration_ms: 5768.422834
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5896.072541

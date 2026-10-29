@@ -1,0 +1,30 @@
+✖ installed private action seam cancels final confirmation and replays the terminal result (5606.232458ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5746.959917
+
+✖ failing tests:
+
+test at test/interface/v4-installed-action-adapter.test.mjs:407:1
+✖ installed private action seam cancels final confirmation and replays the terminal result (5606.232458ms)
+  AssertionError [ERR_ASSERTION]: {"status":"need_revision","stage":"source_pack","schema_ref":"source-pack.schema.json","source_revision":2,"artifact_path":"/private/var/folders/2q/wn9f5xcs6m39xhj0dt60bwvc0000gn/T/gtc-v4-installed-execution-submit-HykaR9/runs/RUN-84e53f88-21e9-416f-ad30-6d90e9922692/staging/source-pack.json","artifact_digest":"7d194a49d85411dcdde1681eafce848bb76c1aae850130fe8361003a8a9fb8db","diagnostics":[{"category":"traceability","code":"CANCEL_EVENT_STALE","path":"/execution_events","message":"Cancellation must be the sole append and bind the execution phase actually displayed."}],"phase":"execution_closure","run_id":"RUN-84e53f88-21e9-416f-ad30-6d90e9922692","produced_artifacts":[],"incomplete_reason":{"code":"CANCEL_EVENT_STALE","summary":"Cancellation must be the sole append and bind the execution phase actually displayed."},"user_next_steps":[{"action":"revise_artifact","description":"修正 execution Source Pack 后在同一运行目录重试。"}],"recovery":{"mode":"retry_current_run","description":"保留已接受 execution revision，只替换未接受的 staging Source Pack。"},"non_blocking_diagnostics":[]}
+  + actual - expected
+
+  + 'need_revision'
+  - 'cancelled'
+
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/v4-installed-action-adapter.test.mjs:437:12)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'need_revision',
+    expected: 'cancelled',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

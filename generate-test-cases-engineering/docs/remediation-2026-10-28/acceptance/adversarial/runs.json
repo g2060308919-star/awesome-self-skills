@@ -1,0 +1,17 @@
+{
+  "AT20": {
+    "run_id": "RUN-e9f6c85a-fc7a-4b3c-ba8e-7c3dc8280531",
+    "run_directory": "/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/docs/remediation-2026-10-28/acceptance/adversarial/AT20/runs/RUN-e9f6c85a-fc7a-4b3c-ba8e-7c3dc8280531",
+    "delivery_intent": "case_document"
+  },
+  "AT22": {
+    "run_id": "RUN-66ff1a44-9c6e-4366-8a58-6ace6a943347",
+    "run_directory": "/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/docs/remediation-2026-10-28/acceptance/adversarial/AT22/runs/RUN-66ff1a44-9c6e-4366-8a58-6ace6a943347",
+    "delivery_intent": "case_document"
+  },
+  "AT23": {
+    "run_id": "RUN-e74d7817-448d-4627-9bae-6f32c333f7f2",
+    "run_directory": "/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/docs/remediation-2026-10-28/acceptance/adversarial/AT23/runs/RUN-e74d7817-448d-4627-9bae-6f32c333f7f2",
+    "delivery_intent": "case_document"
+  }
+}

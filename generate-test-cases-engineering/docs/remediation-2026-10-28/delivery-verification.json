@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "variant": "original",
+      "sample": "minimal",
+      "run_id": "RUN-f4817349-e0a9-4ccb-9187-c24b091406c8",
+      "case_count": 17,
+      "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+      "verification": "passed",
+      "manifest": "docs/remediation-2026-10-28/acceptance/runs/RUN-f4817349-e0a9-4ccb-9187-c24b091406c8/output/current.json"
+    },
+    {
+      "variant": "original",
+      "sample": "comprehensive",
+      "run_id": "RUN-9511f58e-6cae-4877-bf74-47d1328ca0f1",
+      "case_count": 137,
+      "review_target_digest": "sha256:6d07530261a38d540010819ca304eb9ca7302b71ce6eb50659dfb08212d28293",
+      "verification": "passed",
+      "manifest": "docs/remediation-2026-10-28/acceptance/runs/RUN-9511f58e-6cae-4877-bf74-47d1328ca0f1/output/current.json"
+    },
+    {
+      "variant": "portable",
+      "sample": "minimal",
+      "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+      "case_count": 17,
+      "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+      "verification": "passed",
+      "manifest": "docs/remediation-2026-10-28/acceptance/portable/runs/RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5/output/current.json"
+    },
+    {
+      "variant": "portable",
+      "sample": "comprehensive",
+      "run_id": "RUN-dd8ccfed-82e0-4047-afbe-e298e3a07b82",
+      "case_count": 137,
+      "review_target_digest": "sha256:6d07530261a38d540010819ca304eb9ca7302b71ce6eb50659dfb08212d28293",
+      "verification": "passed",
+      "manifest": "docs/remediation-2026-10-28/acceptance/portable/runs/RUN-dd8ccfed-82e0-4047-afbe-e298e3a07b82/output/current.json"
+    }
+  ],
+  "tampered_projection_rejected": true
+}

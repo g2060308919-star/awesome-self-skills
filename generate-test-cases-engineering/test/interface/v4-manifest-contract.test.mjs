@@ -11,7 +11,7 @@ const schema = JSON.parse(await readFile(new URL(
 const sha = 'sha256:' + 'a'.repeat(64);
 const caseRef = { run_id: 'RUN-case-document', revision: 4, manifest_digest: sha, bundle_digest: sha };
 const common = {
-  run_id: 'RUN-manifest', revision: 4, schema_version: '4.0.0', compiler_version: '0.5.0',
+  run_id: 'RUN-manifest', revision: 4, schema_version: '4.3.3', compiler_version: '0.8.3',
   authority: 'canonical', completed_at: '2026-09-09T00:00:00Z'
 };
 const counts = {
@@ -29,6 +29,10 @@ function caseDocument(kind = 'delivered_cases') {
     bundle: { path: 'output/r004/test-bundle.json', digest: sha },
     markdown: { path: 'output/r004/test-cases.md', digest: sha },
     execution_worksheet: { path: 'output/r004/execution-worksheet.csv', digest: sha, format: 'csv' },
+    html:{path:'output/r004/test-cases.html',digest:sha,format:'html'},
+    chat_table:{path:'output/r004/case-table.txt',digest:sha,format:'commonmark-table'},
+    source_reading:{path:'output/r004/source-reading.json',digest:sha,format:'json'},
+    primary_readable:'html',review_target_digest:sha,
     render_options: { include_audit_appendix: false },
     case_count: caseCount, blocked_root_count: blocked, closed_for_delivery_root_count: closed,
     not_applicable_count: excluded, exploratory_count: 0
@@ -68,7 +72,7 @@ test('T02 manifest schema uses the supported closed-schema dialect', () => {
 });
 
 for (const status of ['ready', 'document_only', 'stale']) {
-  test('T02 manifest keeps the v3 ' + status + ' pointer readable and closed', () => {
+  test('manifest rejects historical ' + status + ' pointers', () => {
     const value = status === 'stale' ? {
       status, run_instance_id: 'RUN-v3', active_source_revision: 5,
       reason: 'higher_revision_not_ready', previous_ready_revision: 4
@@ -76,7 +80,7 @@ for (const status of ['ready', 'document_only', 'stale']) {
       status, run_instance_id: 'RUN-v3', source_revision: 4,
       bundle_path: 'output/r004/test-bundle.json', bundle_digest: 'b'.repeat(64), plan_digest: 'c'.repeat(64)
     };
-    accepts(value);
+    rejects(value);
     rejects({ ...value, delivery_intent: 'case_document' }, 'v3 cannot masquerade as a v4 manifest');
     rejects({ ...value, extra: true });
   });

@@ -7,8 +7,8 @@ import { candidateDeliveryInput as candidateInput } from '../helpers/v4-candidat
 test('candidate 4.2 materializes HTML, full CommonMark Table, source summary, Markdown and CSV from one canonical JSON', () => {
   const result = /** @type {any} */ (materializeCaseDocumentDeliveryV4(candidateInput()));
 
-  assert.equal(result.manifest.schema_version, '4.2.0');
-  assert.equal(result.manifest.compiler_version, '0.7.0');
+  assert.equal(result.manifest.schema_version, '4.3.3');
+  assert.equal(result.manifest.compiler_version, '0.8.3');
   assert.equal(result.manifest.primary_readable, 'html');
   assert.equal(result.manifest.html.path, 'output/r002/test-cases.html');
   assert.equal(result.manifest.chat_table.path, 'output/r002/case-table.txt');

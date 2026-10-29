@@ -1,0 +1,25 @@
+✔ the v4 production pipeline compiles all four Agent artifacts into one canonical Case Document bundle (51.122792ms)
+✔ case-document production compilation is invariant to absent, unknown, or verified execution resources (64.118541ms)
+✔ an applicable formal outcome with zero Cases is a quality failure, never an empty success (11.740208ms)
+✔ pre-case semantic gaps stop before Behavior Views or Case Draft defects can influence the reply (9.656042ms)
+✔ revision and schema disagreement is attributed to the Agent-owned artifact without writing output (10.151792ms)
+✔ production compiler state is deterministically derived from the four artifacts without a fifth semantic input (29.637167ms)
+✔ derived production evidence cannot be manufactured by changing a View and its matching Case together (10.439542ms)
+✔ submitted topology cannot authorize itself by changing its disposition and manifest together (8.50675ms)
+✔ resolved semantic roots remain in the canonical audit while leaving the active gap count (22.841334ms)
+✔ production validates relative-baseline semantics against the verified Claim instead of trusting the Case Draft (37.171541ms)
+✔ production validates structured test-value origins against exact Claim assertions (24.513917ms)
+✔ production compiles evidence-backed formal-point NotApplicable and permits a canonical zero-Case result (30.819208ms)
+✔ production rejects NotApplicable that conflicts with a Case or merely says the PRD omitted a rule (17.704666ms)
+✔ execution-binding Claims cannot prove Case semantics, exclusions, risks, or ordering (1.496125ms)
+✔ production risk ledger uses verified Claim routes for formal, semantic-gap and NotApplicable dispositions (33.5945ms)
+✔ production ordering registry is derived from source-backed Claim assertions and rejects forged Case selectors (24.165708ms)
+✔ production resolves a Claim-backed outcome dependency into compiler-owned Case dependencies (37.973ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 511.726334

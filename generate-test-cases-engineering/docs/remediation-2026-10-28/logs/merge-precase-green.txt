@@ -1,0 +1,14 @@
+✔ 4.3 behavior assertions form a closed, deterministic Evidence contract (23.575333ms)
+✔ 4.3 behavior assertions reject malformed families and items at Evidence (65.841166ms)
+✔ 4.3 behavior assertions require exact Claim-to-Fact ownership (9.03075ms)
+✔ 4.3 behavior assertions reject duplicate and conflicting values for one Claim field (17.359792ms)
+✔ historical behavior assertion protocols are rejected (2.030291ms)
+✔ pre-case acceptance rejects the same malformed behavior assertions as final compilation (7.238084ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 214.283125

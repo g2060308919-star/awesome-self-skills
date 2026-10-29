@@ -1,0 +1,873 @@
+{
+  "status": "need_revision",
+  "stage": "case_drafts",
+  "schema_ref": "case-drafts.schema.json",
+  "phase": "case_design",
+  "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+  "scope": {
+    "source_revision": 0,
+    "run_instance_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5"
+  },
+  "diagnostics": [],
+  "produced_artifacts": [],
+  "incomplete_reason": {
+    "code": "STAGE_ARTIFACT_REQUIRED",
+    "summary": "当前运行仍需要 case_drafts 工件才能继续。"
+  },
+  "user_next_steps": [
+    {
+      "action": "write_stage_artifact",
+      "description": "按 case-drafts.schema.json 写入当前候选 revision 的 case_drafts。"
+    }
+  ],
+  "recovery": {
+    "mode": "write_staging_artifact",
+    "description": "保留已接受 revision，在同一运行目录写入所请求的候选工件后重调 runner。"
+  },
+  "non_blocking_diagnostics": [],
+  "case_context": {
+    "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+    "source_revision": 0,
+    "basis": {
+      "source_pack_digest": "sha256:3e5758124c5ec1963b8da1176d173ca17aca729e610f709994077ea347ea6053",
+      "evidence_claims_digest": "sha256:cf189d284411ffe507a793e629c2096ebbbc50238fc1f54833b67314384825a0",
+      "behavior_views_digest": "sha256:0c1d706d2fc4fc72aa33857d526ebf98384ec6bcfc4178259d19fc841b27c36a"
+    },
+    "facts": [
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-10",
+          "CLM-4"
+        ],
+        "fact_id": "FACT-cancel",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "取消后重新打开为空",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4"
+        ],
+        "fact_id": "FACT-create-initial",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "管理员新增初始化",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-7",
+          "CLM-8"
+        ],
+        "fact_id": "FACT-duplicate",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "保存处理中重复点击仅产生一条记录",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-7",
+          "CLM-9"
+        ],
+        "fact_id": "FACT-failure",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "保存失败保留输入并可重试",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-chinese",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 中",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-digit",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 Ab1",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-eleven",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 ABCDEFGHIJK",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-empty",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 空值",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-mixedcase",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 AbCd",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-non-ascii",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 é",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-one",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 A",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-space",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 A B",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-symbol",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 A-B",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ],
+        "fact_id": "FACT-name-ten",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "名称输入 ABCDEFGHIJ",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3"
+        ],
+        "fact_id": "FACT-readonly-create",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "只读用户不能新增",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-11",
+          "CLM-2"
+        ],
+        "fact_id": "FACT-view-只读用户",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "只读用户查看列表及详情",
+        "status": "active"
+      },
+      {
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-11",
+          "CLM-2"
+        ],
+        "fact_id": "FACT-view-管理员",
+        "field_path": "/rule",
+        "module_refs": [
+          "configuration"
+        ],
+        "statement": "管理员查看列表及详情",
+        "status": "active"
+      }
+    ],
+    "fact_modules": [
+      {
+        "fact_id": "FACT-cancel",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-create-initial",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-duplicate",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-failure",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-chinese",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-digit",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-eleven",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-empty",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-mixedcase",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-non-ascii",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-one",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-space",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-symbol",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-name-ten",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-readonly-create",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-view-只读用户",
+        "module_id": "configuration"
+      },
+      {
+        "fact_id": "FACT-view-管理员",
+        "module_id": "configuration"
+      }
+    ],
+    "modules": [
+      {
+        "claim_ids": [
+          "CLM-0"
+        ],
+        "module_id": "configuration",
+        "name": "配置管理",
+        "role": "primary"
+      }
+    ],
+    "outcomes": [
+      {
+        "outcome_id": "OUT-00eb78f75a2745756d958a8922ed248999b7f98d85c9f8951511b5154a3cc604",
+        "fact_id": "FACT-name-eleven",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='ABCDEFGHIJK'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，提示“名称最多10个字母”，没有新记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-0ee3115fb103fb5471826070de1ee0a18489a1918345885881a7e41c19b81799",
+        "fact_id": "FACT-failure",
+        "condition": {
+          "actions": [
+            "填写Alpha保存，等待失败",
+            "保持输入不变再次保存，等待成功"
+          ],
+          "data": [
+            "名称Alpha；第一次请求失败，重试成功"
+          ],
+          "preconditions": [
+            "管理员；打开新增"
+          ]
+        },
+        "expected": "弹窗保持打开且名称仍为Alpha，没有新增记录，允许再次保存；只新增一条名称Alpha的草稿记录，弹窗关闭",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-7",
+          "CLM-9"
+        ]
+      },
+      {
+        "outcome_id": "OUT-214bf2ebfb99ae3dd53d043a2b5941abdcc6a1c4e701450a00919c4d7bd6a36c",
+        "fact_id": "FACT-view-管理员",
+        "condition": {
+          "actions": [
+            "打开配置列表",
+            "查看记录A详情并尝试修改名称或状态"
+          ],
+          "data": [
+            "记录A身份已知"
+          ],
+          "preconditions": [
+            "以管理员登录；列表有名称Alpha状态草稿的记录A"
+          ]
+        },
+        "expected": "可以查看列表并找到记录A；显示名称Alpha及状态草稿，字段只读，不能修改",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-11",
+          "CLM-2"
+        ]
+      },
+      {
+        "outcome_id": "OUT-367cc796436a8c870c13e99f991dc339ea5ab8238e0eb50b2f9aeb7ca0e11635",
+        "fact_id": "FACT-name-one",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='A'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "仅新增一条名称A的草稿记录，关闭弹窗",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-3a5d04fbee6bb67768c04a30299187d6e442bf924628230e6bc8938eaf3546bc",
+        "fact_id": "FACT-name-symbol",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='A-B'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，不新增记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-3ff350328a53b60c03eb0c28b1875146253fdce05b8f86ced7b45f450178e0f3",
+        "fact_id": "FACT-duplicate",
+        "condition": {
+          "actions": [
+            "点击保存，保持请求处理中",
+            "在处理完成前重复点击保存两次",
+            "释放首次请求并等待完成，查看列表"
+          ],
+          "data": [
+            "首次保存请求保持处理中，之后成功返回"
+          ],
+          "preconditions": [
+            "管理员；新增名称Alpha"
+          ]
+        },
+        "expected": "最终仅生成一条名称Alpha的草稿记录，弹窗关闭",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-7",
+          "CLM-8"
+        ]
+      },
+      {
+        "outcome_id": "OUT-6269a6b1e0c57aa6ab3dd2565434b29ad74c2a736eaec4b341fca3d1cbb09a07",
+        "fact_id": "FACT-cancel",
+        "condition": {
+          "actions": [
+            "打开新增并输入Temp",
+            "点击取消",
+            "重新打开新增"
+          ],
+          "data": [
+            "未保存名称Temp"
+          ],
+          "preconditions": [
+            "管理员"
+          ]
+        },
+        "expected": "弹窗关闭，未新增记录；名称为空，不恢复Temp",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-10",
+          "CLM-4"
+        ]
+      },
+      {
+        "outcome_id": "OUT-6577fe283015692954a492fbea7fa443853a114e755c658b5bd6c78733635896",
+        "fact_id": "FACT-name-chinese",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='中'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，不新增记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-89c773f7dde311fbc947d3beea28c656d124c067d6afca70a444d4609f683020",
+        "fact_id": "FACT-name-mixedcase",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='AbCd'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "仅新增一条名称AbCd的草稿记录，关闭弹窗",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-a30a4220c8bc92fb32a5c1047a3446fe98216370f8168e8a5901ea97cc41ed93",
+        "fact_id": "FACT-create-initial",
+        "condition": {
+          "actions": [
+            "打开新增弹窗"
+          ],
+          "data": [],
+          "preconditions": [
+            "管理员"
+          ]
+        },
+        "expected": "表单只有名称字段且初始为空",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4"
+        ]
+      },
+      {
+        "outcome_id": "OUT-b909ada383e7f778890adca4af14226185581b3d4e4c69d39037cd7d03a92a1d",
+        "fact_id": "FACT-name-non-ascii",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='é'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，不新增记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-c4304ef7ef13545b48db14bd32231544d904724fc486895c36a1d6982b74b996",
+        "fact_id": "FACT-name-space",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='A B'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，不新增记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-d70640dca83c706b502630e3a9cbc3ef62fdc326dbd9c1e3d0d02520fd5d6983",
+        "fact_id": "FACT-readonly-create",
+        "condition": {
+          "actions": [
+            "以只读用户尝试新增入口；若入口不可用记录拒绝并核对记录集合；若可打开表单，填写Alpha后点击保存并等待结果"
+          ],
+          "data": [
+            "名称Alpha"
+          ],
+          "preconditions": [
+            "以只读用户登录"
+          ]
+        },
+        "expected": "无论入口拒绝还是保存拒绝均不能新增；记录标识集合及数量不变；不限定入口隐藏或禁用",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3"
+        ]
+      },
+      {
+        "outcome_id": "OUT-d8018ab0c0d67d2e6dce562b88cb5fe3eae280eed470f2162c1263c9bc65086f",
+        "fact_id": "FACT-name-ten",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='ABCDEFGHIJ'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "仅新增一条名称ABCDEFGHIJ的草稿记录，关闭弹窗",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-e12227d3f94551650bbcef6476e657075220f2c2218bffdb505a07f35e90c777",
+        "fact_id": "FACT-name-empty",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称=''"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，提示“名称不能为空”，没有新记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-e8e3c3ac18732d023ec935955c1977dd8078c7a0a69848532d04afd94d027e03",
+        "fact_id": "FACT-name-digit",
+        "condition": {
+          "actions": [
+            "填写该名称并点击保存"
+          ],
+          "data": [
+            "名称='Ab1'"
+          ],
+          "preconditions": [
+            "管理员；打开新增弹窗"
+          ]
+        },
+        "expected": "不提交，不新增记录",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-3",
+          "CLM-4",
+          "CLM-5",
+          "CLM-6",
+          "CLM-7"
+        ]
+      },
+      {
+        "outcome_id": "OUT-eec324a8e6f3312eb4f75b4d7712b9f2726270a2044d80bea4e5e4daff138abe",
+        "fact_id": "FACT-view-只读用户",
+        "condition": {
+          "actions": [
+            "打开配置列表",
+            "查看记录A详情并尝试修改名称或状态"
+          ],
+          "data": [
+            "记录A身份已知"
+          ],
+          "preconditions": [
+            "以只读用户登录；列表有名称Alpha状态草稿的记录A"
+          ]
+        },
+        "expected": "可以查看列表并找到记录A；显示名称Alpha及状态草稿，字段只读，不能修改",
+        "acceptance_role": "primary_acceptance",
+        "claim_ids": [
+          "CLM-11",
+          "CLM-2"
+        ]
+      }
+    ],
+    "formal_test_points": [
+      {
+        "formal_test_point_id": "TP-053b9d3263182f64d03f79f034c60b54875f73f665a10e5f7721d6a240c4d3b6",
+        "outcome_id": "OUT-e8e3c3ac18732d023ec935955c1977dd8078c7a0a69848532d04afd94d027e03",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-0d8ba650dbc8ed2a378de48cfac2ec218824b2d4260e53adbd3ccfca44d8a9cb",
+        "outcome_id": "OUT-a30a4220c8bc92fb32a5c1047a3446fe98216370f8168e8a5901ea97cc41ed93",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-3f3432a782e653a5013d2934431015b73c9a33c14f435b9e03ddf18c0c33a2be",
+        "outcome_id": "OUT-00eb78f75a2745756d958a8922ed248999b7f98d85c9f8951511b5154a3cc604",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-5784b069a8d180a103e45704e08859043392aeb2079dfa73983a8aef16b66f63",
+        "outcome_id": "OUT-3a5d04fbee6bb67768c04a30299187d6e442bf924628230e6bc8938eaf3546bc",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-5e4f3d5e56253c134fd9e1c605162dabad75f827b9f68153ada2238248423190",
+        "outcome_id": "OUT-214bf2ebfb99ae3dd53d043a2b5941abdcc6a1c4e701450a00919c4d7bd6a36c",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-66fe02869485d90397691bf66acb4feb4116b3b4d8e1bc2b9daeceabcd9ae0bf",
+        "outcome_id": "OUT-eec324a8e6f3312eb4f75b4d7712b9f2726270a2044d80bea4e5e4daff138abe",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-7a975f0b8d0e7c79779cc70412918f528457200fd46206a251ba41559b9d617f",
+        "outcome_id": "OUT-d8018ab0c0d67d2e6dce562b88cb5fe3eae280eed470f2162c1263c9bc65086f",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-8162b55ec0a6eb33c7352f0d2bb94899e15cb31b09ce31b22a183c5a5429875f",
+        "outcome_id": "OUT-c4304ef7ef13545b48db14bd32231544d904724fc486895c36a1d6982b74b996",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-8428b76b346e0d6d7c9f23a07f3d7a5c03bd2ab7615a737d9ef9cbccec85491f",
+        "outcome_id": "OUT-3ff350328a53b60c03eb0c28b1875146253fdce05b8f86ced7b45f450178e0f3",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-8478280e654964c0d314896adb5daeaf9a210b5fd3f609e6ee0d90f782c1f46f",
+        "outcome_id": "OUT-b909ada383e7f778890adca4af14226185581b3d4e4c69d39037cd7d03a92a1d",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-8b9e629951e5b17862fd8e16f3836fa819025193f7bce36ef00b191221884685",
+        "outcome_id": "OUT-d70640dca83c706b502630e3a9cbc3ef62fdc326dbd9c1e3d0d02520fd5d6983",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-baf2633cfd5e39dbbd585250e4ef0b8ae679f35fb3de37fd11ac1e560d9400c9",
+        "outcome_id": "OUT-89c773f7dde311fbc947d3beea28c656d124c067d6afca70a444d4609f683020",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-c240688e937d2044c77e19a324c0aaa356c7fe79878d72172e89158ec46921ef",
+        "outcome_id": "OUT-6577fe283015692954a492fbea7fa443853a114e755c658b5bd6c78733635896",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5",
+        "outcome_id": "OUT-367cc796436a8c870c13e99f991dc339ea5ab8238e0eb50b2f9aeb7ca0e11635",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-e2309ff4e96225bf996533c8b6c462653c153537ae105a3f8e8c29a878debdfe",
+        "outcome_id": "OUT-e12227d3f94551650bbcef6476e657075220f2c2218bffdb505a07f35e90c777",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-f866af62bb054424772f99310dc7b847e6938c83ad10675fc6027c611c1ef4fd",
+        "outcome_id": "OUT-0ee3115fb103fb5471826070de1ee0a18489a1918345885881a7e41c19b81799",
+        "semantic_gap_refs": []
+      },
+      {
+        "formal_test_point_id": "TP-ff0ac7c06c5cb7dd138cb0e62b0ab75dec414dd292a3ea3392895d6b4e398a7b",
+        "outcome_id": "OUT-6269a6b1e0c57aa6ab3dd2565434b29ad74c2a736eaec4b341fca3d1cbb09a07",
+        "semantic_gap_refs": []
+      }
+    ],
+    "supporting_observations": [],
+    "ordering_registry": {
+      "business_flows": [],
+      "page_actions": [],
+      "dependency_rules": []
+    },
+    "context_digest": "sha256:7e482e43f40e1f2a5ae86aac7c3ca74bc2d09b571c04258ff905606d53e76d2c"
+  }
+}

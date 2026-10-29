@@ -10,7 +10,7 @@ import {
 import { withClarificationState } from '../../src/advance-v4.mjs';
 import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
 import { compileSemanticGapRootsV4 } from '../../src/semantic-gaps-v4.mjs';
-import { GENERAL_QUALITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
 import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 /** @param {string} character */
@@ -43,7 +43,7 @@ function gap(classification) {
 /** @param {any[]} diagnosticCandidates @param {any} [priorCheckpoint] */
 function compileCheckpoint(diagnosticCandidates, priorCheckpoint = null) {
   return compileSemanticClarificationCheckpointV4({
-    schema_version: '4.3.0', compiler_version: '0.8.0', run_id: 'RUN-critical-gate',
+    schema_version: '4.3.3', compiler_version: '0.8.3', run_id: 'RUN-critical-gate',
     committed_revision: 1, committed_checkpoint_bytes: checkpointBytes,
     discovery_phase: 'pre_case', source_review_witness: {
       expected_unit_ids: ['BLOCK-prd'], reviewed_unit_ids: ['BLOCK-prd']
@@ -51,9 +51,10 @@ function compileCheckpoint(diagnosticCandidates, priorCheckpoint = null) {
     fact_ledger_digest: sha('1'), scope_manifest_digest: sha('2'),
     behavior_views_digest: null, case_drafts_digest: null,
     facts: [
-      { fact_id: 'FACT-branch', statement: '订单存在审批流程', claim_ids: ['CLM-branch'] },
-      { fact_id: 'FACT-label', statement: '订单显示辅助标签', claim_ids: ['CLM-label'] }
+      { status: 'ambiguous', fact_id: 'FACT-branch', statement: '订单存在审批流程', claim_ids: ['CLM-branch'] },
+      { status: 'ambiguous', fact_id: 'FACT-label', statement: '订单显示辅助标签', claim_ids: ['CLM-label'] }
     ],
+    claims: [{claim_id: 'CLM-branch', value: '订单存在审批流程'}, {claim_id: 'CLM-label', value: '订单显示辅助标签'}],
     diagnostic_candidates: diagnosticCandidates, prior_checkpoint: priorCheckpoint
   });
 }
@@ -158,7 +159,7 @@ function pipelineFixture(classification) {
   };
   fixture.artifacts.evidence_claims.semantic_gaps = [candidate];
   const root = compileSemanticGapRootsV4({
-    contract: GENERAL_QUALITY_V4_CONTRACT,
+    contract: RELIABILITY_V4_CONTRACT,
     facts: fixture.artifacts.evidence_claims.fact_ledger,
     claims: fixture.artifacts.evidence_claims.claims,
     diagnostic_candidates: [candidate], discovery_phase: 'pre_case'

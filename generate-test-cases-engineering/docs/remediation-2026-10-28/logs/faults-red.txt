@@ -1,0 +1,98 @@
+TAP version 13
+# Subtest: AT-01: public runner provides complete case context without any submitted cases
+ok 1 - AT-01: public runner provides complete case context without any submitted cases
+  ---
+  duration_ms: 2704.833834
+  type: 'test'
+  ...
+# Subtest: AT-08: public stage constructor is available
+ok 2 - AT-08: public stage constructor is available
+  ---
+  duration_ms: 0.106083
+  type: 'test'
+  ...
+# Subtest: AT-07/08/10: helper is read-only, binds pending drafts and rejects altered context and reserved fields
+ok 3 - AT-07/08/10: helper is read-only, binds pending drafts and rejects altered context and reserved fields
+  ---
+  duration_ms: 1901.087375
+  type: 'test'
+  ...
+# Subtest: AT-05: invalid ordering prerequisite is fatal before accepting behavior
+ok 4 - AT-05: invalid ordering prerequisite is fatal before accepting behavior
+  ---
+  duration_ms: 9.181666
+  type: 'test'
+  ...
+# Subtest: AT-06/10/21/27: stale, malformed, wrong revision and broken reference stay distinct; pending review cannot publish
+ok 5 - AT-06/10/21/27: stale, malformed, wrong revision and broken reference stay distinct; pending review cannot publish
+  ---
+  duration_ms: 3675.234459
+  type: 'test'
+  ...
+# Subtest: AT-14: obsolete identity is rejected without upgrade guidance or file mutation
+ok 6 - AT-14: obsolete identity is rejected without upgrade guidance or file mutation
+  ---
+  duration_ms: 595.631084
+  type: 'test'
+  ...
+# Subtest: REQ-16 source fixture: semantic module discovery uses the public existing topology algorithm
+ok 7 - REQ-16 source fixture: semantic module discovery uses the public existing topology algorithm
+  ---
+  duration_ms: 2.064042
+  type: 'test'
+  ...
+# Subtest: AT-09/21: helper and final compiler reject every dangling Case reference and duplicate local ID
+ok 8 - AT-09/21: helper and final compiler reject every dangling Case reference and duplicate local ID
+  ---
+  duration_ms: 1986.184208
+  type: 'test'
+  ...
+# Subtest: AT-05: real Runner stops before accepting behavior on throw compiler result
+not ok 9 - AT-05: real Runner stops before accepting behavior on throw compiler result
+  ---
+  duration_ms: 31.494792
+  type: 'test'
+  location: '/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-faults.test.mjs:11:40'
+  failureType: 'testCodeFailure'
+  error: '[test-only-compiler-fault] "onLoad" filter is not a valid Go regular expression: "(?u)case-context-v4\\\\.mjs$"'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    /Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:1234:34
+    responseCallbacks.<computed> (/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:886:9)
+    handleIncomingPacket (/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:940:31)
+    Socket.readFromStdout (/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:864:7)
+    Socket.emit (node:events:509:28)
+    addChunk (node:internal/streams/readable:563:12)
+    readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    Readable.push (node:internal/streams/readable:394:5)
+    Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+  ...
+# Subtest: AT-05: real Runner stops before accepting behavior on unknown compiler result
+not ok 10 - AT-05: real Runner stops before accepting behavior on unknown compiler result
+  ---
+  duration_ms: 7.989833
+  type: 'test'
+  location: '/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-faults.test.mjs:11:40'
+  failureType: 'testCodeFailure'
+  error: '[test-only-compiler-fault] "onLoad" filter is not a valid Go regular expression: "(?u)case-context-v4\\\\.mjs$"'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    /Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:1234:34
+    responseCallbacks.<computed> (/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:886:9)
+    handleIncomingPacket (/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:940:31)
+    Socket.readFromStdout (/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/node_modules/esbuild/lib/main.js:864:7)
+    Socket.emit (node:events:509:28)
+    addChunk (node:internal/streams/readable:563:12)
+    readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    Readable.push (node:internal/streams/readable:394:5)
+    Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 8
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11044.240583

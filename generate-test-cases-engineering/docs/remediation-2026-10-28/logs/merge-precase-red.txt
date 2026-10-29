@@ -1,0 +1,39 @@
+✔ 4.3 behavior assertions form a closed, deterministic Evidence contract (24.817708ms)
+✔ 4.3 behavior assertions reject malformed families and items at Evidence (66.94875ms)
+✔ 4.3 behavior assertions require exact Claim-to-Fact ownership (9.251833ms)
+✔ 4.3 behavior assertions reject duplicate and conflicting values for one Claim field (18.266083ms)
+✔ historical behavior assertion protocols are rejected (1.881292ms)
+✖ pre-case acceptance rejects the same malformed behavior assertions as final compilation (9.766916ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 5
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 224.829292
+
+✖ failing tests:
+
+test at test/core/v4-behavior-assertion-contract.test.mjs:78:1
+✖ pre-case acceptance rejects the same malformed behavior assertions as final compilation (9.766916ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'pre_case'
+  - 'need_revision'
+
+      at TestContext.<anonymous> (file:///Users/zhangxudong/.codex/worktrees/merge-gtc-compiler-remediation/awesome-self-skills/generate-test-cases-engineering/test/core/v4-behavior-assertion-contract.test.mjs:84:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'pre_case',
+    expected: 'need_revision',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

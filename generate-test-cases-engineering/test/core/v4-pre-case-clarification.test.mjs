@@ -12,17 +12,17 @@ const checkpointBytes = new TextEncoder().encode('{"revision":3}\n');
 
 function facts() {
   return [
-    { fact_id: 'FACT-ip', statement: '评价列表包含 IP 列', claim_ids: ['CLM-ip'] },
-    { fact_id: 'FACT-empty', statement: '评价列表展示可为空的评价字段', claim_ids: ['CLM-empty'] },
-    { fact_id: 'FACT-sort', statement: '评价列表支持排序', claim_ids: ['CLM-sort'] },
-    { fact_id: 'FACT-refresh', statement: '评价列表可以刷新', claim_ids: ['CLM-refresh'] }
+    { status: 'ambiguous', fact_id: 'FACT-ip', statement: '评价列表包含 IP 列', claim_ids: ['CLM-ip'] },
+    { status: 'ambiguous', fact_id: 'FACT-empty', statement: '评价列表展示可为空的评价字段', claim_ids: ['CLM-empty'] },
+    { status: 'ambiguous', fact_id: 'FACT-sort', statement: '评价列表支持排序', claim_ids: ['CLM-sort'] },
+    { status: 'ambiguous', fact_id: 'FACT-refresh', statement: '评价列表可以刷新', claim_ids: ['CLM-refresh'] }
   ];
 }
 
 /** @param {any} overrides @returns {any} */
 function semanticIssue(overrides) {
   return {
-    category: 'semantic_gap',
+    category: 'semantic_gap', acceptance_impact: { classification: 'noncritical', criteria: ['does_not_change_required_acceptance'], rationale: '本协议夹具将该展示附项列为非核心，验证保留的 Conditional/暂定处理；关键缺口另有专门反例。' },
     code: 'BUSINESS_RULE_UNRESOLVED',
     subject_fact_ids: ['FACT-ip'],
     missing_aspect: 'meaning',
@@ -87,6 +87,7 @@ function input(overrides = {}) {
     behavior_views_digest: null,
     case_drafts_digest: null,
     facts: facts(),
+    claims: facts().flatMap(fact => fact.claim_ids.map(claim_id => ({claim_id, value: fact.statement}))),
     diagnostic_candidates: issues(),
     prior_checkpoint: null,
     ...overrides
@@ -143,47 +144,6 @@ test('compiler owns stable semantic root, version and question-part identities',
   assert.equal(changedRoot.root_issue_id, root.root_issue_id, 'downstream associations must not affect root identity');
 });
 
-test('compiler-private migration dispositions preserve explicit terminal intent only after fresh root reproduction', () => {
-  const first = clarification.compileSemanticClarificationCheckpointV4(input());
-  const [deferred, unknown, closed] = first.checkpoint.semantic_gap_ledger;
-  const migrated = clarification.compileSemanticClarificationCheckpointV4(input({
-    initial_root_dispositions: [
-      { root_issue_id: closed.root_issue_id, status: 'closed_for_delivery' },
-      { root_issue_id: deferred.root_issue_id, status: 'deferred_by_user' },
-      { root_issue_id: unknown.root_issue_id, status: 'unknown_by_user' }
-    ]
-  }));
-  assert.equal(migrated.status, 'clarification_complete');
-  assert.equal(migrated.presentation, null);
-  assert.deepEqual(new Map(migrated.checkpoint.clarification_state.root_states.map(
-    (/** @type {any} */ state) => [state.root_issue_id, state.status]
-  )), new Map([
-    [deferred.root_issue_id, 'deferred_by_user'],
-    [unknown.root_issue_id, 'unknown_by_user'],
-    [closed.root_issue_id, 'closed_for_delivery']
-  ]));
-  assert.deepEqual(
-    migrated.checkpoint.clarification_state.closed_for_delivery_part_ids,
-    [closed.question_part_id]
-  );
-  assert.throws(() => clarification.compileSemanticClarificationCheckpointV4(input({
-    initial_root_dispositions: [{
-      root_issue_id: `ROOT-${'f'.repeat(64)}`, status: 'presented'
-    }]
-  })), /MIGRATION_ROOT_REANALYSIS_MISMATCH/u);
-  assert.throws(() => clarification.compileSemanticClarificationCheckpointV4(input({
-    prior_checkpoint: first.checkpoint,
-    initial_root_dispositions: [{
-      root_issue_id: deferred.root_issue_id, status: 'deferred_by_user'
-    }]
-  })), /MIGRATION_ROOT_DISPOSITIONS_INVALID/u);
-  assert.throws(() => clarification.compileSemanticClarificationCheckpointV4(input({
-    initial_root_dispositions: [{
-      root_issue_id: deferred.root_issue_id, status: 'resolved_final'
-    }]
-  })), /MIGRATION_ROOT_DISPOSITIONS_INVALID/u,
-  'a legacy answer cannot bypass fresh v4 Decision provenance');
-});
 
 test('question parts contain business rationale, exact recovery and only constructible actions', async () => {
   assert.equal(typeof clarification.validateSemanticPresentationV4, 'function');
@@ -236,7 +196,7 @@ test('v4 semantic validators reject a schema-valid legacy presentation', () => {
 
 test('same decision root is aggregated once and conflicting business wording is rejected', () => {
   const duplicate = semanticIssue({ source_claim_ids: ['CLM-ip-extra'], affected_test_point_ids: ['TP-ip'] });
-  const result = clarification.compileSemanticClarificationCheckpointV4(input({ diagnostic_candidates: [...issues(), duplicate] }));
+  const result = clarification.compileSemanticClarificationCheckpointV4(input({ diagnostic_candidates: [...issues(), duplicate], claims: [...input().claims, {claim_id: 'CLM-ip-extra', value: 'IP 列的补充来源'}] }));
   assert.equal(result.presentation.question_parts
     .filter((/** @type {any} */ part) => part.question.includes('IP')).length, 1);
   const root = result.checkpoint.semantic_gap_ledger.find((item) => item.question.includes('IP'));
@@ -259,7 +219,7 @@ test('semantic roots consume the accepted Evidence fact and Claim shapes without
   assert.deepEqual(result.presentation.question_parts[0].affected_facts, [actualClaim.value]);
 });
 
-test('v4 Evidence carries closed typed semantic-gap inputs while v3 remains unchanged', async () => {
+test('v4 Evidence carries closed typed semantic-gap inputs and rejects historical shape', async () => {
   const schema = JSON.parse(await readFile(new URL('../../skill/generate-test-cases/scripts/schemas/evidence-claims.schema.json', import.meta.url), 'utf8'));
   const fact = {
     fact_id: 'FACT-ip', statement: 'IP 列含义尚未明确', status: 'ambiguous',
@@ -267,7 +227,7 @@ test('v4 Evidence carries closed typed semantic-gap inputs while v3 remains unch
     field_path: '/response/ip'
   };
   const semanticGap = {
-    category: 'semantic_gap', code: 'IP_MEANING_UNRESOLVED', subject_fact_ids: ['FACT-ip'],
+    category: 'semantic_gap', acceptance_impact: { classification: 'noncritical', criteria: ['does_not_change_required_acceptance'], rationale: '本协议夹具将该展示附项列为非核心，验证保留的 Conditional/暂定处理；关键缺口另有专门反例。' }, code: 'IP_MEANING_UNRESOLVED', subject_fact_ids: ['FACT-ip'],
     missing_aspect: 'meaning', scope_ref: 'admin.review-list.ip', question: 'IP 表示什么？',
     why_needed: '需要明确业务含义。', decision_impact: '决定列值预期。', unresolved_outcome: '该列场景待确认。',
     answer_options: ['网络 IP', '定位城市'], risk_level: 'high', source_claim_ids: ['CLM-ip'],
@@ -289,6 +249,6 @@ test('v4 Evidence carries closed typed semantic-gap inputs while v3 remains unch
     fact_id: 'FACT-ip', claim_id: 'CLM-ip', status: 'ambiguous', source_claim_ids: ['CLM-ip'],
     required_view_kinds: ['integration'], view_review_basis: 'IP 列含义尚未明确'
   }] };
-  assert.deepEqual(validateAgainstSchema(legacy, schema), []);
+  assert.notDeepEqual(validateAgainstSchema(legacy, schema), []);
   assert.notDeepEqual(validateAgainstSchema({ ...legacy, semantic_gaps: [] }, schema), []);
 });

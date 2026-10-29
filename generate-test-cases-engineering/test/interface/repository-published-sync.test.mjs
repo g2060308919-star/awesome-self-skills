@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const engineeringRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const builtSkill = path.join(engineeringRoot, 'skill/generate-test-cases');
-const publishedSkill = path.resolve(engineeringRoot, '../generate-test-cases');
+const publishedSkills = [
+  path.resolve(engineeringRoot, '../generate-test-cases'),
+  path.resolve(engineeringRoot, '../prd-e2e-plugin/skills/generate-test-cases')
+];
 
 /** @param {string} root @param {string} [relative] @returns {Promise<string[]>} */
 async function files(root, relative = '') {
@@ -22,7 +25,7 @@ async function files(root, relative = '') {
   return result;
 }
 
-test('repository-published Skill is byte-identical to the engineering build shape', async () => {
+for (const publishedSkill of publishedSkills) test(`published Skill ${path.relative(engineeringRoot, publishedSkill)} is byte-identical to the engineering build shape`, async () => {
   const builtFiles = await files(builtSkill);
   const publishedFiles = await files(publishedSkill);
   assert.deepEqual(publishedFiles, builtFiles, 'published Skill file inventory is stale');

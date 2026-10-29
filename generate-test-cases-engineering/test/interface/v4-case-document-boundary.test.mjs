@@ -1,3 +1,5 @@
+import {candidateDeliveryInput} from '../helpers/v4-candidate-delivery-fixture.mjs';
+import {materializeCaseDocumentDeliveryV4} from '../../src/canonical-delivery-v4.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import test from 'node:test';
@@ -45,14 +47,14 @@ test('Case Document rejects an execution intent or contaminated semantic result'
 });
 const hash = (/** @type {string} */ text) => 'sha256:' + createHash('sha256').update(text).digest('hex');
 function fixture() {
-  // v4 execution inherits the canonical Case Document business order. The
-  // reference fixture therefore carries the same required ordered-case ledger
-  // as a real delivered bundle rather than relying on storage-array order.
-  const bundle = {schema_version:'4.0.0',compiler_version:'0.5.0',delivery_intent:'case_document',source_revision:0,ordered_case_ids:['CASE-a'],cases:[{case_id:'CASE-a',semantic_status:'Grounded',title:'显示来源'}]};
-  const bundle_bytes = JSON.stringify(bundle);
-  const manifest = {run_id:'RUN-doc',revision:0,schema_version:'4.0.0',compiler_version:'0.5.0',delivery_intent:'case_document',authority:'canonical',result_kind:'delivered_cases',bundle:{path:'output/r000/test-bundle.json',digest:hash(bundle_bytes)},markdown:{path:'output/r000/test-cases.md',digest:hash('md')},execution_worksheet:{path:'output/r000/execution-worksheet.csv',digest:hash('csv'),format:'csv'},render_options:{include_audit_appendix:false},case_count:1,blocked_root_count:0,closed_for_delivery_root_count:0,not_applicable_count:0,exploratory_count:0,completed_at:'2026-09-09T00:00:00Z'};
-  const manifest_bytes = JSON.stringify(manifest);
-  return {bundle, snapshot:{manifest_bytes,bundle_bytes},request:{delivery_intent:'execution_plan',case_document_ref:{run_id:'RUN-doc',revision:0,manifest_digest:hash(manifest_bytes),bundle_digest:hash(bundle_bytes)}}};
+  const input = candidateDeliveryInput();
+  input.bundle.source_revision=0;
+  input.bundle.cases[0].case_id='CASE-a';input.bundle.cases[0].semantic_status='Grounded';
+  input.bundle.ordered_case_ids=['CASE-a'];
+  const document=materializeCaseDocumentDeliveryV4(input);
+  const bundle=JSON.parse(document.bundle_bytes), bundle_bytes=document.bundle_bytes;
+  const manifest_bytes=JSON.stringify(document.manifest);
+  return {bundle,snapshot:{manifest_bytes,bundle_bytes},request:{delivery_intent:'execution_plan',case_document_ref:{run_id:document.manifest.run_id,revision:0,manifest_digest:hash(manifest_bytes),bundle_digest:hash(bundle_bytes)}}};
 }
 test('resolver bytes are captured once before hashing and parsing', async () => {
   const {snapshot,request}=fixture();

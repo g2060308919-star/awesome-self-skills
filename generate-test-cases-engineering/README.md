@@ -15,6 +15,10 @@ acceptance evidence. Nested Git metadata, `node_modules`, local worktrees,
 runtime caches, temporary files, and environment secrets are intentionally
 excluded.
 
+## 当前协议整改验收
+
+当前整改的代码说明、AT-01–33、真实独立审阅、构建和可重跑命令见 [整改交付记录](docs/remediation-2026-10-28/implementation-report.md)。`npm test` 默认运行当前协议与共享算法回归；历史协议原始测试及替代映射见 [test-history](test-history/README.md)。下列 public-pilot/benchmark 属于另行验收，不作为此次已执行结论。
+
 ## Verify
 
 ```bash
@@ -50,25 +54,11 @@ canonical Source → Evidence/Fact/Scope → pre-case clarification
 → canonical JSON + HTML + full Table + compatibility Markdown/CSV
 ```
 
-The exact `4.3.1/0.8.1` pair retains the general-quality candidate contract. It requires auditable
-candidate responsibility/disposition, acceptance-impact classification for
-semantic gaps, a final critical-semantic delivery gate, and a content-bound
-independent review. The review reuses `case_drafts`: a valid pending submission
-causes the compiler to issue the authoritative target inventory and digest, and
-a completed submission repeats the same generated content with an assessment
-bound to that digest. It is not a fifth artifact or public stage.
+Only `4.3.3/0.8.3` is accepted. The current contract retains candidate responsibility/disposition, acceptance-impact classification, critical-gap gates, source collection receipts and content-bound independent review. A pending review produces the exact inventory and digest; completion stays in `case_drafts`.
 
-The `4.3.2/0.8.2` pair keeps those quality gates and binds collection
-receipts separately from normalized source text. It carries reviewed resource
-acquisition through the source reading summary and canonical delivery.
+`prepareStageArtifact(runDirectory, reply, {stage, payload})` constructs the four in-memory candidates. Case-stage replies carry compiler-owned `case_context`; the runner recomputes its binding under the submission lock. Upstream answers are committed before downstream views and cases are rechecked. See [the stage construction contract](skill/generate-test-cases/references/stage-construction.md).
 
-The latest `4.3.3/0.8.3` pair preserves these gates, distinguishes colliding
-fact labels using source-backed business context, and hashes Evidence components
-from their canonical artifact snapshot. The formal runner requires a controlled
-upgrade for historical v4 identities; it never continues generation under an
-older pair. Original bytes and manifests remain immutable. See the
-[reliability validation report](docs/reliability-2026-10-22.md) for the support
-matrix, tests and remaining limits.
+Historical protocol input is rejected without conversion or mutation. Current task revisions and cancellation/source-change lineage remain supported. Historical validation reports describe their original release, not a current support matrix.
 
 Missing environment URLs, accounts, sample-data tools, observers, or mocks never block Case Document generation. Execution resources belong only to a separately requested execution-plan run bound to an immutable `case_document_ref`; the Skill prepares a runner projection but never starts E2E execution.
 
@@ -170,6 +160,6 @@ the command's exit status. Benchmark CLIs exit zero only for their successful
 top-level status; `invalid`, `fail`, `fatal`, `insufficient_evidence`, and
 incomplete statuses exit nonzero.
 
-## v3 migration
+## Remediation acceptance
 
-Existing v3 runs remain immutable and readable. Migration creates a v4 sibling with explicit lineage and a migration index; it does not rewrite the v3 directory in place. Ambiguous legacy clarification suppression is reopened or marked for review, and incomplete or digest-invalid migrations fail closed. Continue a migrated run only through its new v4 directory.
+The local materials, actual independent review and per-scenario results are recorded in [docs/remediation-2026-10-28](docs/remediation-2026-10-28/). Protocol-only simulated review fixtures are separate from real sample review evidence.

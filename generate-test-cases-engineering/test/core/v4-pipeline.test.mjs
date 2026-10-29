@@ -3,17 +3,34 @@ import test from 'node:test';
 
 import testBundleSchema from '../../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import { digest } from '../../src/canonical.mjs';
-import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
+import { compileCaseDocumentRevisionV4 as compileRaw, compileCaseAuthoringContext, validateCaseDraftCandidate } from '../../src/v4-pipeline.mjs';
 import { deriveV4SystemContext } from '../../src/v4-system-context.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
+import { bindGeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 import { v4PipelineFixture as fixture } from '../helpers/v4-pipeline-fixture.mjs';
+
+// Protocol-only simulation isolates the pipeline algorithms under test. This is
+// never used by the local sample acceptance driver or as a real review record.
+/** @param {any} artifacts @param {any} system */
+function compileCaseDocumentRevisionV4(artifacts, system) {
+ let result=compileRaw(artifacts,system);
+ if(result.review_request){
+  const request=result.review_request;
+  const target=request.review_target_projection;
+  const items=target.formal_test_points.map((/** @type {any} */ p)=>({item_kind:'formal_test_point',item_id:p.formal_test_point_id}));
+  artifacts=structuredClone(artifacts);
+  artifacts.case_drafts.independent_review={...artifacts.case_drafts.independent_review,status:'completed',source_first_targets:request.source_first_targets,review_target_digest:request.review_target_digest,target_assessments:request.source_first_targets.map((/** @type {any} */ t)=>({target_id:t.target_id,disposition:'verified',affected_items:items,source_claim_ids:t.source_claim_ids,decision_ids:t.decision_ids,rationale:'TEST ONLY: protocol fixture for this algorithm unit test.',required_recheck:{status:'passed',affected_items:items}})),findings:[]};
+  result=compileRaw(artifacts,system);
+ }
+ return result;
+}
 
 test('the v4 production pipeline compiles all four Agent artifacts into one canonical Case Document bundle', () => {
   const input = fixture();
   const result = compileCaseDocumentRevisionV4(input.artifacts, input.system);
   assert.equal(result.status, 'compiled', JSON.stringify(result));
-  assert.equal(result.bundle.compiler_version, '0.5.0');
-  assert.equal(result.bundle.schema_version, '4.0.0');
+  assert.equal(result.bundle.compiler_version, '0.8.3');
+  assert.equal(result.bundle.schema_version, '4.3.3');
   assert.equal(result.bundle.delivery_intent, 'case_document');
   assert.equal(result.bundle.result_kind, 'delivered_cases');
   assert.equal(result.bundle.cases.length, 1);
@@ -50,7 +67,7 @@ test('pre-case semantic gaps stop before Behavior Views or Case Draft defects ca
   const fact = input.artifacts.evidence_claims.fact_ledger[0];
   const claim = input.artifacts.evidence_claims.claims[0];
   input.artifacts.evidence_claims.semantic_gaps = [{
-    category: 'semantic_gap', code: 'ACCEPTANCE_TIMING_UNRESOLVED', subject_fact_ids: [fact.fact_id],
+    category: 'semantic_gap', acceptance_impact: { classification: 'noncritical', criteria: ['does_not_change_required_acceptance'], rationale: '本协议夹具将该展示附项列为非核心，验证保留的 Conditional/暂定处理；关键缺口另有专门反例。' }, code: 'ACCEPTANCE_TIMING_UNRESOLVED', subject_fact_ids: [fact.fact_id],
     missing_aspect: 'acceptance_timing', scope_ref: 'checkout', question: '订单何时视为已接受？',
     why_needed: '需要明确业务完成时点。', decision_impact: '决定观察步骤和预期。',
     unresolved_outcome: '接受时机相关场景保持待确认。', answer_options: ['提交成功时', '异步处理完成时'],
@@ -131,7 +148,7 @@ test('resolved semantic roots remain in the canonical audit while leaving the ac
   const fact = input.artifacts.evidence_claims.fact_ledger[0];
   const claim = input.artifacts.evidence_claims.claims[0];
   input.artifacts.evidence_claims.semantic_gaps = [{
-    category: 'semantic_gap', code: 'ACCEPTANCE_TIMING_UNRESOLVED',
+    category: 'semantic_gap', acceptance_impact: { classification: 'noncritical', criteria: ['does_not_change_required_acceptance'], rationale: '本协议夹具将该展示附项列为非核心，验证保留的 Conditional/暂定处理；关键缺口另有专门反例。' }, code: 'ACCEPTANCE_TIMING_UNRESOLVED',
     subject_fact_ids: [fact.fact_id], missing_aspect: 'acceptance_timing',
     scope_ref: 'checkout', question: '订单何时视为已接受？',
     why_needed: '需要明确业务完成时点。', decision_impact: '决定观察步骤和预期。',
@@ -157,7 +174,7 @@ test('resolved semantic roots remain in the canonical audit while leaving the ac
   assert.equal(result.status, 'compiled', JSON.stringify(result));
   assert.equal(result.bundle.coverage.semantic_gap_count, 0);
   assert.equal(result.bundle.semantic_root_groups.length, 1);
-  assert.equal(result.bundle.semantic_root_groups[0].status, 'resolved');
+  assert.equal(result.bundle.semantic_root_groups[0].status, 'resolved_temporary');
 });
 
 test('production validates relative-baseline semantics against the verified Claim instead of trusting the Case Draft', () => {
@@ -315,7 +332,7 @@ test('production risk ledger uses verified Claim routes for formal, semantic-gap
     reason: '该只读结算状态不改变业务权限'
   }];
   input.artifacts.evidence_claims.semantic_gaps = [{
-    category: 'semantic_gap', code: 'UNKNOWN_ENUM_UNRESOLVED',
+    category: 'semantic_gap', acceptance_impact: { classification: 'noncritical', criteria: ['does_not_change_required_acceptance'], rationale: '本协议夹具将该展示附项列为非核心，验证保留的 Conditional/暂定处理；关键缺口另有专门反例。' }, code: 'UNKNOWN_ENUM_UNRESOLVED',
     subject_fact_ids: [fact.fact_id], missing_aspect: 'unknown_enum', scope_ref: 'checkout',
     question: '出现未知状态值时应如何展示？', why_needed: '需要确定未知值的业务结果。',
     decision_impact: '答案决定未知值用例的预期。', unresolved_outcome: '未知值场景保持待确认。',
@@ -367,9 +384,9 @@ test('production ordering registry is derived from source-backed Claim assertion
   const forged = compileCaseDocumentRevisionV4(
     input.artifacts, deriveV4SystemContext(input.artifacts)
   );
-  assert.equal(forged.status, 'fatal', JSON.stringify(forged));
-  assert.equal(forged.result_kind, 'quality_failure');
-  assert.equal(forged.reason_code, 'CASE_ORDERING_FAILED');
+  assert.equal(forged.status, 'need_revision', JSON.stringify(forged));
+  assert.equal(forged.stage, 'case_drafts');
+  assert.equal(forged.diagnostics[0].code, 'ORDERING_CASE_REFERENCE_UNRESOLVED');
 });
 
 test('production resolves a Claim-backed outcome dependency into compiler-owned Case dependencies', () => {
@@ -436,10 +453,17 @@ test('production resolves a Claim-backed outcome dependency into compiler-owned 
     makeCase('created', createdPoint, '订单已创建')
   ];
 
+  bindGeneralQualityFixture({artifacts:input.artifacts,system:deriveV4SystemContext(input.artifacts)});
   const result = compileCaseDocumentRevisionV4(
     input.artifacts, deriveV4SystemContext(input.artifacts)
   );
   assert.equal(result.status, 'compiled', JSON.stringify(result));
+  const {case_drafts,...upstream}=input.artifacts;
+  const context=compileCaseAuthoringContext(upstream,deriveV4SystemContext(input.artifacts));
+  const partial={...case_drafts,cases:[case_drafts.cases[0]]};
+  assert.equal(validateCaseDraftCandidate(partial,context,deriveV4SystemContext(input.artifacts)).status,'candidate_valid',
+    'construction validates selectors without demanding all dependency endpoint Cases');
+  assert.notEqual(compileRaw({...upstream,case_drafts:partial},deriveV4SystemContext(input.artifacts)).status,'compiled');
   const created = result.bundle.cases.find((/** @type {any} */ item) => item.primary_test_point_id === createdPoint);
   const accepted = result.bundle.cases.find((/** @type {any} */ item) => item.primary_test_point_id === acceptedPoint);
   assert.deepEqual(created.ordering.depends_on_case_ids, []);

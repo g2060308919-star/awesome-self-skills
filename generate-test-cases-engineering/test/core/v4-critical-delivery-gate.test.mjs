@@ -6,7 +6,7 @@ import {
   availableSemanticActionsV4,
   deriveSemanticDeliveryGateV4
 } from '../../src/semantic-delivery-gate-v4.mjs';
-import { GENERAL_QUALITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
 import { classifyFinalOutcomeV4 } from '../../src/final-outcome-v4.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
@@ -46,7 +46,7 @@ test('AT16/AT20/AT21: criticality follows acceptance impact, never risk or tempo
     'presented', 'resolved_temporary', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery'
   ]) {
     const result = deriveSemanticDeliveryGateV4({
-      contract: GENERAL_QUALITY_V4_CONTRACT,
+      contract: RELIABILITY_V4_CONTRACT,
       roots: [critical, noncritical],
       rootStates: [state(critical, status), state(noncritical, 'closed_for_delivery')],
       decisions: []
@@ -59,7 +59,7 @@ test('AT16/AT20/AT21: criticality follows acceptance impact, never risk or tempo
 test('AT22: 4.3 fails closed when acceptance impact has not been classified', () => {
   const unclassified = { root_issue_id: 'ROOT-unclassified', root_version_digest: digest('c'), risk_level: 'low' };
   assert.throws(() => deriveSemanticDeliveryGateV4({
-    contract: GENERAL_QUALITY_V4_CONTRACT,
+    contract: RELIABILITY_V4_CONTRACT,
     roots: [unclassified], rootStates: [state(unclassified, 'presented')], decisions: []
   }), /SEMANTIC_IMPACT_REQUIRED/);
 });
@@ -74,7 +74,7 @@ test('AT26: only a current final E3 Decision resolves a critical user question',
     resolution: 'final', evidence_level: 'E3', authority: 'product_final'
   };
   const resolved = deriveSemanticDeliveryGateV4({
-    contract: GENERAL_QUALITY_V4_CONTRACT,
+    contract: RELIABILITY_V4_CONTRACT,
     roots: [critical], rootStates: [state(critical, 'resolved_final')], decisions: [finalDecision]
   });
   assert.equal(resolved.can_materialize_formal_case_document, true);
@@ -90,7 +90,7 @@ test('AT26: only a current final E3 Decision resolves a critical user question',
     { ...finalDecision, target: { ...finalDecision.target, root_version_digest: digest('d') } }
   ]) {
     assert.equal(deriveSemanticDeliveryGateV4({
-      contract: GENERAL_QUALITY_V4_CONTRACT,
+      contract: RELIABILITY_V4_CONTRACT,
       roots: [critical], rootStates: [state(critical, 'resolved_final')], decisions: [staleOrWeak]
     }).can_materialize_formal_case_document, false);
   }
@@ -115,7 +115,7 @@ test('AT26: replayable E2 derivation and evidence-backed non-applicability are l
     }
   ]) {
     const result = deriveSemanticDeliveryGateV4({
-      contract: GENERAL_QUALITY_V4_CONTRACT,
+      contract: RELIABILITY_V4_CONTRACT,
       roots: [critical], rootStates: [state(critical, fixture.status)], decisions: [fixture.record]
     });
     assert.equal(result.can_materialize_formal_case_document, true);

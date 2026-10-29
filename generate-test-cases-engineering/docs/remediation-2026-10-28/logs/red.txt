@@ -1,0 +1,49 @@
+✖ AT-01: public runner provides complete case context without any submitted cases (1970.173833ms)
+✖ AT-08: public stage constructor is available (0.398041ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2140.854667
+
+✖ failing tests:
+
+test at test/interface/remediation-context.test.mjs:53:1
+✖ AT-01: public runner provides complete case context without any submitted cases (1970.173833ms)
+  AssertionError [ERR_ASSERTION]: missing compiler-owned case authoring context
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-context.test.mjs:56:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/interface/remediation-context.test.mjs:68:1
+✖ AT-08: public stage constructor is available (0.398041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'undefined'
+  - 'function'
+
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-context.test.mjs:69:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'undefined',
+    expected: 'function',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

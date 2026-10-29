@@ -1,0 +1,35 @@
+{
+  "original_documents_sha256": {
+    "01-context.md": "c5e4a15fedd6c70a3ec38f3fbc066bb81f174fc168256ea1486f7be6e19bd65e",
+    "02-technical-design.md": "dc54aa2695c5de37f53413f9fa8d4f5e962dc45fbd9dd6da4485324372bd1684",
+    "03-spec.md": "a63f1365e2834d030a8c07a7c923d725534b858a86a909abe1cdcb77b27942e0"
+  },
+  "archived_test_original_bytes_verified": [
+    "core/v4-candidate-contract.test.mjs",
+    "core/v4-general-quality-contract.test.mjs",
+    "fixtures/v4/migration-crash-driver.mjs",
+    "golden/v4-bend-review-platform.test.mjs",
+    "golden/v4-presentation-quality.test.mjs",
+    "interface/v4-bend-review-journey.test.mjs",
+    "interface/v4-general-quality-versioning.test.mjs",
+    "interface/v4-migration-runner.test.mjs",
+    "interface/v4-no-fallback-conformance.test.mjs",
+    "interface/v4-post-case-runner.test.mjs",
+    "interface/v4-reliability-public-upgrade.test.mjs",
+    "interface/v4-runner-production.test.mjs",
+    "interface/v4-schema-examples.test.mjs",
+    "interface/v4-semantic-reopen-runner.test.mjs",
+    "interface/v4-task15-journey-evidence.test.mjs",
+    "recovery/execution-run-store.test.mjs",
+    "recovery/v4-candidate-transaction.test.mjs",
+    "recovery/v4-migration.test.mjs",
+    "recovery/v4-version-upgrade.test.mjs",
+    "repeatability/v4-installed-journey.repeat.mjs"
+  ],
+  "published_file_count": 29,
+  "published_shape_byte_identical": true,
+  "bundle_sha256": "1ebe32dae289ab2bfc85e12ceb1b8f6373062c754d812371095f273a388405e6",
+  "canonical_identity_source_unchanged": true,
+  "obsolete_public_paths_absent": true,
+  "git_diff_check": "passed"
+}

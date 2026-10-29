@@ -11,7 +11,7 @@ const sha = (value) => `sha256:${createHash('sha256').update(value).digest('hex'
 /** @returns {any} */
 function finalCheckpoint() {
   return {
-    schema_version: '4.0.0', compiler_version: '0.5.0',
+    schema_version: '4.3.3', compiler_version: '0.8.3',
     run_id: 'RUN-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', revision: 4,
     commit_profile: 'final',
     source_review_witness: { expected_unit_ids: ['UNIT-1'], reviewed_unit_ids: ['UNIT-1'] },
@@ -49,7 +49,7 @@ test('T10 final checkpoint schema rejects an active presentation or incomplete d
   const rootIssueId = `ROOT-${'4'.repeat(64)}`;
   const rootVersionDigest = sha('root');
   active.clarification_state.presentation = {
-    schema_version: '4.0.0', presentation_id: presentationId,
+    schema_version: '4.3.3', presentation_id: presentationId,
     phase: 'requirements_analysis', supersedes_presentation_id: null,
     answered_part_ids: [], remaining_part_ids: [questionPartId],
     cycle_digest: sha('active-cycle'), run_actions: ['cancel_run'],

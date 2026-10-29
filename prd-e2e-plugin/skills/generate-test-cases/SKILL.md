@@ -5,7 +5,7 @@ description: Use when a PRD, module description, module-description, 需求文�
 
 # Generate Test Cases
 
-Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. New runs and upgraded continuations use `4.3.3/0.8.3`. Historical v4 runs retain their immutable bytes; continue them through the compiler-created `version_upgrade` successor described in `references/run-management.md`. v4 is the only public generation workflow. v3 is a legacy, read-only validation or migration input and is never a generation fallback.
+Use the bundled deterministic compiler to turn requirements into evidence-grounded manual functional Cases. The current protocol is `4.3.3/0.8.3`. Inputs outside that contract receive `CURRENT_PROTOCOL_REQUIRED`; preserve their original files. There is no protocol conversion, upgrade, downgrade, or migration entry. Task revisions and verified cancellation recovery remain part of the current workflow.
 
 The compiler owns validation, stable identity, Facts, scope topology, formal Test Points, semantic roots, classification, coverage, ordering, checkpoints, canonical results, and rendering. The Agent writes only the four requested semantic artifacts: `source_pack`, `evidence_claims`, `behavior_views`, and `case_drafts`.
 
@@ -101,7 +101,7 @@ For semantic clarification, allow only `answer_question_part`, `defer_question_p
 
 ### Handle `need_revision`
 
-Report current state, accepted artifacts, exact validation reason, the artifact/action that can be corrected next, and recovery from the last committed checkpoint. Repair an unaccepted staging artifact at the same revision. Repair an accepted semantic artifact only through the digest-bound append procedure in `run-management.md`; never edit accepted, derived, or output bytes.
+Report current state, accepted artifacts, exact validation reason, the artifact/action that can be corrected next, and recovery from the last committed checkpoint. Repair an unaccepted staging artifact at the same revision. For accepted semantic state, use only advertised answer/recovery actions described in `run-management.md`; unsupported repair actions are technical limitations, and accepted, derived, or output bytes remain immutable.
 
 When `incomplete_reason.code` is `STAGE_ARTIFACT_REQUIRED`, open the named Schema and matching policy, write only its fixed staging file, and call the runner again:
 
@@ -110,9 +110,15 @@ When `incomplete_reason.code` is `STAGE_ARTIFACT_REQUIRED`, open the named Schem
 - `behavior_views` -> `staging/behavior-views.json`
 - `case_drafts` -> `staging/case-drafts.json`
 
+For each advertised `write_stage_artifact` or `revise_artifact` stage, call the
+bundled async `prepareStageArtifact(runDirectory, validatedReply, {stage, payload})`
+before writing. Read [stage-construction.md](references/stage-construction.md)
+for payload boundaries, context use, errors, and a runnable call pattern.
+It returns an in-memory candidate; only the runner accepts it.
+
 Any other Agent-writable stage is `PIPELINE_PROTOCOL_ERROR`. Never invent a fifth artifact.
 
-For a 4.3 `case_drafts` reply with `INDEPENDENT_REVIEW_REQUIRED` and a
+For a `case_drafts` reply with `INDEPENDENT_REVIEW_REQUIRED` and a
 `review_request`, do not create another artifact or stage. Read the declared
 source-first targets before the generated projection, adjudicate every target
 and finding from exact Claim/Decision support, and call
@@ -130,9 +136,9 @@ Allow three repair attempts for the same normalized stage and root cause. The fo
 
 Re-read `output/current.json`, treat it as the only authoritative manifest, and validate every referenced file and digest before reporting success. Report current state, canonical result kind, produced files/counts, any retained gaps or execution exclusion reason, next available action, and exact recovery run reference.
 
-For a 4.2 or 4.3 Case Document, validate `output/current.json` entries for canonical JSON, `test-cases.html`, `case-table.txt`, CSV, Markdown, and `source-reading.json`. For 4.3 also verify that the manifest review digest matches canonical JSON. Open `test-cases.html` as the primary readable artifact. Send the CommonMark Table from `case-table.txt` in canonical `ordered_case_ids` order and展示全部 Case 的全量 Table; every generated Case appears exactly once, and a long table is continued in ordered segments without ellipsis or sampling. Its required header is `序号 | 模块 | 用例/流程名称 | 预期结果 | 优先级 | 依据状态`. Display all step-bound Oracles in their deterministic observation order rather than summarizing only the last result.
+For a Case Document, validate `output/current.json` entries for canonical JSON, `test-cases.html`, `case-table.txt`, CSV, Markdown, and `source-reading.json`. Also verify that the manifest review digest matches canonical JSON. Open `test-cases.html` as the primary readable artifact. Send the CommonMark Table from `case-table.txt` in canonical `ordered_case_ids` order and展示全部 Case 的全量 Table; every generated Case appears exactly once, and a long table is continued in ordered segments without ellipsis or sampling. Its required header is `序号 | 模块 | 用例/流程名称 | 预期结果 | 优先级 | 依据状态`. Display all step-bound Oracles in their deterministic observation order rather than summarizing only the last result.
 
-JSON, HTML, CSV, Markdown, and the full Table are projections of the same canonical Case bundle; `source-reading.json` is separately projected from the bound technical collection record. Markdown remains a compatibility file and begins with a one-scenario-per-line overview showing module, priority, title, and status. Coverage is labelled “已审阅 formal test-point 覆盖” and separately names semantic gap, Exploratory, and NotApplicable counts. Never claim unbounded “100% requirement coverage”. Internal IDs appear only in canonical JSON or an explicitly enabled audit appendix. For a legacy 4.0 task, keep its original manifest and readable artifacts unchanged; do not backfill a false collection-completeness claim.
+JSON, HTML, CSV, Markdown, and the full Table are projections of the same canonical Case bundle; `source-reading.json` is separately projected from the bound technical collection record. Markdown remains a compatibility file and begins with a one-scenario-per-line overview showing module, priority, title, and status. Coverage is labelled “已审阅 formal test-point 覆盖” and separately names semantic gap, Exploratory, and NotApplicable counts. Never claim unbounded “100% requirement coverage”. Internal IDs appear only in canonical JSON or an explicitly enabled audit appendix.
 
 `blocked_only` is a delivered unresolved report and must not claim Cases were generated. `no_applicable_cases`, `delivered_cases`, and `delivered_with_gaps` retain their exact meaning. Execution-only `execution_ready` requires nonempty `runner_projection.case_ids`; `no_execution_selected` is not ready. Only Grounded + Execute Cases enter that projection.
 
@@ -152,7 +158,7 @@ Report current state, produced and preserved prior artifacts, incomplete reason 
 - Keep one independently diagnosable primary business outcome per Case. Every Oracle binds an existing step with `observe_after_step_id`.
 - Never fabricate a Behavior View field, business rule, ordering dependency, observer, execution resource, or Schema field. Multiple unrelated atomic Claims must not share a whole-document locator.
 - `request_delivery` may close selected semantic gaps for delivery; it never fabricates answers, deletes formal Test Points, or makes an execution plan ready.
-- In 4.3, `request_delivery`, ordinary confirmation, E1 input, defer, unknown, or `resolved_temporary` never resolves a critical acceptance-impact root. Formal delivery requires the compiler's final-resolution basis.
+- `request_delivery`, ordinary confirmation, E1 input, defer, unknown, or `resolved_temporary` never resolves a critical acceptance-impact root. Formal delivery requires the compiler's final-resolution basis.
 - Repair semantic errors at the earliest owning layer, then regenerate or re-review every affected downstream artifact and binding. Do not patch only the rendered Case or review prose.
 - A request to explain counts, apparent duplication, or a disposition rationale is read-only analysis unless the user explicitly changes product truth or scope. Explain the semantic difference before treating two items as duplicates, and do not create a new Source revision for explanation alone.
 - JSON is normative. HTML, the full conversation Table, Markdown, and CSV are mechanical views of the same canonical result, never independently edited.

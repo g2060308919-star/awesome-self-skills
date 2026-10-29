@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { canonicalStringify, digest } from '../src/canonical.mjs';
+import { verifySchemaContracts } from './verify-schema-contracts.mjs';
 
 const schemaDirectory = 'skill/generate-test-cases/scripts/schemas';
 const manifestPath = 'skill/generate-test-cases/scripts/schema-manifest.json';
@@ -21,10 +22,13 @@ try {
     ? await mkdtemp(path.join(os.tmpdir(), 'generate-test-cases-build-')) : null;
   const schemaFiles = /** @type {string[]} */ (await readdir(schemaDirectory))
     .filter((/** @type {string} */ file) => file.endsWith('.schema.json')).sort();
+  const registry = new Map();
   const schemas = await Promise.all(schemaFiles.map(async (/** @type {string} */ file) => {
     const schema = JSON.parse(await readFile(path.join(schemaDirectory, file), 'utf8'));
+    registry.set(file, schema);
     return { file, digest: digest(schema) };
   }));
+  verifySchemaContracts(registry);
   const manifestBase = { compiler_version: compilerVersion, schema_version: schemaVersion, schemas };
   const manifestDigest = digest(manifestBase);
   const manifestText = `${canonicalStringify({ ...manifestBase, digest: manifestDigest })}\n`;

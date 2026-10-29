@@ -1814,33 +1814,6 @@ export async function prepareRunStore(runDirectory) {
   return canonicalRoot;
 }
 
-/** Create or recover the immutable identity for one private run directory. */
-/** @param {string} runDirectory */
-export async function ensureRunInstance(runDirectory) {
-  const target = pathJoin(runDirectory, 'run-instance.json');
-  const existing = await readJsonIfPresent(runDirectory, target);
-  if (existing) {
-    const value = existing.value;
-    if (!value || typeof value !== 'object'
-      || value.schema_version !== '3.0.0'
-      || typeof value.run_instance_id !== 'string'
-      || !/^RUN-[0-9a-f-]{36}$/u.test(value.run_instance_id)
-      || typeof value.created_at !== 'string') throw new RunStoreIntegrityError(
-      'Immutable run-instance.json is invalid.'
-    );
-    return value;
-  }
-  const value = {
-    schema_version: '3.0.0',
-    run_instance_id: `RUN-${NATIVE_RANDOM_UUID()}`,
-    created_at: NATIVE_REFLECT_APPLY(
-      NATIVE_DATE_TO_ISO_STRING, new NATIVE_DATE(currentTimeMilliseconds()), []
-    )
-  };
-  await atomicWriteJson(runDirectory, target, value);
-  return value;
-}
-
 /** Restore a staging file claimed immediately before a crashed promotion. */
 /** @param {string} runDirectory */
 export async function recoverStagingClaims(runDirectory) {
@@ -2278,19 +2251,4 @@ export async function writeNonReadyCurrent(runDirectory, runInstanceId, activeSo
     reason: 'higher_revision_not_ready',
     previous_ready_revision: previousReadyRevision ?? null
   });
-}
-
-/** Catalog-scoped migration never writes to the legacy run. @param {string} catalogRoot @param {string} legacyRunDirectory */
-export async function migrateLegacyRun(catalogRoot, legacyRunDirectory) {
-  return (await import('./migrate-v3-run.mjs')).migrateLegacyRun(catalogRoot, legacyRunDirectory);
-}
-
-/** Bidirectional immutable migration lookup. @param {string} catalogRoot @param {string} runId */
-export async function queryLegacyMigration(catalogRoot, runId) {
-  return (await import('./migrate-v3-run.mjs')).queryLegacyMigration(catalogRoot, runId);
-}
-
-/** Read and reverify a sibling seed before the v4 runner performs source reanalysis. @param {string} catalogRoot @param {string} siblingDirectory */
-export async function loadMigrationReplaySeed(catalogRoot, siblingDirectory) {
-  return (await import('./migrate-v3-run.mjs')).loadMigrationReplaySeed(catalogRoot, siblingDirectory);
 }

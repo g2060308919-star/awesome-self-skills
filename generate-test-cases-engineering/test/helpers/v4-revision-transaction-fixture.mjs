@@ -4,16 +4,19 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { materializeCaseDocumentDeliveryV4 } from '../../src/canonical-delivery-v4.mjs';
-import { canonicalStringify, digest } from '../../src/canonical.mjs';
+import { canonicalArtifactSnapshot, canonicalStringify, digest } from '../../src/canonical.mjs';
 import {
   applySemanticClarificationEventsV4,
   compileSemanticClarificationCheckpointV4,
   constructSemanticClarificationEventV4
 } from '../../src/clarification-v4.mjs';
 import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
+import { compileIndependentReviewTargetV4 } from '../../src/independent-review-v4.mjs';
+import { materializeRelativeBaselinesV4 } from '../../src/relative-baseline-materialization-v4.mjs';
+import { deriveV4CaseSemanticContext } from '../../src/v4-system-context.mjs';
 import { bindGeneralQualityFixture } from './v4-general-quality-fixture.mjs';
 import { v4PipelineFixture } from './v4-pipeline-fixture.mjs';
-import { LEGACY_V4_CONTRACT, isGeneralQualityV4Contract } from '../../src/v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT, isGeneralQualityV4Contract } from '../../src/v4-contract.mjs';
 
 /** @param {unknown} value */
 export const sha = (value) => `sha256:${createHash('sha256').update(String(value)).digest('hex')}`;
@@ -53,15 +56,16 @@ const clone = (value) => structuredClone(value);
 function semanticGap(index, evidence) {
   return {
     category: 'semantic_gap', code: `OUTCOME_RULE_${index + 1}`,
-    subject_fact_ids: [evidence.fact_ledger[0].fact_id],
-    missing_aspect: `expected outcome ${index + 1}`, scope_ref: `checkout/rule-${index + 1}`,
+    subject_fact_ids: [`FACT-optional-${index + 1}`],
+    missing_aspect: `optional explanation ${index + 1}`, scope_ref: `checkout/rule-${index + 1}`,
     question: `规则 ${index + 1} 的预期结果是什么？`,
-    why_needed: '该口径决定业务验收结果。',
-    decision_impact: '答案会改变对应测试用例的预期。',
-    unresolved_outcome: '该业务结果无法进入最终验收。',
+    why_needed: '该可选补充说明独立于已知主要验收结果。',
+    decision_impact: '答案会补充可选说明。',
+    unresolved_outcome: '可选补充说明保持未决。',
     answer_options: ['确定结果'], risk_level: 'high',
-    source_claim_ids: [evidence.claims[0].claim_id],
-    discovery_phase: 'pre_case', affected_test_point_ids: []
+    source_claim_ids: [`CLM-optional-${index + 1}`],
+    discovery_phase: 'pre_case', affected_test_point_ids: [],
+    acceptance_impact: {classification:'noncritical',criteria:['does_not_change_required_acceptance'],rationale:'该事务夹具只跟踪补充说明，已确定的主要验收结果不依赖它。'}
   };
 }
 
@@ -127,7 +131,7 @@ function resolveCheckpointRoots(checkpoint, count) {
  */
 export function revisionArtifacts(profile, revision, options = {}) {
   const runId = options.run_id ?? 'RUN-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const contract = options.contract ?? LEGACY_V4_CONTRACT;
+  const contract = options.contract ?? RELIABILITY_V4_CONTRACT;
   const fixture = v4PipelineFixture();
   const sourcePack = clone(fixture.artifacts.source_pack);
   const evidence = clone(fixture.artifacts.evidence_claims);
@@ -156,7 +160,45 @@ export function revisionArtifacts(profile, revision, options = {}) {
   if (compiled.status !== 'compiled') throw new TypeError('REVISION_FIXTURE_COMPILE_FAILED');
 
   const gapCount = options.semantic_gap_count ?? (options.semantic_root ? 1 : 0);
+  // Protocol-only optional roots need distinct ambiguous write targets. They
+  // cannot reuse the known acceptance Fact or supersede its Claim.
+  for (let index = 0; index < gapCount; index += 1) {
+    const claimId = `CLM-optional-${index + 1}`;
+    const claim = clone(evidence.claims[0]);
+    claim.claim_id = claimId;
+    delete claim.semantic_value.behavior_assertions;
+    evidence.claims.push(claim);
+    evidence.fact_ledger.push({ ...clone(evidence.fact_ledger[0]),
+      fact_id: `FACT-optional-${index + 1}`, status: 'ambiguous', claim_ids: [claimId] });
+  }
   evidence.semantic_gaps = Array.from({ length: gapCount }, (_, index) => semanticGap(index, evidence));
+  Object.assign(evidence, canonicalArtifactSnapshot(evidence));
+  if (gapCount > 0 && profile !== 'pre_case_pending' && isGeneralQualityV4Contract(contract)) {
+    // Protocol simulation only: the added Facts change the review projection.
+    // Bind this synthetic completion to the final fixture content, without
+    // treating it as a real source-first business review or changing Case IDs.
+    const semantic = deriveV4CaseSemanticContext(evidence);
+    const materialized = materializeRelativeBaselinesV4(
+      caseDrafts.cases, semantic.semantic_evidence, semantic.claim_assessments
+    );
+    if (materialized.diagnostics.length) throw new TypeError('REVISION_FIXTURE_REVIEW_CASES_INVALID');
+    const reviewTarget = compileIndependentReviewTargetV4({
+      source_revision: revision,
+      source_first_targets: caseDrafts.independent_review.source_first_targets,
+      facts: evidence.fact_ledger, views: behaviorViews.views,
+      formal_test_points: compiled.obligations.formal_test_points,
+      candidate_responsibilities: behaviorViews.design_assurance.candidate_responsibilities,
+      cases: materialized.cases
+    });
+    caseDrafts.independent_review.source_first_targets = reviewTarget.projection.source_first_targets;
+    caseDrafts.independent_review.review_target_digest = reviewTarget.digest;
+    caseDrafts.independent_review.reviewer_identity.separation_basis =
+      'Protocol-only transaction fixture; no real independent business review is asserted.';
+    for (const assessment of caseDrafts.independent_review.target_assessments) {
+      assessment.rationale = 'Protocol-only review binding for reopen and transaction recovery tests.';
+    }
+    compiled.bundle.independent_review_summary.review_target_digest = reviewTarget.digest;
+  }
   const genesis = `${canonicalStringify({
     schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, genesis: true

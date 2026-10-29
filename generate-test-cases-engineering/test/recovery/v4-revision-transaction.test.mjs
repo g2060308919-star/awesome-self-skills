@@ -11,7 +11,7 @@ import {
   ensureV4RunInstance,
   readRevisionTransactionV4
 } from '../../src/revision-transaction-v4.mjs';
-import { acquireRunLock, atomicWriteJson, ensureRunInstance } from '../../src/run-store.mjs';
+import { acquireRunLock, atomicWriteJson } from '../../src/run-store.mjs';
 import {
   appendRequest, readJson, revisionArtifacts, sha, withRun
 } from '../helpers/v4-revision-transaction-fixture.mjs';
@@ -19,12 +19,12 @@ import {
 /** @param {string} file */
 const missing = async (file) => assert.rejects(readFile(file), { code: 'ENOENT' });
 
-test('T10 creates an immutable v4 run identity without changing legacy v3 creation', async () => {
+test('T10 creates an immutable v4 run identity and rejects historical identities without adoption', async () => {
   await withRun(async (/** @type {string} */ directory) => {
     const first = await ensureV4RunInstance(directory, { delivery_intent: 'case_document' });
     const second = await ensureV4RunInstance(directory, { delivery_intent: 'case_document' });
-    assert.equal(first.schema_version, '4.0.0');
-    assert.equal(first.compiler_version, '0.5.0');
+    assert.equal(first.schema_version, '4.3.3');
+    assert.equal(first.compiler_version, '0.8.3');
     assert.equal(first.delivery_intent, 'case_document');
     assert.match(first.run_id, /^RUN-[0-9a-f-]{36}$/u);
     assert.deepEqual(second, first);
@@ -33,53 +33,33 @@ test('T10 creates an immutable v4 run identity without changing legacy v3 creati
       /RUN_INSTANCE_BINDING_CONFLICT/
     );
   });
-  await withRun(async (/** @type {string} */ directory) => {
-    const legacy = await ensureRunInstance(directory);
-    assert.equal(legacy.schema_version, '3.0.0');
-    assert.match(legacy.run_instance_id, /^RUN-/u);
-  });
-});
 
-test('T10 adopts a pristine v3 bootstrap as v4 without changing its durable identity', async () => {
-  await withRun(async (/** @type {string} */ directory) => {
-    const bootstrap = await ensureRunInstance(directory);
-    const adopted = await ensureV4RunInstance(directory, {
-      run_id: bootstrap.run_instance_id, delivery_intent: 'case_document'
-    });
-    assert.deepEqual(adopted, {
-      schema_version: '4.0.0', compiler_version: '0.5.0',
-      run_id: bootstrap.run_instance_id, delivery_intent: 'case_document',
-      created_at: bootstrap.created_at, lineage: null
-    });
-    assert.deepEqual(await ensureV4RunInstance(directory, {
-      run_id: bootstrap.run_instance_id, delivery_intent: 'case_document'
-    }), adopted);
-  });
 });
 
 test('T10 refuses to reinterpret an established v3 run as a v4 bootstrap', async () => {
   await withRun(async (/** @type {string} */ directory) => {
-    const legacy = await ensureRunInstance(directory);
+    const legacy={schema_version:'3.0.0',run_instance_id:'RUN-11111111-1111-4111-8111-111111111111',created_at:'2026-10-28T00:00:00Z'};
+    await atomicWriteJson(directory,path.join(directory,'run-instance.json'),legacy);
     await atomicWriteJson(directory, path.join(directory, 'checkpoint.json'), {
       schema_version: '3.0.0', run_instance_id: legacy.run_instance_id, source_revision: 0
     });
     await assert.rejects(ensureV4RunInstance(directory, {
       run_id: legacy.run_instance_id, delivery_intent: 'case_document'
-    }), /V3_BOOTSTRAP_NOT_ADOPTABLE/);
+    }), /IMMUTABLE_V4_RUN_INSTANCE_INVALID/);
     assert.equal((await readJson(path.join(directory, 'run-instance.json'))).schema_version, '3.0.0');
   });
 });
 
 test('T10 exposes explicit held-lock entry points for the production runner transaction', async () => {
   await withRun(async (/** @type {string} */ directory) => {
-    const bootstrap = await ensureRunInstance(directory);
+    const bootstrap = await ensureV4RunInstance(directory, { delivery_intent: 'case_document' });
     await assert.rejects(revisionTransactions.ensureV4RunInstanceWithHeldLock(directory, {
-      run_id: bootstrap.run_instance_id, delivery_intent: 'case_document'
+      run_id: bootstrap.run_id, delivery_intent: 'case_document'
     }, undefined), /RUN_LOCK_OWNERSHIP_REQUIRED/);
     const release = await acquireRunLock(directory);
     try {
       const run = await revisionTransactions.ensureV4RunInstanceWithHeldLock(directory, {
-        run_id: bootstrap.run_instance_id, delivery_intent: 'case_document'
+        run_id: bootstrap.run_id, delivery_intent: 'case_document'
       }, release);
       const committed = await revisionTransactions.commitRevisionTransactionV4WithHeldLock(
         directory,
@@ -147,7 +127,8 @@ test('T10 commit profiles expose only a complete committed checkpoint and only f
     });
     await commitRevisionTransactionV4(directory, post);
     assert.equal((await readJson(path.join(directory, 'checkpoint.json'))).revision, 2);
-    assert.equal(await readFile(path.join(directory, 'output/current.json'), 'utf8'), originalCurrent);
+    assert.equal((await readJson(path.join(directory, 'output/current.json'))).status, 'stale');
+    assert.equal((await readJson(path.join(directory, 'output/current.json'))).active_revision, (await readJson(path.join(directory, 'checkpoint.json'))).revision);
 
     const postCheckpoint = await readFile(path.join(directory, 'checkpoint.json'), 'utf8');
     const laterPre = appendRequest('pre_case_pending', 2, 3, {
@@ -155,7 +136,8 @@ test('T10 commit profiles expose only a complete committed checkpoint and only f
     });
     await commitRevisionTransactionV4(directory, laterPre);
     assert.equal((await readJson(path.join(directory, 'checkpoint.json'))).revision, 3);
-    assert.equal(await readFile(path.join(directory, 'output/current.json'), 'utf8'), originalCurrent);
+    assert.equal((await readJson(path.join(directory, 'output/current.json'))).status, 'stale');
+    assert.equal((await readJson(path.join(directory, 'output/current.json'))).active_revision, (await readJson(path.join(directory, 'checkpoint.json'))).revision);
     assert.equal((await readRevisionTransactionV4(directory, delivered.txn_id)).phase, 'complete');
   });
 });

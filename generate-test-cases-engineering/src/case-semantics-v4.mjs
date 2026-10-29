@@ -1,7 +1,7 @@
 import { canonicalStringify, digest } from './canonical.mjs';
 import { scopeContains } from './decision-record.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
-import { LEGACY_V4_CONTRACT, requireV4Contract } from './v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT, requireV4Contract } from './v4-contract.mjs';
 
 const text = { type: 'string', minLength: 1, pattern: '\\S' };
 const refs = { type: 'array', items: text, uniqueItems: true };
@@ -287,7 +287,7 @@ function requiredSemanticClaimIds(candidate) {
  */
 export function compileSemanticCaseDocumentV4(
   input,
-  /** @type {unknown} */ submittedContract = LEGACY_V4_CONTRACT
+  /** @type {unknown} */ submittedContract = RELIABILITY_V4_CONTRACT
 ) {
   const contract = requireV4Contract(submittedContract);
   if (validateAgainstSchema(input, semanticCompilationInputSchema).length) {

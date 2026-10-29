@@ -1,3 +1,4 @@
+import { bindGeneralQualityFixture } from './v4-quality-binder.mjs';
 import { digest } from '../../src/canonical.mjs';
 import { sourceBoundaryFixture } from './v4-source-boundary.mjs';
 
@@ -18,7 +19,7 @@ export function v4PipelineFixture() {
     ]
   };
   const behavior_views = {
-    schema_version: '4.0.0', source_revision: 0,
+    schema_version: '4.3.3', source_revision: 0,
     views: [{
       view_id: 'VIEW-checkout-state', module_id: 'checkout', type: 'state', scope: 'checkout',
       source_claim_ids: [claim.claim_id], elements: [element], relations: []
@@ -37,7 +38,7 @@ export function v4PipelineFixture() {
   })}`;
   const pointId = `TP-${digest({ outcome_id: outcomeId })}`;
   const case_drafts = {
-    schema_version: '4.0.0', source_revision: 0,
+    schema_version: '4.3.3', source_revision: 0,
     cases: [{
       case_id: 'CASE-adapter-placeholder', title: '提交订单后显示已接受', module_id: 'checkout', priority: 'P0',
       ordering: { business_flow_ref: null, page_action_ref: null },
@@ -106,8 +107,8 @@ export function v4PipelineFixture() {
     }],
     decisions: { delivery_requested: false, root_statuses: [] }
   };
-  return {
+  return bindGeneralQualityFixture({
     artifacts: { source_pack: source.pack, evidence_claims: source.evidence, behavior_views, case_drafts },
     system
-  };
+  });
 }

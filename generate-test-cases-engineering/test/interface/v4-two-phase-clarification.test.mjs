@@ -17,10 +17,10 @@ const sha = (character) => `sha256:${character.repeat(64)}`;
 const checkpointBytes = new TextEncoder().encode('{"revision":7}\n');
 
 const facts = [
-  { fact_id: 'FACT-ip', statement: 'IP 列', claim_ids: ['CLM-ip'] },
-  { fact_id: 'FACT-empty', statement: '空值展示', claim_ids: ['CLM-empty'] },
-  { fact_id: 'FACT-sort', statement: '默认排序', claim_ids: ['CLM-sort'] },
-  { fact_id: 'FACT-refresh', statement: '刷新列表', claim_ids: ['CLM-refresh'] }
+  { status: 'ambiguous', fact_id: 'FACT-ip', statement: 'IP 列', claim_ids: ['CLM-ip'] },
+  { status: 'ambiguous', fact_id: 'FACT-empty', statement: '空值展示', claim_ids: ['CLM-empty'] },
+  { status: 'ambiguous', fact_id: 'FACT-sort', statement: '默认排序', claim_ids: ['CLM-sort'] },
+  { status: 'ambiguous', fact_id: 'FACT-refresh', statement: '刷新列表', claim_ids: ['CLM-refresh'] }
 ];
 
 /** @param {'ip'|'empty'|'sort'|'refresh'} subject @param {'pre_case'|'post_case'} [phase] @returns {any} */
@@ -34,8 +34,9 @@ function gap(subject, phase = 'pre_case') {
   };
   const [factId, missing, scope, question, why, impact, outcome, options, risk] = table[subject];
   return {
+    acceptance_impact: {classification:'noncritical',criteria:['does_not_change_required_acceptance'],rationale:'本夹具仅选择附录示例展示；必要验收规则已经确定。'},
     category: 'semantic_gap', code: `${subject.toUpperCase()}_UNRESOLVED`, subject_fact_ids: [factId],
-    missing_aspect: missing, scope_ref: scope, question, why_needed: why, decision_impact: impact,
+    missing_aspect: missing, scope_ref: scope, question: `可选附录示例：${question}`, why_needed: '仅选择已确定规则之外的附录示例。', decision_impact: '不改变必要验收，只改变示例展示。',
     unresolved_outcome: outcome, answer_options: options, risk_level: risk, source_claim_ids: [`CLM-${subject}`],
     discovery_phase: phase
   };
@@ -51,7 +52,7 @@ function request(options = {}) {
     fact_ledger_digest: sha('1'), scope_manifest_digest: sha('2'),
     behavior_views_digest: phase === 'pre_case' ? null : sha('3'),
     case_drafts_digest: phase === 'pre_case' ? null : sha('4'),
-    facts, diagnostic_candidates: candidates, prior_checkpoint, ...overrides
+    facts, claims: facts.flatMap(fact => fact.claim_ids.map(claim_id => ({claim_id, value: fact.statement}))), diagnostic_candidates: candidates, prior_checkpoint, ...overrides
   };
 }
 
@@ -76,7 +77,7 @@ test('post-case adds a genuinely new root, carries remaining roots, and never re
   prior.clarification_state.presentation_digest = sha256CanonicalV4(prior.clarification_state.presentation);
 
   const second = clarification.compileSemanticClarificationCheckpointV4(request({
-    phase: 'post_case', candidates: [gap('ip', 'post_case'), gap('empty', 'post_case'), gap('sort', 'post_case'), gap('refresh', 'post_case')],
+    phase: 'post_case', candidates: [gap('refresh', 'post_case')],
     prior_checkpoint: prior
   }));
   assert.equal(second.presentation.phase, 'case_design');
@@ -125,7 +126,7 @@ test('request_delivery closes only explicit question-part refs and cannot suppre
   assert.equal(selected.checkpoint.clarification_state.remaining_part_ids.length, 2);
 
   const later = clarification.compileSemanticClarificationCheckpointV4(request({
-    phase: 'post_case', candidates: [gap('ip', 'post_case'), gap('empty', 'post_case'), gap('sort', 'post_case'), gap('refresh', 'post_case')],
+    phase: 'post_case', candidates: [gap('refresh', 'post_case')],
     prior_checkpoint: selected.checkpoint
   }));
   assert.equal(later.presentation.question_parts

@@ -22,7 +22,7 @@ export function sourceBoundaryFixture() {
   Object.assign(source, { content: projection.content, content_digest: audited.capture_digest.slice(7), domain: 'business',
     capture_digest: audited.capture_digest, semantic_digest: 'sha256:' + digest(projection), semantic_projection: projection, capture_audit: audited.capture_audit });
   const unit = projection.structure[0]; const textDigest = audited.capture_digest;
-  pack.schema_version = evidence.schema_version = '4.0.0'; pack.delivery_intent = 'case_document'; pack.artifact_events = []; evidence.semantic_gaps = [];
+  pack.schema_version = evidence.schema_version = '4.3.3'; pack.delivery_intent = 'case_document'; pack.artifact_events = []; evidence.semantic_gaps = [];
   pack.locators = [{ locator_id: claim.source_locator_ids[0], source_id: source.source_id, semantic_digest: source.semantic_digest,
     type: 'text_block_range', unit_id: unit.unit_id, section_id: unit.section_id, range: { start: 0, end: Array.from(unit.text).length },
     excerpt: unit.text, excerpt_digest: textDigest, domain: 'business', field_path: '/state' }];

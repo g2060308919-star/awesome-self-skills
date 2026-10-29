@@ -16,7 +16,7 @@ const sha = `sha256:${'a'.repeat(64)}`;
 /** @param {string | undefined} [deliveryIntent] @returns {any} */
 function sourcePack(deliveryIntent) {
   return {
-    schema_version: '4.0.0',
+    schema_version: '4.3.3',
     source_revision: 0,
     run_instance_id: 'RUN-12345678-1234-4234-8234-123456789abc',
     run_scope: 'review-platform',
@@ -76,26 +76,14 @@ test('BR-02: case-document intent prohibits an execution reference, including nu
   assert.ok(validateAgainstSchema(nullRef, contract).length > 0);
 });
 
-test('BR-01: v3 remains readable without adopting the v4 required intent', () => {
+test('BR-01: historical Source Pack is rejected', () => {
   const value = { ...sourcePack(), schema_version: '3.0.0' };
   delete value.artifact_events;
-  assert.deepEqual(validateAgainstSchema(value, contract), []);
+  assert.notDeepEqual(validateAgainstSchema(value, contract), []);
 });
 
-test('BR-01: the private runner accepts a valid v4 intent before requesting the next artifact', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'v4-delivery-intent-'));
-  try {
-    const initial = await advanceStrict(directory);
-    assert.equal(initial.status, 'need_artifact');
-    const value = sourcePack('case_document');
-    value.run_instance_id = initial.scope.run_instance_id;
-    await mkdir(path.join(directory, 'staging'), { recursive: true });
-    await writeFile(path.join(directory, 'staging/source-pack.json'), JSON.stringify(value));
-    const next = await advanceStrict(directory);
-    assert.equal(next.status, 'need_revision', JSON.stringify(next));
-    assert.equal(next.incomplete_reason.code, 'STAGE_ARTIFACT_REQUIRED');
-    assert.equal(next.stage, 'evidence_claims', JSON.stringify(next));
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+test('public current runner requires an explicitly bootstrapped run', async()=>{
+ const directory=await mkdtemp(path.join(os.tmpdir(),'v4-delivery-intent-'));
+ try { const reply=await advanceStrict(directory);assert.equal(reply.status,'fatal');assert.equal(reply.diagnostics[0].code,'CURRENT_PROTOCOL_REQUIRED'); }
+ finally {await rm(directory,{recursive:true,force:true});}
 });

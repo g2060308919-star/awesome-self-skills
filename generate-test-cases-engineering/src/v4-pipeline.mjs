@@ -7,6 +7,7 @@ import { validateDesignAssuranceV4 } from './design-assurance-v4.mjs';
 import {
   compileSemanticCaseDocumentV4,
   validateRelativeBaselineEvidenceV4,
+  validateCaseSemanticsV4,
   validateTestValueOriginsV4
 } from './case-semantics-v4.mjs';
 import { classifyFinalOutcomeV4 } from './final-outcome-v4.mjs';
@@ -20,7 +21,7 @@ import {
   assembleObligationsArtifactV4,
   compileBusinessOutcomesV4
 } from './obligations/business-outcomes-v4.mjs';
-import { compileCaseOrdering, compileOrderingRegistry } from './ordering-registry.mjs';
+import { compileCaseOrdering, compileOrderingRegistry, validateCaseOrderingReferences } from './ordering-registry.mjs';
 import { compileSemanticGapRootsV4 } from './semantic-gaps-v4.mjs';
 import {
   deriveSemanticDeliveryGateV4,
@@ -402,13 +403,19 @@ function presentRoots(roots, compiled, contract, semanticDeliveryGate) {
   });
 }
 
-/** Validate the complete Source/Evidence phase without manufacturing downstream
- * Agent artifacts. Both the initial Evidence path and repair path use this gate.
- * @param {any} submittedArtifacts @param {any} submittedSystem */
+/**
+ * Pure v4 production orchestration. The first argument remains exactly the four
+ * Agent-writable artifacts. Raw acquisition material and compiler verification
+ * registries are private system state and never enter the semantic Case identity.
+ *
+ * @param {unknown} submittedArtifacts
+ * @param {unknown} submittedSystem
+ * @returns {any}
+ */
 export function compilePreCaseArtifactsV4(submittedArtifacts, submittedSystem) {
   if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 2
     || !['source_pack', 'evidence_claims'].every(key => Object.hasOwn(submittedArtifacts, key))) {
-    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly Source Pack and Evidence Claims are required for pre-case validation.' }]);
+    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly two upstream Agent artifacts are required.' }]);
   }
   if (!record(submittedSystem) || Object.keys(submittedSystem).some(key => !ALLOWED_SYSTEM_KEYS.has(key))) {
     return qualityFailure('V4_SYSTEM_CONTEXT_INVALID');
@@ -481,35 +488,20 @@ export function compilePreCaseArtifactsV4(submittedArtifacts, submittedSystem) {
     non_blocking_diagnostics: []
   };
 
-  return { status: 'pre_case_ready', context: {
-    artifacts, system, contract, revision, evidence, semanticEvidence, behaviorEvidence,
-    scope, preCaseRoots
-  } };
+  return { status: 'pre_case', sourcePack, contract, revision, evidence, semanticEvidence, behaviorEvidence, scope, preCaseRoots };
 }
 
-/** Pure v4 production orchestration. The first argument remains exactly the
- * four Agent-writable artifacts; acquisition verification stays private.
- * @param {any} submittedArtifacts @param {any} submittedSystem */
-export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
-  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4
-    || !['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'].every(key => Object.hasOwn(submittedArtifacts, key))) {
-    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly four Agent artifacts are required.' }]);
+/** Compute all authoring prerequisites without a Case Draft artifact.
+ * @param {any} artifacts @param {any} system @returns {any} */
+export function compileCaseAuthoringContext(artifacts, system) {
+  if (!record(artifacts) || Object.keys(artifacts).length !== 3
+    || !['source_pack', 'evidence_claims', 'behavior_views'].every(key => Object.hasOwn(artifacts, key))) {
+    return needRevision('source_pack', [{code:'V4_ARTIFACT_SET_INVALID',path:'/',message:'Exactly three upstream artifacts are required.'}]);
   }
-  const preCase = compilePreCaseArtifactsV4({
-    source_pack: submittedArtifacts.source_pack,
-    evidence_claims: submittedArtifacts.evidence_claims
-  }, submittedSystem);
-  if (preCase.status !== 'pre_case_ready') return preCase;
-  const {
-    artifacts: preCaseArtifacts, system, contract, revision, evidence,
-    semanticEvidence, behaviorEvidence, scope, preCaseRoots
-  } = preCase.context;
-  const artifacts = { ...preCaseArtifacts,
-    behavior_views: structuredClone(submittedArtifacts.behavior_views),
-    case_drafts: structuredClone(submittedArtifacts.case_drafts) };
-  const sourcePack = artifacts.source_pack;
-
-  for (const stage of ['behavior_views', 'case_drafts']) {
+  const preCase = compilePreCaseArtifactsV4({source_pack: artifacts.source_pack, evidence_claims: artifacts.evidence_claims}, system);
+  if (preCase.status !== 'pre_case') return preCase;
+  const { sourcePack, contract, revision, evidence, semanticEvidence, behaviorEvidence, scope, preCaseRoots } = preCase;
+  for (const stage of ['behavior_views']) {
     const artifact = artifacts[stage];
     if (record(artifact) && (artifact.schema_version !== contract.schema_version
       || (artifact.source_revision !== undefined && artifact.source_revision !== revision))) {
@@ -537,30 +529,35 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   const behavior = compileBusinessOutcomesV4(artifacts.behavior_views, behaviorEvidence);
   if (behavior.kind === 'need_revision') return needRevision('behavior_views', behavior.diagnostics);
   if (behavior.kind !== 'compiled') return qualityFailure('BUSINESS_OUTCOME_COMPILATION_FAILED', behavior.diagnostics);
-  const caseSchemaFailure = validateArtifact(artifacts.case_drafts, caseDraftsSchema, 'case_drafts');
-  if (caseSchemaFailure) return caseSchemaFailure;
-  for (const candidate of artifacts.case_drafts.cases) {
-    const diagnostics = validateRelativeBaselineEvidenceV4(candidate, semanticEvidence);
-    if (diagnostics.length) return needRevision('case_drafts', diagnostics);
+  let orderingRegistry;
+  try { orderingRegistry = compileOrderingRegistry(system.ordering); } catch (error) {
+    return qualityFailure(error instanceof Error ? error.message : 'ORDERING_REGISTRY_INVALID');
   }
-  const materializedDrafts = materializeRelativeBaselinesV4(
-    artifacts.case_drafts.cases, semanticEvidence, system.claim_assessments
-  );
-  if (materializedDrafts.diagnostics.length) return needRevision('case_drafts', materializedDrafts.diagnostics);
-  const formalPoints = pointsWithRoles(behavior.formal_test_points, behavior.outcomes);
-  let semantic;
-  try {
-    semantic = compileSemanticCaseDocumentV4({
-      source_revision: revision, case_drafts: materializedDrafts.cases,
-      formal_test_points: formalPoints,
-      claim_assessments: system.claim_assessments
-    }, contract);
-  } catch (error) {
-    return needRevision('case_drafts', [{
-      category: 'adapter_revision', code: error instanceof Error ? error.message : 'CASE_COMPILATION_FAILED',
-      path: '/cases', message: 'Case Drafts must close one verified business result each.'
+  return { status: 'authoring', sourcePack, contract, revision, evidence, semanticEvidence,
+    scope, preCaseRoots, currentDesignAssurance, behavior, orderingRegistry };
+}
+
+/** Full compilation retains the four-artifact boundary and all final gates.
+ * @param {any} submittedArtifacts @param {any} submittedSystem @returns {any} */
+export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSystem) {
+  if (!record(submittedArtifacts) || Object.keys(submittedArtifacts).length !== 4
+    || !['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts'].every(key => Object.hasOwn(submittedArtifacts, key))) {
+    return needRevision('source_pack', [{ code: 'V4_ARTIFACT_SET_INVALID', path: '/', message: 'Exactly four Agent artifacts are required.' }]);
+  }
+  const artifacts = structuredClone(submittedArtifacts);
+  const system = submittedSystem;
+  const context = compileCaseAuthoringContext({ source_pack: artifacts.source_pack,
+    evidence_claims: artifacts.evidence_claims, behavior_views: artifacts.behavior_views }, system);
+  if (context.status !== 'authoring') return context;
+  const { sourcePack, contract, revision, evidence, semanticEvidence, scope,
+    preCaseRoots, currentDesignAssurance, behavior, orderingRegistry } = context;
+  if (record(artifacts.case_drafts) && (artifacts.case_drafts.schema_version !== contract.schema_version
+    || artifacts.case_drafts.source_revision !== revision)) return needRevision('case_drafts', [{
+      code: 'SOURCE_REVISION_MISMATCH', path: '/source_revision', message: 'Case Drafts must bind the active revision.'
     }]);
-  }
+  const checked = validateCaseDraftCandidate(artifacts.case_drafts, context, system);
+  if (checked.status !== 'candidate_valid') return checked;
+  const { materializedDrafts, formalPoints, semantic } = checked;
 
   let postCaseRoots;
   try { postCaseRoots = rootState(semanticRoots(evidence, 'post_case', contract), system.decisions?.root_statuses ?? []); } catch (error) {
@@ -584,13 +581,8 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
       return quality ? qualityFailure(diagnostics[0].code, diagnostics) : needRevision('case_drafts', diagnostics);
     }
   }
-  let orderingRegistry;
-  try { orderingRegistry = compileOrderingRegistry(system.ordering); } catch (error) {
-    return qualityFailure(error instanceof Error ? error.message : 'ORDERING_REGISTRY_INVALID');
-  }
   const orderingInputs = semantic.cases.map((/** @type {any} */ candidate) => ({
-    ...candidate,
-    ordering: {
+    ...candidate, ordering: {
       business_flow_ref: candidate.ordering.business_flow_ref,
       page_action_ref: candidate.ordering.page_action_ref
     }
@@ -772,4 +764,54 @@ export function compileCaseDocumentRevisionV4(submittedArtifacts, submittedSyste
   const bundleDiagnostics = validateAgainstSchema(bundle, testBundleSchema);
   if (bundleDiagnostics.length) return qualityFailure('CANONICAL_BUNDLE_INVALID', bundleDiagnostics);
   return { status: 'compiled', result_kind: outcome.result_kind, bundle, obligations: obligations.artifact };
+}
+
+/** Shared structural/semantic checks, deliberately before coverage and independent review.
+ * @param {any} drafts @param {any} context @param {any} system @returns {any} */
+export function validateCaseDraftCandidate(drafts, context, system) {
+  const { semanticEvidence, behavior, revision, contract } = context;
+  const caseSchemaFailure = validateArtifact(drafts, caseDraftsSchema, 'case_drafts');
+  if (caseSchemaFailure) return caseSchemaFailure;
+  const facts = new Set(context.evidence.fact_ledger.map((/** @type {any} */ f) => f.fact_id));
+  const observations = new Set(behavior.supporting_observations.map((/** @type {any} */ o) => o.supporting_observation_id));
+  for (const [index, candidate] of drafts.cases.entries()) {
+    const diagnostics = [
+      ...validateCaseSemanticsV4(candidate),
+      ...validateRelativeBaselineEvidenceV4(candidate, semanticEvidence)
+    ];
+    for (const [field, known, code] of /** @type {Array<[string,Set<any>,string]>} */ ([
+      ['fact_ids', facts, 'CASE_FACT_UNRESOLVED'],
+      ['supporting_observation_ids', observations, 'CASE_OBSERVATION_UNRESOLVED']
+    ])) {
+      for (const [refIndex, ref] of candidate[field].entries()) if (!known.has(ref)) diagnostics.push({
+        category: 'adapter_revision', code, path: `/${field}/${refIndex}`,
+        message: 'Case reference does not resolve in the accepted authoring context.'
+      });
+    }
+    if (diagnostics.length) return needRevision('case_drafts', diagnostics.map(d => ({
+      ...d, path: `/cases/${index}${d.path}`
+    })));
+  }
+  const materializedDrafts = materializeRelativeBaselinesV4(
+    drafts.cases, semanticEvidence, system.claim_assessments
+  );
+  if (materializedDrafts.diagnostics.length) return needRevision('case_drafts', materializedDrafts.diagnostics);
+  const formalPoints = pointsWithRoles(behavior.formal_test_points, behavior.outcomes);
+  let semantic;
+  try {
+    semantic = compileSemanticCaseDocumentV4({
+      source_revision: revision, case_drafts: materializedDrafts.cases,
+      formal_test_points: formalPoints,
+      claim_assessments: system.claim_assessments
+    }, contract);
+  } catch (error) {
+    return needRevision('case_drafts', [{
+      category: 'adapter_revision', code: error instanceof Error ? error.message : 'CASE_COMPILATION_FAILED',
+      path: '/cases', message: 'Case Drafts must close one verified business result each.'
+    }]);
+  }
+  const orderingDiagnostics = validateCaseOrderingReferences(drafts.cases, context.orderingRegistry,
+    context.scope.scope_manifest.modules.map((/** @type {any} */ m) => m.module_id));
+  if (orderingDiagnostics.length) return needRevision('case_drafts', orderingDiagnostics);
+  return { status: 'candidate_valid', materializedDrafts, formalPoints, semantic };
 }

@@ -11,7 +11,7 @@ export function candidateDeliveryInput() {
     run_id: 'RUN-42424242-4242-4242-8242-424242424242',
     completed_at: '2026-09-15T00:00:00.000Z',
     bundle: {
-      schema_version: '4.2.0', compiler_version: '0.7.0',
+      schema_version: '4.3.3', compiler_version: '0.8.3',
       delivery_intent: 'case_document', source_revision: 2,
       result_kind: 'delivered_cases', ordered_case_ids: ['CASE-flow'],
       scope_manifest: {
@@ -42,6 +42,9 @@ export function candidateDeliveryInput() {
         boundary: { reviewed_formal_test_point_count: 0, covered_formal_test_point_count: 0, not_applicable_formal_test_point_count: 0 },
         semantic_gap_count: 0, exploratory_count: 9, not_applicable_count: 0
       },
+      // Protocol-only presentation fixture. These summaries are not evidence of an actual review.
+      design_assurance_summary: {status:'complete',plan_revision:1,batch_count:1,rule_group_count:1,candidate_responsibility_count:1,candidate_disposition_counts:{retained:1,representative_value:0,equivalent_merge:0,evidence_exclusion:0,semantic_gap:0,exploratory:0}},
+      independent_review_summary: {status:'completed',protocol_version:'1.0.0',review_mode:'independent_source_first',reviewer_identity_class:'independent_context',source_first_target_count:1,target_assessment_counts:{verified:1,semantic_gap:0,evidence_excluded:0},finding_counts:{confirmed:0,rejected:0},review_target_digest:sha('9')},
       semantic_root_groups: [],
       exploratory: riskKinds.map(kind => ({ exploratory_id: `EXP-${kind}`, module_id: 'admin', title: `${kind} 风险`, reason: '风险目录建议探索检查' })),
       not_applicable: [],

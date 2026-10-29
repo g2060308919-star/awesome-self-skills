@@ -98,7 +98,7 @@ test('schema tampering is fatal before an empty run is read', async () => {
     await cp(manifestPath, path.join(temporaryScripts, 'schema-manifest.json'));
     await cp(runnerPath, temporaryRunner);
     const tamperedSchema = path.join(temporaryScripts, 'schemas/source-pack.schema.json');
-    await writeFile(tamperedSchema, (await readFile(tamperedSchema, 'utf8')).replace('"3.0.0"', '"9.0.0"'));
+    await writeFile(tamperedSchema, (await readFile(tamperedSchema, 'utf8')).replace('"4.3.3"', '"9.0.0"'));
     const result = await runCompiler(runDirectory, temporaryRunner);
     const reply = JSON.parse(result.stdout);
 

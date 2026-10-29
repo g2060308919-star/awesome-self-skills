@@ -1,0 +1,32 @@
+✖ production resolves a Claim-backed outcome dependency into compiler-owned Case dependencies (69.204708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 145.648792
+
+✖ failing tests:
+
+test at test/core/v4-pipeline.test.mjs:392:1
+✖ production resolves a Claim-backed outcome dependency into compiler-owned Case dependencies (69.204708ms)
+  AssertionError [ERR_ASSERTION]: construction validates selectors without demanding all dependency endpoint Cases
+  + actual - expected
+
+  + 'need_revision'
+  - 'candidate_valid'
+
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/core/v4-pipeline.test.mjs:464:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'need_revision',
+    expected: 'candidate_valid',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

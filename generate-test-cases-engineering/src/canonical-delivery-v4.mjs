@@ -7,7 +7,7 @@ import sourceReadingSchema from '../skill/generate-test-cases/scripts/schemas/so
 import testBundleSchema from '../skill/generate-test-cases/scripts/schemas/test-bundle.schema.json' with { type: 'json' };
 import { renderBusinessMarkdownV4 } from './business-markdown-v4.mjs';
 import {
-  buildCaseDocumentPresentationV4, matchCasePresentationFamilyV42,
+  buildCaseDocumentPresentationV4, matchCasePresentationV4,
   renderBusinessHtmlV4, renderCaseTableV4
 } from './case-document-presentation-v4.mjs';
 import { canonicalStringify, digest } from './canonical.mjs';
@@ -86,7 +86,7 @@ function normalizeInput(input) {
   const bundle = structuredClone(input.bundle);
   const actualKeys = Object.keys(bundle).sort();
   const contract = v4ContractForIdentity(bundle);
-  const expectedKeys = [...(['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(contract?.schema_version ?? '')
+  const expectedKeys = [...(['4.3.3'].includes(contract?.schema_version ?? '')
     ? GENERAL_QUALITY_BUNDLE_KEYS : BASE_BUNDLE_KEYS)].sort();
   const candidate = contract?.candidate === true;
   if (actualKeys.length !== expectedKeys.length || actualKeys.some((key, index) => key !== expectedKeys[index])
@@ -111,7 +111,7 @@ function normalizeInput(input) {
     'result_kind', 'ordered_case_ids', 'scope_manifest', 'cases', 'coverage',
     'semantic_root_groups', 'exploratory', 'not_applicable'
   ].map(key => [key, structuredClone(bundle[key])]));
-  if (['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(contract.schema_version)) Object.assign(projection, {
+  if (['4.3.3'].includes(contract.schema_version)) Object.assign(projection, {
     schema_version: bundle.schema_version,
     compiler_version: bundle.compiler_version,
     design_assurance_summary: structuredClone(bundle.design_assurance_summary),
@@ -247,7 +247,7 @@ async function resolveCaseDocument(ref, services) {
     || manifest.bundle.digest !== ref.bundle_digest
     || bundle.delivery_intent !== 'case_document' || bundle.source_revision !== ref.revision
     || bundle.result_kind !== manifest.result_kind || bundle.cases.length !== manifest.case_count
-    || (['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(bundle.schema_version)
+    || (['4.3.3'].includes(bundle.schema_version)
       && manifest.review_target_digest !== bundle.independent_review_summary?.review_target_digest)) {
     throw new TypeError('CASE_DOCUMENT_MANIFEST_INVALID');
   }
@@ -377,7 +377,7 @@ export function materializeCaseDocumentDeliveryV4(input) {
         path: `${prefix}/source-reading.json`, digest: byteDigest(sourceReadingBytes ?? ''), format: 'json'
       },
       primary_readable: 'html',
-      ...(['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(canonicalBundle.schema_version) ? {
+      ...(['4.3.3'].includes(canonicalBundle.schema_version) ? {
         review_target_digest: canonicalBundle.independent_review_summary.review_target_digest
       } : {})
     } : {}),
@@ -422,7 +422,7 @@ export function validateCaseDocumentArtifactSetV4(input, texts) {
     const presentation = buildCaseDocumentPresentationV4(
       JSON.parse(materialized.bundle_bytes), value.render_options
     );
-    presentationFamily = matchCasePresentationFamilyV42(
+    presentationFamily = matchCasePresentationV4(
       presentation, JSON.parse(materialized.source_reading_bytes),
       { html: texts.html, table: texts.table }
     );
@@ -490,7 +490,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
   validateFinalRiskReview(normalized.bundle);
   if (normalized.bundle.source_revision !== manifest.revision
     || normalized.bundle.result_kind !== manifest.result_kind
-    || (['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(normalized.bundle.schema_version)
+    || (['4.3.3'].includes(normalized.bundle.schema_version)
       && manifest.review_target_digest
         !== normalized.bundle.independent_review_summary.review_target_digest)
     || canonicalStringify(derivedCounts(normalized.bundle)) !== canonicalStringify({
@@ -507,7 +507,7 @@ async function readAndVerifyArtifacts(runDirectory, manifest) {
       normalized.bundle, manifest.render_options
     );
     try {
-      matchCasePresentationFamilyV42(presentation, normalized.sourceReading, {
+      matchCasePresentationV4(presentation, normalized.sourceReading, {
         html: artifacts.html, table: artifacts.table
       });
     } catch {

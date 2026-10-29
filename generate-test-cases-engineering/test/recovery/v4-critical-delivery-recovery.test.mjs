@@ -10,7 +10,7 @@ import {
 } from '../../src/canonical-delivery-v4.mjs';
 import { compileSemanticGapRootsV4 } from '../../src/semantic-gaps-v4.mjs';
 import { deriveSemanticDeliveryGateV4 } from '../../src/semantic-delivery-gate-v4.mjs';
-import { GENERAL_QUALITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
 import { candidateDeliveryInput } from '../helpers/v4-candidate-delivery-fixture.mjs';
 
 const base = {
@@ -24,7 +24,7 @@ const base = {
 /** @param {'critical'|'noncritical'} classification */
 function compile(classification) {
   return compileSemanticGapRootsV4({
-    contract: GENERAL_QUALITY_V4_CONTRACT,
+    contract: RELIABILITY_V4_CONTRACT,
     facts: [{ fact_id: 'FACT-rule', statement: '订单可能需要复核', claim_ids: ['CLM-rule'] }],
     diagnostic_candidates: [{
       ...base,
@@ -45,7 +45,7 @@ test('AT27: impact changes invalidate old root versions, states, and final choic
   assert.notEqual(currentRoot.question_part_id, oldRoot.question_part_id);
 
   const result = deriveSemanticDeliveryGateV4({
-    contract: GENERAL_QUALITY_V4_CONTRACT, roots: [currentRoot],
+    contract: RELIABILITY_V4_CONTRACT, roots: [currentRoot],
     rootStates: [{
       root_issue_id: currentRoot.root_issue_id,
       root_version_digest: oldRoot.root_version_digest,
@@ -62,8 +62,8 @@ test('AT27: impact changes invalidate old root versions, states, and final choic
 
 function unresolvedCriticalDelivery() {
   const input = candidateDeliveryInput();
-  input.bundle.schema_version = '4.3.0';
-  input.bundle.compiler_version = '0.8.0';
+  input.bundle.schema_version = '4.3.3';
+  input.bundle.compiler_version = '0.8.3';
   input.bundle.design_assurance_summary = {
     status: 'complete', plan_revision: 1, batch_count: 1, rule_group_count: 1,
     candidate_responsibility_count: 1,

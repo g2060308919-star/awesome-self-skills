@@ -52,9 +52,10 @@ function partialAnswerCheckpoint() {
     ['sort', '默认排序', '默认排序是升序还是降序？', ['升序', '降序']]
   ];
   const facts = definitions.map(([key, statement]) => ({
-    fact_id: `FACT-${key}`, statement, claim_ids: [`CLM-${key}`]
+    status: 'ambiguous', fact_id: `FACT-${key}`, statement, claim_ids: [`CLM-${key}`]
   }));
   const diagnostic_candidates = definitions.map(([key, _statement, question, answer_options]) => ({
+    acceptance_impact:{classification:'critical',criteria:['makes_required_result_undecidable'],rationale:'必要列和排序结果未定。'},
     category: 'semantic_gap', code: `${key.toUpperCase()}_UNRESOLVED`,
     subject_fact_ids: [`FACT-${key}`], missing_aspect: `${key}_meaning`,
     scope_ref: `review.${key}`, question,
@@ -71,7 +72,7 @@ function partialAnswerCheckpoint() {
     fact_ledger_digest: `sha256:${digest(facts)}`,
     scope_manifest_digest: `sha256:${digest({ primary_surface: 'review' })}`,
     behavior_views_digest: null, case_drafts_digest: null,
-    facts, diagnostic_candidates, prior_checkpoint: null
+    facts, claims: facts.flatMap(fact => fact.claim_ids.map(claim_id => ({claim_id, value: fact.statement}))), diagnostic_candidates, prior_checkpoint: null
   });
 }
 
@@ -85,9 +86,9 @@ test('v4 user outcome: answering IP alone keeps the other two presented question
   const start = characters.join('').indexOf(answer);
   const event = constructSemanticClarificationEventV4(
     initial.presentation, ip, 'answer_question_part', {
-      answer, resolution: 'temporary', authority: 'task_scoped',
+      answer, resolution: 'final', authority: 'product_final',
       answer_origin: {
-        type: 'user_statement', presentation_id: initial.presentation.presentation_id,
+        type: 'authorized_confirmation', presentation_id: initial.presentation.presentation_id,
         message_digest: byteDigest(message),
         answer_span: {
           start_scalar: start, end_scalar: start + answerCharacters.length,
@@ -111,7 +112,7 @@ test('v4 user outcome: answering IP alone keeps the other two presented question
   assert.equal(result.presentation.question_parts.length, 2);
   assert.equal(result.checkpoint.clarification_state.remaining_part_ids.length, 2);
   assert.equal(result.checkpoint.clarification_state.root_states.filter(
-    (/** @type {any} */ state) => state.status === 'resolved_temporary'
+    (/** @type {any} */ state) => state.status === 'resolved_final'
   ).length, 1);
   assert.equal(result.checkpoint.clarification_state.root_states.filter(
     (/** @type {any} */ state) => state.status === 'presented'

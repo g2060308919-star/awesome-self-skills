@@ -31,9 +31,9 @@ test('T11 production source boundary recomputes raw audit and canonical structur
   assert.equal(canonicalStringify(f.pack), before); assert.ok(!JSON.stringify(result).includes('capture_bytes'));
 });
 
-test('T11 production source boundary preserves v3 instead of pretending v3 metadata is a v4 source', () => {
+test('T11 production source boundary rejects historical source metadata', () => {
   const journey = buildJourney('all-e3'); const result = compile({ ...sourceBoundaryFixture(), pack: journey.source_pack, evidence: journey.evidence_claims });
-  assert.equal(result.status, 'accepted'); assert.equal(result.evidence.claimsById.get('claim_checkout').level, 'E3');
+  assert.equal(result.status, 'rejected'); assert.equal(result.diagnostics[0].code, 'SOURCE_SCHEMA_INVALID');
 });
 
 test('T11 production source boundary rejects digest-consistent projection, exclusion and missing/foreign byte-source forgeries', () => {

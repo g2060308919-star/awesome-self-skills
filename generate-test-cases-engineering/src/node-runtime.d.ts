@@ -14,6 +14,7 @@ declare module 'node:child_process' {
   export const ChildProcess: any;
   export const execFile: any;
   export const spawn: any;
+  export const spawnSync: any;
 }
 
 declare module 'node:fs/promises' {

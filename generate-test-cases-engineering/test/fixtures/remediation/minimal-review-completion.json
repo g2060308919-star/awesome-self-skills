@@ -1,0 +1,1109 @@
+{
+  "target_assessments": [
+    {
+      "target_id": "IRT-2b79cec1c9f889244e7f20a5e61c54a391acfb8d6462ebdbbe771b47c3861f8b",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-view-管理员"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-view-管理员"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-5e4f3d5e56253c134fd9e1c605162dabad75f827b9f68153ada2238248423190"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-228de9851b9d0dddb872d624736ebb3b875ac30e05ba06942c3f8c2278fc87ca"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-view-只读用户"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-view-只读用户"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-66fe02869485d90397691bf66acb4feb4116b3b4d8e1bc2b9daeceabcd9ae0bf"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-82d5f20bc73bd62463dd759db4181eea7cd8ebb5f118447ed8132ba330202e0a"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-1",
+        "CLM-2"
+      ],
+      "decision_ids": [],
+      "rationale": "M01：两类角色分别打开列表、找到已知记录，再查看详情；未引入其他角色。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-view-管理员"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-view-管理员"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-5e4f3d5e56253c134fd9e1c605162dabad75f827b9f68153ada2238248423190"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-228de9851b9d0dddb872d624736ebb3b875ac30e05ba06942c3f8c2278fc87ca"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-view-只读用户"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-view-只读用户"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-66fe02869485d90397691bf66acb4feb4116b3b4d8e1bc2b9daeceabcd9ae0bf"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-82d5f20bc73bd62463dd759db4181eea7cd8ebb5f118447ed8132ba330202e0a"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-225c5b8a06df7482904f090eef2c3f33d9af40ef69fceabe9cd682a478662cb1",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-readonly-create"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-readonly-create"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-8b9e629951e5b17862fd8e16f3836fa819025193f7bce36ef00b191221884685"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-40cb10b7230e85e7675fb9667882ea8ba5546d7f1d321657ccda8937c1b5e4a6"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-create-initial"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-create-initial"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-0d8ba650dbc8ed2a378de48cfac2ec218824b2d4260e53adbd3ccfca44d8a9cb"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-f82fa9181dfcfc6699f972e81ec24cc6c9a6b46cc43268f8474a38b28ff94385"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-one"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-one"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-eb9fa9631a704c1c935f05b5b7454f83bf5b444ed8be54322c892ea8d06f0227"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-3"
+      ],
+      "decision_ids": [],
+      "rationale": "M02：管理员可新增并保存；只读入口不可用则记录拒绝，可打开则填Alpha点击保存，最终核对标识集合和数量不变。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-readonly-create"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-readonly-create"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-8b9e629951e5b17862fd8e16f3836fa819025193f7bce36ef00b191221884685"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-40cb10b7230e85e7675fb9667882ea8ba5546d7f1d321657ccda8937c1b5e4a6"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-create-initial"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-create-initial"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-0d8ba650dbc8ed2a378de48cfac2ec218824b2d4260e53adbd3ccfca44d8a9cb"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-f82fa9181dfcfc6699f972e81ec24cc6c9a6b46cc43268f8474a38b28ff94385"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-one"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-one"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-eb9fa9631a704c1c935f05b5b7454f83bf5b444ed8be54322c892ea8d06f0227"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-eaf4305e1fd305e3983e0032b801cfb1eaf42038060e0fcb91a600fc5e226fa8",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-create-initial"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-create-initial"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-0d8ba650dbc8ed2a378de48cfac2ec218824b2d4260e53adbd3ccfca44d8a9cb"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-f82fa9181dfcfc6699f972e81ec24cc6c9a6b46cc43268f8474a38b28ff94385"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-4"
+      ],
+      "decision_ids": [],
+      "rationale": "M03：打开新增后明确只有名称一个字段且为空。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-create-initial"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-create-initial"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-0d8ba650dbc8ed2a378de48cfac2ec218824b2d4260e53adbd3ccfca44d8a9cb"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-f82fa9181dfcfc6699f972e81ec24cc6c9a6b46cc43268f8474a38b28ff94385"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-1b9ba031f144c11c1b016b097ed36c1fbd5a9f85c9abe3d19e2a6875b3896eb3",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-empty"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-empty"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-e2309ff4e96225bf996533c8b6c462653c153537ae105a3f8e8c29a878debdfe"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-19563904998606bb4ac562454504eaed3f99561f813c7810498210b326268fa9"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-5"
+      ],
+      "decision_ids": [],
+      "rationale": "M04：空名称点击保存不提交，精确提示名称不能为空，无新记录。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-empty"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-empty"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-e2309ff4e96225bf996533c8b6c462653c153537ae105a3f8e8c29a878debdfe"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-19563904998606bb4ac562454504eaed3f99561f813c7810498210b326268fa9"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-5de2c770e1fd8d235dcd2985f535fed481292cb1c878fe20e1738c2779eb58b2",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-one"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-one"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-eb9fa9631a704c1c935f05b5b7454f83bf5b444ed8be54322c892ea8d06f0227"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-ten"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-ten"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-7a975f0b8d0e7c79779cc70412918f528457200fd46206a251ba41559b9d617f"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-8560904a6698f14a097bb5dc39649273b9ca4c9af9eb1e4c90404616d923e582"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-mixedcase"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-mixedcase"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-baf2633cfd5e39dbbd585250e4ef0b8ae679f35fb3de37fd11ac1e560d9400c9"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-6028843dafcecfa1b88a537ecb7ba2bca39218e8fdcd793b1704d1752b1a335f"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-4"
+      ],
+      "decision_ids": [],
+      "rationale": "M05：A和ABCDEFGHIJ分别覆盖1与10有效长度，AbCd明确证明ASCII大小写字母合法。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-one"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-one"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-eb9fa9631a704c1c935f05b5b7454f83bf5b444ed8be54322c892ea8d06f0227"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-ten"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-ten"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-7a975f0b8d0e7c79779cc70412918f528457200fd46206a251ba41559b9d617f"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-8560904a6698f14a097bb5dc39649273b9ca4c9af9eb1e4c90404616d923e582"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-mixedcase"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-mixedcase"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-baf2633cfd5e39dbbd585250e4ef0b8ae679f35fb3de37fd11ac1e560d9400c9"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-6028843dafcecfa1b88a537ecb7ba2bca39218e8fdcd793b1704d1752b1a335f"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-635616f658250dc7a590465e53676792f592ad4d91076e6b0b9403ea657d7e0e",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-eleven"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-eleven"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-3f3432a782e653a5013d2934431015b73c9a33c14f435b9e03ddf18c0c33a2be"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-0d51c4d0b66c7d0475363b6b74ee94d0bf446708e36e4fcd700500e60f48fb44"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-6"
+      ],
+      "decision_ids": [],
+      "rationale": "M06：纯字母ABCDEFGHIJK的长度11不提交并精确提示名称最多10个字母，没有其他输入错误干扰。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-eleven"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-eleven"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-3f3432a782e653a5013d2934431015b73c9a33c14f435b9e03ddf18c0c33a2be"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-0d51c4d0b66c7d0475363b6b74ee94d0bf446708e36e4fcd700500e60f48fb44"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-0efafe3d9adbc05080fee47e1213adfe3a9df18a6dcf949eaa98a47d4607db77",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-digit"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-digit"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-053b9d3263182f64d03f79f034c60b54875f73f665a10e5f7721d6a240c4d3b6"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-3e141823e4795dc4bc179d8a091c6c27128d29c1d60b845d059cee1a997e5187"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-chinese"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-chinese"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-c240688e937d2044c77e19a324c0aaa356c7fe79878d72172e89158ec46921ef"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-f4ab694f26ffa00ad5d7f5f909aa276fd5cb7a8e28f46568103ad72174e3f8d6"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-space"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-space"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-8162b55ec0a6eb33c7352f0d2bb94899e15cb31b09ce31b22a183c5a5429875f"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-6163f50510affc1c8c54df98010f3fcafdeb6e2a563b4d906128f9c2896d9819"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-symbol"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-symbol"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-5784b069a8d180a103e45704e08859043392aeb2079dfa73983a8aef16b66f63"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-beecaed56c421bc8eb8847d05fb0c8001e41c286888c789b55a4f94faa4a2325"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-non-ascii"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-non-ascii"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-8478280e654964c0d314896adb5daeaf9a210b5fd3f609e6ee0d90f782c1f46f"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-0308f787af9501b97e191e059702b1982eab4e0af4cc1f92809aecc3bed5d705"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-4"
+      ],
+      "decision_ids": [],
+      "rationale": "M07：Ab1、中、A B、A-B、é分别覆盖数字、中文、空格、符号、非ASCII拉丁字母，均不提交且不虚构精确提示。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-digit"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-digit"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-053b9d3263182f64d03f79f034c60b54875f73f665a10e5f7721d6a240c4d3b6"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-3e141823e4795dc4bc179d8a091c6c27128d29c1d60b845d059cee1a997e5187"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-chinese"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-chinese"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-c240688e937d2044c77e19a324c0aaa356c7fe79878d72172e89158ec46921ef"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-f4ab694f26ffa00ad5d7f5f909aa276fd5cb7a8e28f46568103ad72174e3f8d6"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-space"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-space"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-8162b55ec0a6eb33c7352f0d2bb94899e15cb31b09ce31b22a183c5a5429875f"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-6163f50510affc1c8c54df98010f3fcafdeb6e2a563b4d906128f9c2896d9819"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-symbol"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-symbol"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-5784b069a8d180a103e45704e08859043392aeb2079dfa73983a8aef16b66f63"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-beecaed56c421bc8eb8847d05fb0c8001e41c286888c789b55a4f94faa4a2325"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-non-ascii"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-non-ascii"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-8478280e654964c0d314896adb5daeaf9a210b5fd3f609e6ee0d90f782c1f46f"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-0308f787af9501b97e191e059702b1982eab4e0af4cc1f92809aecc3bed5d705"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-fe08b48d7181b91c44cbaf2d318ad4b1174431c2d44df6ef2f19ad8341c6e222",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-one"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-one"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-eb9fa9631a704c1c935f05b5b7454f83bf5b444ed8be54322c892ea8d06f0227"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-ten"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-ten"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-7a975f0b8d0e7c79779cc70412918f528457200fd46206a251ba41559b9d617f"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-8560904a6698f14a097bb5dc39649273b9ca4c9af9eb1e4c90404616d923e582"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-mixedcase"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-mixedcase"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-baf2633cfd5e39dbbd585250e4ef0b8ae679f35fb3de37fd11ac1e560d9400c9"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-6028843dafcecfa1b88a537ecb7ba2bca39218e8fdcd793b1704d1752b1a335f"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-7"
+      ],
+      "decision_ids": [],
+      "rationale": "M08：合法输入结果均核对恰好一条、名称等于输入、状态草稿、弹窗关闭。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-one"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-one"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-d22db41ce49ec3042075d0828129582dfd9f55b938caa8c15e8e131f7bdba5e5"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-eb9fa9631a704c1c935f05b5b7454f83bf5b444ed8be54322c892ea8d06f0227"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-ten"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-ten"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-7a975f0b8d0e7c79779cc70412918f528457200fd46206a251ba41559b9d617f"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-8560904a6698f14a097bb5dc39649273b9ca4c9af9eb1e4c90404616d923e582"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-mixedcase"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-mixedcase"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-baf2633cfd5e39dbbd585250e4ef0b8ae679f35fb3de37fd11ac1e560d9400c9"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-6028843dafcecfa1b88a537ecb7ba2bca39218e8fdcd793b1704d1752b1a335f"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-9d537fe1219cda1d972f791ce744d6f8dc660fa0bc6ffd8f9b5a089daab695ab",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-duplicate"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-duplicate"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-8428b76b346e0d6d7c9f23a07f3d7a5c03bd2ab7615a737d9ef9cbccec85491f"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-cdc5a4ea5078f9d5b8681de3398bd504680bf9cd74d5cf7a5ada9b46bf7e9cf4"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-8"
+      ],
+      "decision_ids": [],
+      "rationale": "M09：保持第一次请求处理中，在完成前重复点两次，释放请求后最终只有一条Alpha草稿。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-duplicate"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-duplicate"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-8428b76b346e0d6d7c9f23a07f3d7a5c03bd2ab7615a737d9ef9cbccec85491f"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-cdc5a4ea5078f9d5b8681de3398bd504680bf9cd74d5cf7a5ada9b46bf7e9cf4"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-7bfa0ddf0d2e2191f6f68d11bffb355b3797e8773fbf136b0f9f98435c3bd9bf",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-failure"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-failure"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-f866af62bb054424772f99310dc7b847e6938c83ad10675fc6027c611c1ef4fd"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-f7681af06a0fc9f3c8c4a04f907911219430635fbbd7f76e551afb76fe64a4b4"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-7",
+        "CLM-9"
+      ],
+      "decision_ids": [],
+      "rationale": "M10：首次真实请求失败后的STEP-0核对弹窗和Alpha保留且可重试；STEP-1不改输入重试后仅一条草稿并关闭。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-failure"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-failure"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-f866af62bb054424772f99310dc7b847e6938c83ad10675fc6027c611c1ef4fd"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-f7681af06a0fc9f3c8c4a04f907911219430635fbbd7f76e551afb76fe64a4b4"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-677e4f1c843ec6ce8f3595dd2e6617b3dbe07a95ca75b8e7a29ba3394fc9a3aa",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-cancel"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-cancel"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-ff0ac7c06c5cb7dd138cb0e62b0ab75dec414dd292a3ea3392895d6b4e398a7b"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-e96402d41c6602e0f9f8619cb79de594a4712fc8df755e8593870f65656b6ae7"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-10"
+      ],
+      "decision_ids": [],
+      "rationale": "M11：取消步骤检查关闭且无新增，重开步骤检查名称为空而不恢复Temp。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-cancel"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-cancel"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-ff0ac7c06c5cb7dd138cb0e62b0ab75dec414dd292a3ea3392895d6b4e398a7b"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-e96402d41c6602e0f9f8619cb79de594a4712fc8df755e8593870f65656b6ae7"
+          }
+        ]
+      }
+    },
+    {
+      "target_id": "IRT-1bf8ee1661ea39529e028e306da9feaf6be9474ab2a6044ff1ae403b5dcbeb9a",
+      "disposition": "verified",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-view-管理员"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-view-管理员"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-5e4f3d5e56253c134fd9e1c605162dabad75f827b9f68153ada2238248423190"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-228de9851b9d0dddb872d624736ebb3b875ac30e05ba06942c3f8c2278fc87ca"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-view-只读用户"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-view-只读用户"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-66fe02869485d90397691bf66acb4feb4116b3b4d8e1bc2b9daeceabcd9ae0bf"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-82d5f20bc73bd62463dd759db4181eea7cd8ebb5f118447ed8132ba330202e0a"
+        }
+      ],
+      "source_claim_ids": [
+        "CLM-11",
+        "CLM-2"
+      ],
+      "decision_ids": [],
+      "rationale": "M12：两类角色均显示已知记录Alpha与草稿状态，尝试修改后仍只读。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-view-管理员"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-view-管理员"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-5e4f3d5e56253c134fd9e1c605162dabad75f827b9f68153ada2238248423190"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-228de9851b9d0dddb872d624736ebb3b875ac30e05ba06942c3f8c2278fc87ca"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-view-只读用户"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-view-只读用户"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-66fe02869485d90397691bf66acb4feb4116b3b4d8e1bc2b9daeceabcd9ae0bf"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-82d5f20bc73bd62463dd759db4181eea7cd8ebb5f118447ed8132ba330202e0a"
+          }
+        ]
+      }
+    }
+  ],
+  "findings": [
+    {
+      "finding_kind": "omission",
+      "source_first_target_ids": [
+        "IRT-225c5b8a06df7482904f090eef2c3f33d9af40ef69fceabe9cd682a478662cb1"
+      ],
+      "source_claim_ids": [
+        "CLM-3"
+      ],
+      "decision_ids": [],
+      "issue": "MIN-R01（历史确认问题）：旧15条样本的只读新增只有笼统尝试创建，没有明确保存动作。",
+      "impact": "可能在入口可打开时漏检实际写入权限。",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-readonly-create"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-readonly-create"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-8b9e629951e5b17862fd8e16f3836fa819025193f7bce36ef00b191221884685"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-40cb10b7230e85e7675fb9667882ea8ba5546d7f1d321657ccda8937c1b5e4a6"
+        }
+      ],
+      "adjudication": "confirmed",
+      "disposition": "fixed_and_rechecked",
+      "rationale": "当前入口可用时明确填写Alpha并点击保存，最终检查零新增及记录集合不变。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-readonly-create"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-readonly-create"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-8b9e629951e5b17862fd8e16f3836fa819025193f7bce36ef00b191221884685"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-40cb10b7230e85e7675fb9667882ea8ba5546d7f1d321657ccda8937c1b5e4a6"
+          }
+        ]
+      }
+    },
+    {
+      "finding_kind": "omission",
+      "source_first_target_ids": [
+        "IRT-0efafe3d9adbc05080fee47e1213adfe3a9df18a6dcf949eaa98a47d4607db77"
+      ],
+      "source_claim_ids": [
+        "CLM-4"
+      ],
+      "decision_ids": [],
+      "issue": "MIN-R02（历史确认问题）：旧15条样本缺符号和非ASCII拉丁字母输入。",
+      "impact": "不能完成先前独立目标M07列出的非法字符区别。",
+      "affected_items": [
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-symbol"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-symbol"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-5784b069a8d180a103e45704e08859043392aeb2079dfa73983a8aef16b66f63"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-beecaed56c421bc8eb8847d05fb0c8001e41c286888c789b55a4f94faa4a2325"
+        },
+        {
+          "item_kind": "fact",
+          "item_id": "FACT-name-non-ascii"
+        },
+        {
+          "item_kind": "view",
+          "item_id": "VIEW-name-non-ascii"
+        },
+        {
+          "item_kind": "formal_test_point",
+          "item_id": "TP-8478280e654964c0d314896adb5daeaf9a210b5fd3f609e6ee0d90f782c1f46f"
+        },
+        {
+          "item_kind": "case",
+          "item_id": "RCASE-0308f787af9501b97e191e059702b1982eab4e0af4cc1f92809aecc3bed5d705"
+        }
+      ],
+      "adjudication": "confirmed",
+      "disposition": "fixed_and_rechecked",
+      "rationale": "当前A-B和é均有明确输入、保存动作、不提交和无新记录结果。",
+      "required_recheck": {
+        "status": "passed",
+        "affected_items": [
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-symbol"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-symbol"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-5784b069a8d180a103e45704e08859043392aeb2079dfa73983a8aef16b66f63"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-beecaed56c421bc8eb8847d05fb0c8001e41c286888c789b55a4f94faa4a2325"
+          },
+          {
+            "item_kind": "fact",
+            "item_id": "FACT-name-non-ascii"
+          },
+          {
+            "item_kind": "view",
+            "item_id": "VIEW-name-non-ascii"
+          },
+          {
+            "item_kind": "formal_test_point",
+            "item_id": "TP-8478280e654964c0d314896adb5daeaf9a210b5fd3f609e6ee0d90f782c1f46f"
+          },
+          {
+            "item_kind": "case",
+            "item_id": "RCASE-0308f787af9501b97e191e059702b1982eab4e0af4cc1f92809aecc3bed5d705"
+          }
+        ]
+      }
+    }
+  ]
+}

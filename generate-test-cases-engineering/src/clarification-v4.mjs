@@ -23,7 +23,7 @@ import {
   requiresRecoverableCriticalQuestionV4
 } from './semantic-delivery-gate-v4.mjs';
 import {
-  LEGACY_V4_CONTRACT, isGeneralQualityV4Contract, isV4SchemaVersion, requireV4Contract,
+  RELIABILITY_V4_CONTRACT, isGeneralQualityV4Contract, isV4SchemaVersion, requireV4Contract,
   v4ContractForSchema
 } from './v4-contract.mjs';
 
@@ -38,9 +38,6 @@ const TERMINAL_ROOT_STATES = new Set([
   ...RESOLVED_ROOT_STATES, 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery', 'obsolete'
 ]);
 const ROOT_STATES = new Set(['presented', ...TERMINAL_ROOT_STATES]);
-const MIGRATION_INITIAL_ROOT_STATES = new Set([
-  'presented', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery'
-]);
 const DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const RISK_RANK = new Map([['critical', 0], ['high', 1], ['medium', 2], ['low', 3]]);
 
@@ -271,7 +268,7 @@ function assertCheckpoint(checkpoint) {
 export function compileSemanticClarificationCheckpointV4(submitted) {
   if (!isRecord(submitted)) throw new TypeError('CLARIFICATION_INPUT_INVALID');
   const contract = submitted.schema_version === undefined && submitted.compiler_version === undefined
-    ? LEGACY_V4_CONTRACT
+    ? RELIABILITY_V4_CONTRACT
     : requireV4Contract({
         schema_version: submitted.schema_version,
         compiler_version: submitted.compiler_version
@@ -312,32 +309,7 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
   }
   if (discoveryPhase === 'post_case' && !prior) throw new TypeError('POST_CASE_PRIOR_CHECKPOINT_REQUIRED');
 
-  /** A migration seed is compiler-owned input used only while creating the
-   * first pre-case checkpoint. It preserves proven v3 lifecycle intent, but
-   * every referenced root still has to be reproduced by fresh v4 semantic
-   * analysis before the disposition can be applied. */
-  const initialRootDispositions = new Map();
-  if (submitted.initial_root_dispositions !== undefined) {
-    if (prior || discoveryPhase !== 'pre_case'
-      || !Array.isArray(submitted.initial_root_dispositions)) {
-      throw new TypeError('MIGRATION_ROOT_DISPOSITIONS_INVALID');
-    }
-    for (const disposition of submitted.initial_root_dispositions) {
-      if (!isRecord(disposition)
-        || Object.keys(disposition).length !== 2
-        || typeof disposition.root_issue_id !== 'string'
-        || typeof disposition.status !== 'string'
-        || !MIGRATION_INITIAL_ROOT_STATES.has(disposition.status)
-        || initialRootDispositions.has(disposition.root_issue_id)) {
-        throw new TypeError('MIGRATION_ROOT_DISPOSITIONS_INVALID');
-      }
-      initialRootDispositions.set(disposition.root_issue_id, disposition.status);
-    }
-    const currentRootIds = new Set(currentRoots.map((root) => root.root_issue_id));
-    for (const rootId of initialRootDispositions.keys()) {
-      if (!currentRootIds.has(rootId)) throw new TypeError('MIGRATION_ROOT_REANALYSIS_MISMATCH');
-    }
-  }
+  if (submitted.initial_root_dispositions !== undefined) throw new TypeError('CURRENT_PROTOCOL_REQUIRED');
 
   /** @type {Map<string, any>} */
   const ledger = new Map();
@@ -356,7 +328,7 @@ export function compileSemanticClarificationCheckpointV4(submitted) {
       root_issue_id: root.root_issue_id,
       root_version_digest: root.root_version_digest,
       question_part_id: root.question_part_id,
-      status: initialRootDispositions.get(root.root_issue_id) ?? 'presented'
+      status: 'presented'
     });
   }
 

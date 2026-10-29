@@ -1,0 +1,65 @@
+{
+  "run_id": "RUN-6e91f9ac-375e-46bb-8828-20e929f8515c",
+  "attempts": [
+    {
+      "attempt": 1,
+      "runner_status": "need_revision",
+      "stage": "case_drafts",
+      "diagnostics": [
+        {
+          "category": "schema",
+          "code": "MIN_ITEMS",
+          "path": "/cases/0/oracles",
+          "message": "has too few items"
+        }
+      ]
+    },
+    {
+      "attempt": 2,
+      "runner_status": "need_revision",
+      "stage": "case_drafts",
+      "diagnostics": [
+        {
+          "category": "schema",
+          "code": "MIN_ITEMS",
+          "path": "/cases/0/oracles",
+          "message": "has too few items"
+        }
+      ]
+    },
+    {
+      "attempt": 3,
+      "runner_status": "need_revision",
+      "stage": "case_drafts",
+      "diagnostics": [
+        {
+          "category": "schema",
+          "code": "MIN_ITEMS",
+          "path": "/cases/0/oracles",
+          "message": "has too few items"
+        }
+      ]
+    },
+    {
+      "attempt": 4,
+      "runner_status": "need_revision",
+      "stage": "case_drafts",
+      "diagnostics": [
+        {
+          "category": "schema",
+          "code": "MIN_ITEMS",
+          "path": "/cases/0/oracles",
+          "message": "has too few items"
+        }
+      ]
+    }
+  ],
+  "stop": {
+    "layer": "Agent/Adapter",
+    "code": "PIPELINE_NO_PROGRESS",
+    "same_root_count": 4
+  },
+  "accepted_checkpoint_unchanged": true,
+  "checkpoint_bytes_sha256": "77c3b1ae611d3fcfdeb0f058a839b7058b8407a8966429057241d0ce919742c9",
+  "new_run_created_for_retry": false
+}

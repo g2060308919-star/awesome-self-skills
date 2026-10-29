@@ -1,3 +1,4 @@
+import {prepareCaseFixture} from '../helpers/v4-stage-construction.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -16,6 +17,7 @@ import { discoverV4Topology, prepareV4Source, validateV4SourcePackBeforeStaging 
 
 /** @param {string} runDirectory @param {keyof typeof STAGE_FILES} stage @param {any} value */
 async function stageArtifact(runDirectory, stage, value) {
+  if(stage==='case_drafts')value=await prepareCaseFixture(runDirectory,value);
   await mkdir(path.join(runDirectory, 'staging'), { recursive: true });
   await writeFile(
     path.join(runDirectory, 'staging', STAGE_FILES[stage]),

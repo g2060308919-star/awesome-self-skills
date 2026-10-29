@@ -155,6 +155,32 @@ export function compileOrderingRegistry(input) {
 const failure = code => ({ kind: 'fatal', result_kind: 'quality_failure', diagnostics: [{ category: 'quality_failure', code, path: '/ordering',
   message: 'Canonical Case ordering requires verified source-backed references and a complete acyclic dependency graph.' }] });
 
+/** @param {any} candidate @param {Set<any>|Map<any,any>} modules
+ * @param {Map<any,any>} flows @param {Map<any,any>} actions */
+function selectorError(candidate, modules, flows, actions) {
+  if (!modules.has(candidate.module_id)) return 'ORDERING_MODULE_UNRESOLVED';
+  const flow = flows.get(candidate.ordering.business_flow_ref);
+  const action = actions.get(candidate.ordering.page_action_ref);
+  if ((candidate.ordering.business_flow_ref !== null && (!flow || flow.module_id !== candidate.module_id))
+    || (candidate.ordering.page_action_ref !== null && (!action || !flow || action.flow_id !== flow.flow_id))) {
+    return 'ORDERING_CASE_REFERENCE_UNRESOLVED';
+  }
+  return null;
+}
+
+/** Validate only authored selectors; dependency closure belongs to final compilation.
+ * @param {any[]} cases @param {any} registry @param {string[]} moduleIds */
+export function validateCaseOrderingReferences(cases, registry, moduleIds) {
+  const modules = new Set(moduleIds);
+  const flows = uniqueMap(registry.business_flows, 'flow_id');
+  const actions = uniqueMap(registry.page_actions, 'action_id');
+  return cases.flatMap((candidate, index) => {
+    const code = selectorError(candidate, modules, flows, actions);
+    return code ? [{category: 'adapter_revision', code, path: `/cases/${index}/ordering`,
+      message: 'Case ordering selectors must resolve in the current module and ordering registry.'}] : [];
+  });
+}
+
 /**
  * Selectors come from Case Draft; dependencies are compiler-only output. This
  * pure result is not a public runner reply and performs no persistence/execution.
@@ -183,11 +209,8 @@ export function compileCaseOrdering(inputCases, inputPoints, registry, systemCon
       }
       const point = byPointId.get(candidate.primary_test_point_id);
       if (!point || point.acceptance_role !== candidate.acceptance_role) throw new TypeError('ORDERING_TEST_POINT_UNRESOLVED');
-      if (!modules.has(candidate.module_id)) throw new TypeError('ORDERING_MODULE_UNRESOLVED');
-      const flow = flows.get(candidate.ordering.business_flow_ref);
-      const action = actions.get(candidate.ordering.page_action_ref);
-      if ((candidate.ordering.business_flow_ref !== null && (!flow || flow.module_id !== candidate.module_id))
-        || (candidate.ordering.page_action_ref !== null && (!action || !flow || action.flow_id !== flow.flow_id))) throw new TypeError('ORDERING_CASE_REFERENCE_UNRESOLVED');
+      const selectorFailure = selectorError(candidate, modules, flows, actions);
+      if (selectorFailure) throw new TypeError(selectorFailure);
       const outcomeIds = caseIdsByOutcome.get(point.outcome_id) ?? new Set();
       outcomeIds.add(candidate.case_id); caseIdsByOutcome.set(point.outcome_id, outcomeIds);
       dependencies.set(candidate.case_id, new Set());

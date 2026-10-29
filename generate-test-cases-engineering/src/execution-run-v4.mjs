@@ -29,7 +29,7 @@ import {
 } from './run-store.mjs';
 import { validateAgainstSchema, validateUniqueStableIds } from './schema-validator.mjs';
 import { createSemanticQuestionReplyV4 } from './stop-replies-v4.mjs';
-import { v4ContractForIdentity } from './v4-contract.mjs';
+import { latestV4Contract, v4ContractForIdentity } from './v4-contract.mjs';
 
 /** @param {unknown} value @returns {value is Record<string, any>} */
 function record(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
@@ -414,7 +414,7 @@ async function executionCancellationAppend(runDirectory, prior, candidate, runId
     throw new TypeError('CANCEL_EVENT_BATCH_CONFLICT');
   }
   const snapshot = await readJsonIfPresent(runDirectory, finalConfirmationPath(runDirectory));
-  const finalDisplayed = snapshot?.value?.schema_version === '4.0.0'
+  const finalDisplayed = snapshot?.value?.schema_version === latestV4Contract().schema_version
     && snapshot.value.run_id === runId && snapshot.value.status === 'pending'
     && snapshot.value.source_revision === revision;
   const phase = finalDisplayed ? 'final_confirmation' : 'execution_closure';

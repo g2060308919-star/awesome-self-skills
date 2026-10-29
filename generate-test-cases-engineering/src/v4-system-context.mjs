@@ -283,26 +283,6 @@ function behaviorEvidence(evidence) {
     condition_field: fact.field_path.split('/').filter(Boolean).at(-1) ?? 'value'
   }));
   const factById = new Map(evidence.fact_ledger.map((/** @type {any} */ fact) => [fact.fact_id, fact]));
-  if (evidence.schema_version !== '4.3.0') {
-    const claims = evidence.claims.filter(supportedBusinessClaim).map((/** @type {any} */ claim) => {
-      const submitted = Array.isArray(claim.semantic_value?.behavior_assertions)
-        ? claim.semantic_value.behavior_assertions : [];
-      const entries = submitted.filter((/** @type {any} */ assertion) => {
-        if (!record(assertion) || Object.keys(assertion).sort().join(',') !== 'fact_id,field_path,value'
-          || typeof assertion.fact_id !== 'string' || typeof assertion.field_path !== 'string'
-          || !assertion.field_path.startsWith('/')) return false;
-        const fact = factById.get(assertion.fact_id);
-        return fact && Array.isArray(fact.claim_ids) && fact.claim_ids.includes(claim.claim_id);
-      }).map((/** @type {any} */ assertion) => [canonicalStringify(assertion), structuredClone(assertion)]);
-      return {
-        claim_id: claim.claim_id, level: claim.level,
-        supported: claim.level !== 'E1' || claim.claim_form === 'decision-record',
-        assertions: [...new Map(entries).values()]
-      };
-    }).filter((/** @type {any} */ claim) => claim.assertions.length > 0);
-    return { facts, claims, diagnostics: [] };
-  }
-
   /** @type {any[]} */
   const diagnostics = [];
   /** @type {any[]} */
@@ -651,15 +631,14 @@ export function deriveV4SystemContext(submittedArtifacts, sourceAcquisition = nu
     throw new TypeError('V4_ARTIFACT_SET_INVALID');
   }
   const artifacts = /** @type {any} */ (submittedArtifacts);
-  const pack = artifacts.source_pack;
-  const evidence = artifacts.evidence_claims;
-  if (!isV4SchemaVersion(pack?.schema_version) || evidence?.schema_version !== pack.schema_version) {
-    throw new TypeError('V4_ARTIFACT_VERSION_INVALID');
-  }
+  return deriveV4AuthoringSystemContext(artifacts.source_pack, artifacts.evidence_claims, sourceAcquisition);
+}
+
+/** @param {any} pack @param {any} evidence @param {any} [sourceAcquisition] */
+export function deriveV4AuthoringSystemContext(pack, evidence, sourceAcquisition = null) {
   const preCase = deriveV4PreCaseSystemContext(pack, evidence, sourceAcquisition);
   return {
     ...preCase,
-    behavior_evidence: behaviorEvidence(evidence),
     ordering: orderingSystem(pack, evidence),
     semantic_evidence: deriveV4CaseSemanticContext(evidence).semantic_evidence,
   };
@@ -705,6 +684,7 @@ export function deriveV4PreCaseSystemContext(submittedPack, submittedEvidence, s
   const claim_assessments = claimAssessmentSystem(evidence);
   return {
     source, topology,
+    behavior_evidence: behaviorEvidence(evidence),
     interaction: { verified_claims: topology.verified_claims },
     claim_assessments,
     decisions: { delivery_requested: false, root_statuses: [] }

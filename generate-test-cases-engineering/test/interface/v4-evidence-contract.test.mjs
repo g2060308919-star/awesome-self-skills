@@ -10,7 +10,7 @@ const sha = character => `sha256:${character.repeat(64)}`;
 /** @returns {any} */
 function fixture() {
   return {
-    schema_version: '4.0.0',
+    schema_version: '4.3.3',
     source_revision: 0,
     claims: [],
     fact_ledger: [{
@@ -95,7 +95,7 @@ test('v4 Evidence rejects the legacy Fact shape and every missing compiler/revie
   }
 });
 
-test('v3 Evidence bytes keep the legacy closed Fact contract and reject v4-only scope fields', () => {
+test('historical Evidence is rejected before semantic interpretation', () => {
   const legacy = {
     schema_version: '3.0.0', source_revision: 0, claims: [],
     fact_ledger: [{
@@ -104,6 +104,6 @@ test('v3 Evidence bytes keep the legacy closed Fact contract and reject v4-only 
       view_review_basis: 'legacy projection'
     }]
   };
-  assert.deepEqual(validateAgainstSchema(legacy, schema), []);
+  assert.notDeepEqual(validateAgainstSchema(legacy, schema), []);
   assert.notDeepEqual(validateAgainstSchema({ ...legacy, scope_manifest: fixture().scope_manifest }, schema), []);
 });

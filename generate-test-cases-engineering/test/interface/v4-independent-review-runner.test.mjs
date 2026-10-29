@@ -1,3 +1,4 @@
+import {prepareCaseFixture} from '../helpers/v4-stage-construction.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -18,6 +19,7 @@ import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.m
 
 /** @param {string} directory @param {keyof typeof STAGE_FILES} stage @param {any} value */
 async function stageArtifact(directory, stage, value) {
+  if(stage==='case_drafts')value=await prepareCaseFixture(directory,value);
   await mkdir(path.join(directory, 'staging'), { recursive: true });
   await writeFile(
     path.join(directory, 'staging', STAGE_FILES[stage]),
@@ -176,18 +178,17 @@ test('AT23/AT24: strict runner retries a pending review without accepting it, th
   );
 });
 
-test('AT24/AT29: 4.3 cannot omit current review while 4.2 retains its frozen Case Draft shape', () => {
+test('current protocol cannot omit review or design assurance', () => {
   const current = v4GeneralQualityFixture();
   delete current.artifacts.case_drafts.independent_review;
   const rejected = compileCaseDocumentRevisionV4(current.artifacts, current.system);
   assert.equal(rejected.status, 'need_revision');
   assert.equal(rejected.stage, 'case_drafts');
 
-  const old = v4GeneralQualityFixture();
-  for (const artifact of Object.values(old.artifacts)) artifact.schema_version = '4.2.0';
-  delete old.artifacts.behavior_views.design_assurance;
-  delete old.artifacts.case_drafts.independent_review;
-  assert.equal(compileCaseDocumentRevisionV4(old.artifacts, old.system).status, 'compiled');
+  const missingDesign=v4GeneralQualityFixture();
+  delete missingDesign.artifacts.behavior_views.design_assurance;
+  const result=compileCaseDocumentRevisionV4(missingDesign.artifacts,missingDesign.system);
+  assert.equal(result.status,'need_revision');assert.equal(result.stage,'behavior_views');
 });
 
 test('AT24: review binds the materialized relative-baseline Case that is actually delivered', () => {

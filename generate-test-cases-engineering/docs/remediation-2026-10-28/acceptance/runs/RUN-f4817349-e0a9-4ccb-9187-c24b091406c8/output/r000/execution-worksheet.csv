@@ -1,0 +1,29 @@
+case_id,acceptance_role,module,priority,title,preconditions,data_conditions,steps,expected_results,execution_status,defect_ids,test_data_used,owner,notes
+CASE-29cbed377ec9cef7115896378569b54359ae8e4c8050f6ada6df5f4d335b0e38,primary_acceptance,配置管理,P1,保存处理中重复点击仅产生一条记录,1. 管理员；新增名称Alpha,1. 首次保存请求保持处理中，之后成功返回,"1. 点击保存，保持请求处理中
+2. 在处理完成前重复点击保存两次
+3. 释放首次请求并等待完成，查看列表",步骤3：最终仅生成一条名称Alpha的草稿记录，弹窗关闭,not_run,,,,
+CASE-0c1b983cd6774e71ee0ea4b38f41555665458d663a123b615046743821a58494,primary_acceptance,配置管理,P1,保存失败保留输入并可重试,1. 管理员；打开新增,1. 名称Alpha；第一次请求失败，重试成功,"1. 填写Alpha保存，等待失败
+2. 保持输入不变再次保存，等待成功","步骤1：弹窗保持打开且名称仍为Alpha，没有新增记录，允许再次保存
+步骤2：只新增一条名称Alpha的草稿记录，弹窗关闭",not_run,,,,
+CASE-b4f3d9b7e057c52d61189983008b4d924e6cd9808d7e3ec7ebd5721af81c95b2,primary_acceptance,配置管理,P1,取消后重新打开为空,1. 管理员,1. 未保存名称Temp,"1. 打开新增并输入Temp
+2. 点击取消
+3. 重新打开新增","步骤2：弹窗关闭，未新增记录
+步骤3：名称为空，不恢复Temp",not_run,,,,
+CASE-add7bd3ecad81082cb585abc93397a85d24a1b2f41a015ab8abc651d1190178f,primary_acceptance,配置管理,P1,只读用户不能新增,1. 以只读用户登录,1. 名称Alpha,1. 以只读用户尝试新增入口；若入口不可用记录拒绝并核对记录集合；若可打开表单，填写Alpha后点击保存并等待结果,步骤1：无论入口拒绝还是保存拒绝均不能新增；记录标识集合及数量不变；不限定入口隐藏或禁用,not_run,,,,
+CASE-af9d421f2d995f24cd3facb8a18abd8b67582a7202592a1cf08ba674e433b394,primary_acceptance,配置管理,P1,只读用户查看列表及详情,1. 以只读用户登录；列表有名称Alpha状态草稿的记录A,1. 记录A身份已知,"1. 打开配置列表
+2. 查看记录A详情并尝试修改名称或状态","步骤1：可以查看列表并找到记录A
+步骤2：显示名称Alpha及状态草稿，字段只读，不能修改",not_run,,,,
+CASE-b6c86986bb7e25ac04bdd97338d6a8eed1c5347a329b712c5540f9f43585bf24,primary_acceptance,配置管理,P1,名称输入 A,1. 管理员；打开新增弹窗,1. 名称='A',1. 填写该名称并点击保存,步骤1：仅新增一条名称A的草稿记录，关闭弹窗,not_run,,,,
+CASE-3f020834f570a0bf3f51daa92db4af1e8dd8fe6daf077a5d6cba56fd5852a022,primary_acceptance,配置管理,P1,名称输入 A B,1. 管理员；打开新增弹窗,1. 名称='A B',1. 填写该名称并点击保存,步骤1：不提交，不新增记录,not_run,,,,
+CASE-42f4e305f70e9d255e0fc3d96fc37a943fc3dd39e8aa4957aa1527aff0868372,primary_acceptance,配置管理,P1,名称输入 A-B,1. 管理员；打开新增弹窗,1. 名称='A-B',1. 填写该名称并点击保存,步骤1：不提交，不新增记录,not_run,,,,
+CASE-00536a8e20a4137b237ba6f4bbb202267de142bef32c7ec6733f1cfc90fe9664,primary_acceptance,配置管理,P1,名称输入 ABCDEFGHIJ,1. 管理员；打开新增弹窗,1. 名称='ABCDEFGHIJ',1. 填写该名称并点击保存,步骤1：仅新增一条名称ABCDEFGHIJ的草稿记录，关闭弹窗,not_run,,,,
+CASE-4c06380448e42b625cbc5ae31415fb17e51c3037e692beb976656a8ba322ffe0,primary_acceptance,配置管理,P1,名称输入 ABCDEFGHIJK,1. 管理员；打开新增弹窗,1. 名称='ABCDEFGHIJK',1. 填写该名称并点击保存,步骤1：不提交，提示“名称最多10个字母”，没有新记录,not_run,,,,
+CASE-884595f04f0513b344b31830e8363b699b4011da69881ed7dfb2a0796a433f00,primary_acceptance,配置管理,P1,名称输入 Ab1,1. 管理员；打开新增弹窗,1. 名称='Ab1',1. 填写该名称并点击保存,步骤1：不提交，不新增记录,not_run,,,,
+CASE-087e59d1e78d905d30cf855f1f1f6da55387e901fc1a7f06a6ae30ccc80d81a2,primary_acceptance,配置管理,P1,名称输入 AbCd,1. 管理员；打开新增弹窗,1. 名称='AbCd',1. 填写该名称并点击保存,步骤1：仅新增一条名称AbCd的草稿记录，关闭弹窗,not_run,,,,
+CASE-2746f4873353f3d651f0abd8fab9d9a69a8d88ab701064b4ad0836d8015a27a7,primary_acceptance,配置管理,P1,名称输入 é,1. 管理员；打开新增弹窗,1. 名称='é',1. 填写该名称并点击保存,步骤1：不提交，不新增记录,not_run,,,,
+CASE-8f6e99bc0a707c4073d352410f5f0773ff2e0a0d0e35bdbef17f4b00f4e48276,primary_acceptance,配置管理,P1,名称输入 中,1. 管理员；打开新增弹窗,1. 名称='中',1. 填写该名称并点击保存,步骤1：不提交，不新增记录,not_run,,,,
+CASE-fb8090afc17edfeb13a59fe191d87a00276325424dd4831053c842bd361fdd1d,primary_acceptance,配置管理,P1,名称输入 空值,1. 管理员；打开新增弹窗,1. 名称='',1. 填写该名称并点击保存,步骤1：不提交，提示“名称不能为空”，没有新记录,not_run,,,,
+CASE-ecd9cfc2410685f7fd3966e97f69c33175b66e25e9dba3ba595fb76be142f1ab,primary_acceptance,配置管理,P1,管理员新增初始化,1. 管理员,,1. 打开新增弹窗,步骤1：表单只有名称字段且初始为空,not_run,,,,
+CASE-36f7d7c8fc6c16004d977bbf8f1f06f1ee07e635ee2a777961446a2db55a92b3,primary_acceptance,配置管理,P1,管理员查看列表及详情,1. 以管理员登录；列表有名称Alpha状态草稿的记录A,1. 记录A身份已知,"1. 打开配置列表
+2. 查看记录A详情并尝试修改名称或状态","步骤1：可以查看列表并找到记录A
+步骤2：显示名称Alpha及状态草稿，字段只读，不能修改",not_run,,,,

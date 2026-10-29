@@ -1,3 +1,4 @@
+import { prepareCaseFixture } from '../helpers/v4-stage-construction.mjs';
 import { currentAcquisitionContextV4, readAcquisitionSnapshotV4, acquisitionBaseLocationV4 } from '../../src/source-acquisition-context-v4.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -82,7 +83,7 @@ async function startAcceptedEvidence(directory, providedFixture = null) {
   return { fixture, accepted };
 }
 
-/** Complete the latest protocol's compiler-bound independent review.
+/** Simulate compiler-bound review transport only; not a real independent semantic review.
  * @param {string} directory @param {any} draft */
 async function deliverReviewedCases(directory, draft) {
   const completed = draft.independent_review;
@@ -94,6 +95,7 @@ async function deliverReviewedCases(directory, draft) {
       return sourceTarget;
     })
   };
+  draft = await prepareCaseFixture(directory, draft, publicAdapter);
   await stage(directory, 'case_drafts', draft);
   const pending = await run(directory);
   assert.equal(pending.status, 'need_revision', JSON.stringify(pending));
@@ -107,7 +109,7 @@ async function deliverReviewedCases(directory, draft) {
       return { target_id: target.target_id, disposition: 'verified',
         affected_items: [{ item_kind: 'case', item_id: candidate.case_id }],
         source_claim_ids: target.source_claim_ids, decision_ids: target.decision_ids,
-        rationale: '测试夹具独立核对来源、步骤与预期。',
+        rationale: 'Protocol simulation only; no real semantic review asserted.',
         required_recheck: { status: 'passed', affected_items: [{ item_kind: 'case', item_id: candidate.case_id }] } };
     }), findings: []
   });
@@ -360,11 +362,12 @@ test('GTC-01 acquired asset is reused while an unaccepted semantic answer is cor
     const tamperedSource = structuredClone(valid);
     tamperedSource.sources[0].semantic_projection.content += ' changed original bytes';
     await stage(directory, 'source_pack', tamperedSource);
-    assert.equal((await run(directory)).incomplete_reason.code, 'ARTIFACT_RESUME_STALE');
+    // Source-version changes now route to a new run before material-resume validation.
+    assert.equal((await run(directory)).incomplete_reason.code, 'NEW_RUN_REQUIRED');
     const tamperedAsset = structuredClone(valid);
     tamperedAsset.source_assets[0].asset_digest = `sha256:${'f'.repeat(64)}`;
     await stage(directory, 'source_pack', tamperedAsset);
-    assert.equal((await run(directory)).incomplete_reason.code, 'ARTIFACT_RESUME_STALE');
+    assert.equal((await run(directory)).incomplete_reason.code, 'NEW_RUN_REQUIRED');
     const tamperedEvents = structuredClone(valid);
     tamperedEvents.artifact_events.pop();
     await stage(directory, 'source_pack', tamperedEvents);

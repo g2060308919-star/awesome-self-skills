@@ -1,0 +1,274 @@
+{
+  "status": "passed",
+  "recorded_at_utc": "2026-10-28T22:15:47.911314+00:00",
+  "base_commit": "80e25279b7e3a01058857df5f7c505055fe7fefb",
+  "branch": "codex/generate-test-cases-reliability",
+  "protocol": {
+    "schema_version": "4.3.3",
+    "compiler_version": "0.8.3"
+  },
+  "runtime": {
+    "node": "v24.18.0",
+    "npm": "11.16.0",
+    "platform": "macOS"
+  },
+  "commands": [
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "logs/final-build.txt"
+    },
+    {
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "logs/final-check.txt",
+      "includes": [
+        "TypeScript noEmit",
+        "build --check",
+        "current protocol and shared invariant suite"
+      ],
+      "metrics": {
+        "tests": 833,
+        "pass": 833,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "command": "GTC_RELIABILITY_RUNNER=<engineering bundle> node --test --test-reporter=tap test/interface/remediation-source-change.test.mjs",
+      "exit_code": 0,
+      "log": "logs/final-installed-source-change.txt",
+      "tests": 1,
+      "passed": 1
+    },
+    {
+      "command": "node test/acceptance/verify-recorded-deliveries.mjs",
+      "exit_code": 0,
+      "log": "logs/final-delivery.txt",
+      "verified_real_review_deliveries": 4,
+      "tampered_csv_with_forged_file_digest_rejected": true
+    },
+    {
+      "command": "node test/acceptance/no-progress.mjs",
+      "exit_code": 0,
+      "log": "logs/final-no-progress.txt",
+      "stop": "PIPELINE_NO_PROGRESS",
+      "layer": "Agent/Adapter",
+      "same_root_count": 4
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "acceptance": {
+    "passed": 33,
+    "failed": 0,
+    "not_executed": 0,
+    "items": [
+      {
+        "id": "AT-01",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-02",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-03",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-04",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-05",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-06",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-07",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-08",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-09",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-10",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-11",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-12",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-13",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-14",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-15",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-16",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-17",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-18",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-19",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-20",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-21",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-22",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-23",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-24",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-25",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-26",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-27",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-28",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-29",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-30",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-31",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-32",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      },
+      {
+        "id": "AT-33",
+        "status": "passed",
+        "evidence": "acceptance-record.md"
+      }
+    ]
+  },
+  "requirements": {
+    "mapped": 16,
+    "record": "acceptance-record.md"
+  },
+  "self_checks": {
+    "rounds": 3,
+    "record": "self-checks.md",
+    "unresolved_findings": 0
+  },
+  "published_package": {
+    "byte_identical": true,
+    "file_count": 29,
+    "bundle_sha256": "1ebe32dae289ab2bfc85e12ceb1b8f6373062c754d812371095f273a388405e6",
+    "details": "scope-verification.json"
+  },
+  "real_review": {
+    "reviewer": "independent context /root/source_first_review",
+    "source_first": true,
+    "minimal_targets": 12,
+    "comprehensive_targets": 70,
+    "minimal_final_cases": 17,
+    "comprehensive_final_cases": 137,
+    "original_and_portable_new_run_reviewed": true,
+    "record": "delivery-verification.json",
+    "protocol_simulation_not_substitute": true
+  },
+  "not_executed_out_of_scope": [
+    "original external business PRD",
+    "live MCP/provider availability",
+    "business/browser E2E",
+    "production actions",
+    "other operating systems",
+    "historical protocol migration/upgrade matrix",
+    "30-PRD public-pilot and benchmark"
+  ],
+  "working_tree_only": true
+}

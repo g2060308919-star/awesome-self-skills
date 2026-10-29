@@ -1,10 +1,11 @@
+import { v4GeneralQualityFixture as currentFixture } from '../helpers/v4-general-quality-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { compileSemanticCaseDocumentV4 } from '../../src/case-semantics-v4.mjs';
 import { compileCaseDocument } from '../../src/execution-plan.mjs';
 import { compileBusinessOutcomesV4 } from '../../src/obligations/business-outcomes-v4.mjs';
-import { GENERAL_QUALITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
+import { RELIABILITY_V4_CONTRACT } from '../../src/v4-contract.mjs';
 import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 test('AT10-AT13 one-result single-point Cases remain alongside a same-object complete flow', () => {
@@ -38,7 +39,7 @@ test('AT10-AT13 one-result single-point Cases remain alongside a same-object com
       outcome_id: 'OUT-order-accepted', acceptance_role: 'primary_acceptance'
     }],
     claim_assessments: fixture.system.claim_assessments
-  }, GENERAL_QUALITY_V4_CONTRACT);
+  }, RELIABILITY_V4_CONTRACT);
 
   assert.equal(result.cases.length, 2);
   assert.equal(new Set(result.cases.map((/** @type {any} */ item) => item.case_id)).size, 2);
@@ -66,7 +67,7 @@ test('AT14 explicit enumeration values compile to distinct formal results withou
     ]
   };
   const artifact = {
-    schema_version: '4.2.0', source_revision: 0,
+    schema_version: '4.3.3', source_revision: 0, design_assurance: currentFixture().artifacts.behavior_views.design_assurance,
     views: [{
       view_id: 'VIEW-order-state', module_id: 'orders', type: 'input-domain', scope: 'orders',
       source_claim_ids: ['CLM-order-state'], elements: [element], relations: []

@@ -1,9 +1,8 @@
+export { prepareStageArtifact } from './stage-artifact-adapter.mjs';
 import { realpathSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { advanceStrict as advanceStrictInternal } from './advance-strict.mjs';
-import { latestV4Contract, v4ContractForIdentity } from './v4-contract.mjs';
 import {
   constructIndependentReviewCompletionV4, constructV4Action
 } from './agent-action-adapter-v4.mjs';
@@ -33,24 +32,9 @@ function fatalReply(code, message) {
   };
 }
 
-/** Historical identities are read-only at the public generation boundary.
- * Recompute through a compiler-created successor; never mutate an old pair
- * or dispatch it to an old generator. The core still decodes historical data
- * for immutable verification and migration fixtures.
+/** The public boundary accepts the one current protocol. Historical runs stay untouched.
  * @param {string} runDirectory */
 export async function advanceStrict(runDirectory) {
-  if (typeof runDirectory === 'string' && path.isAbsolute(runDirectory)) {
-    let identity;
-    try { identity = JSON.parse(await readFile(path.join(runDirectory, 'run-instance.json'), 'utf8')); }
-    catch { /* The core returns its precise missing/corrupt-store diagnostic. */ }
-    if (typeof identity?.schema_version === 'string' && identity.schema_version.startsWith('4.')) {
-      const contract = v4ContractForIdentity(identity);
-      if (!contract) return fatalReply('VERSION_UPGRADE_UNSUPPORTED',
-        'The v4 schema/compiler pair is unknown or mismatched; preserve this run for inspection.');
-      if (contract !== latestV4Contract()) return fatalReply('VERSION_UPGRADE_REQUIRED',
-        "Verify completed delivery read-only, or use createV4RunDirectory(catalogRoot, { parent_run_id, creation_reason: 'version_upgrade' }) to continue with the latest compiler.");
-    }
-  }
   return advanceStrictInternal(runDirectory);
 }
 

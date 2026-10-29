@@ -2,8 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "run-instance.schema.json",
   "oneOf": [
-    { "$ref": "#/$defs/v3RunInstance" },
-    { "$ref": "#/$defs/v4RunInstance" }
+    {
+      "$ref": "#/$defs/v4RunInstance"
+    }
   ],
   "$defs": {
     "runId": {
@@ -22,24 +23,28 @@
         "pattern": "^DEC-[0-9a-f]{64}$"
       }
     },
-    "v3RunInstance": {
-      "type": "object",
-      "required": ["schema_version", "run_instance_id", "created_at"],
-      "properties": {
-        "schema_version": { "const": "3.0.0" },
-        "run_instance_id": { "$ref": "#/$defs/runId" },
-        "created_at": { "type": "string", "minLength": 1 }
-      },
-      "additionalProperties": false
-    },
     "caseDocumentRef": {
       "type": "object",
-      "required": ["run_id", "revision", "manifest_digest", "bundle_digest"],
+      "required": [
+        "run_id",
+        "revision",
+        "manifest_digest",
+        "bundle_digest"
+      ],
       "properties": {
-        "run_id": { "$ref": "#/$defs/runId" },
-        "revision": { "type": "integer", "minimum": 0 },
-        "manifest_digest": { "$ref": "#/$defs/sha256" },
-        "bundle_digest": { "$ref": "#/$defs/sha256" }
+        "run_id": {
+          "$ref": "#/$defs/runId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bundle_digest": {
+          "$ref": "#/$defs/sha256"
+        }
       },
       "additionalProperties": false
     },
@@ -51,9 +56,16 @@
         "reopen_event_id"
       ],
       "properties": {
-        "newly_suspended_decision_ids": { "$ref": "#/$defs/decisionIdSet" },
-        "cumulative_suspended_decision_ids": { "$ref": "#/$defs/decisionIdSet" },
-        "reopen_event_id": { "type": "string", "minLength": 1 }
+        "newly_suspended_decision_ids": {
+          "$ref": "#/$defs/decisionIdSet"
+        },
+        "cumulative_suspended_decision_ids": {
+          "$ref": "#/$defs/decisionIdSet"
+        },
+        "reopen_event_id": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": false
     },
@@ -66,10 +78,19 @@
         "decision_suspension"
       ],
       "properties": {
-        "root_issue_id": { "type": "string", "pattern": "^ROOT-[0-9a-f]{64}$" },
-        "prior_root_version_digest": { "$ref": "#/$defs/sha256" },
-        "reopened_root_version_digest": { "$ref": "#/$defs/sha256" },
-        "decision_suspension": { "$ref": "#/$defs/decisionSuspension" }
+        "root_issue_id": {
+          "type": "string",
+          "pattern": "^ROOT-[0-9a-f]{64}$"
+        },
+        "prior_root_version_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reopened_root_version_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decision_suspension": {
+          "$ref": "#/$defs/decisionSuspension"
+        }
       },
       "additionalProperties": false
     },
@@ -82,10 +103,18 @@
         "scope_manifest_digest"
       ],
       "properties": {
-        "source_pack_digest": { "$ref": "#/$defs/sha256" },
-        "decision_journal_digest": { "$ref": "#/$defs/sha256" },
-        "evidence_digest": { "$ref": "#/$defs/sha256" },
-        "scope_manifest_digest": { "$ref": "#/$defs/sha256" }
+        "source_pack_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "decision_journal_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scope_manifest_digest": {
+          "$ref": "#/$defs/sha256"
+        }
       },
       "additionalProperties": false
     },
@@ -101,48 +130,46 @@
         "inherited_artifacts"
       ],
       "properties": {
-        "creation_reason": { "const": "reopen_semantic_question" },
-        "parent_case_document_ref": { "$ref": "#/$defs/caseDocumentRef" },
-        "parent_execution_run_id": { "$ref": "#/$defs/runId" },
-        "reopen_event_id": { "type": "string", "minLength": 1 },
+        "creation_reason": {
+          "const": "reopen_semantic_question"
+        },
+        "parent_case_document_ref": {
+          "$ref": "#/$defs/caseDocumentRef"
+        },
+        "parent_execution_run_id": {
+          "$ref": "#/$defs/runId"
+        },
+        "reopen_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "reopened_targets": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/reopenedTarget" }
+          "items": {
+            "$ref": "#/$defs/reopenedTarget"
+          }
         },
-        "decision_reopen_overlay_digest": { "$ref": "#/$defs/sha256" },
-        "inherited_artifacts": { "$ref": "#/$defs/inheritedArtifacts" }
-      },
-      "additionalProperties": false
-    },
-    "migrationLineage": {
-      "type": "object",
-      "required": ["creation_reason", "parent_run_id"],
-      "properties": {
-        "creation_reason": { "enum": ["migration_v3", "resume_cancelled"] },
-        "parent_run_id": { "$ref": "#/$defs/runId" }
-      },
-      "additionalProperties": false
-    },
-    "versionUpgradeLineage": {
-      "type": "object",
-      "required": ["creation_reason", "parent_run_id", "parent_schema_version", "parent_compiler_version", "parent_snapshot_digest", "parent_revision"],
-      "properties": {
-        "creation_reason": { "const": "version_upgrade" },
-        "parent_run_id": { "$ref": "#/$defs/runId" },
-        "parent_schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0", "4.3.1", "4.3.2"] },
-        "parent_compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0", "0.8.1", "0.8.2"] },
-        "parent_snapshot_digest": { "$ref": "#/$defs/sha256" },
-        "parent_revision": { "type": ["integer", "null"], "minimum": 0 }
+        "decision_reopen_overlay_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "inherited_artifacts": {
+          "$ref": "#/$defs/inheritedArtifacts"
+        }
       },
       "additionalProperties": false
     },
     "v4Lineage": {
       "oneOf": [
-        { "type": "null" },
-        { "$ref": "#/$defs/semanticReopenLineage" },
-        { "$ref": "#/$defs/migrationLineage" },
-        { "$ref": "#/$defs/versionUpgradeLineage" }
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/semanticReopenLineage"
+        },
+        {
+          "$ref": "#/$defs/resumeLineage"
+        }
       ]
     },
     "v4RunInstance": {
@@ -156,24 +183,62 @@
         "lineage"
       ],
       "properties": {
-        "schema_version": { "enum": ["4.0.0", "4.2.0", "4.3.0", "4.3.1", "4.3.2", "4.3.3"] },
-        "compiler_version": { "enum": ["0.5.0", "0.7.0", "0.8.0", "0.8.1", "0.8.2", "0.8.3"] },
-        "run_id": { "$ref": "#/$defs/runId" },
-        "delivery_intent": { "enum": ["case_document", "execution_plan"] },
-        "created_at": { "type": "string", "minLength": 1 },
-        "lineage": { "$ref": "#/$defs/v4Lineage" }
+        "schema_version": {
+          "const": "4.3.3"
+        },
+        "compiler_version": {
+          "const": "0.8.3"
+        },
+        "run_id": {
+          "$ref": "#/$defs/runId"
+        },
+        "delivery_intent": {
+          "enum": [
+            "case_document",
+            "execution_plan"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lineage": {
+          "$ref": "#/$defs/v4Lineage"
+        }
       },
       "additionalProperties": false,
-      "allOf": [{
-        "oneOf": [
-          { "properties": { "schema_version": { "const": "4.0.0" }, "compiler_version": { "const": "0.5.0" } } },
-          { "properties": { "schema_version": { "const": "4.2.0" }, "compiler_version": { "const": "0.7.0" } } },
-          { "properties": { "schema_version": { "const": "4.3.0" }, "compiler_version": { "const": "0.8.0" } } },
-          { "properties": { "schema_version": { "const": "4.3.1" }, "compiler_version": { "const": "0.8.1" } } },
-          { "properties": { "schema_version": { "const": "4.3.2" }, "compiler_version": { "const": "0.8.2" } } },
-          { "properties": { "schema_version": { "const": "4.3.3" }, "compiler_version": { "const": "0.8.3" } } }
-        ]
-      }]
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "schema_version": {
+                  "const": "4.3.3"
+                },
+                "compiler_version": {
+                  "const": "0.8.3"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "resumeLineage": {
+      "type": "object",
+      "required": [
+        "creation_reason",
+        "parent_run_id"
+      ],
+      "properties": {
+        "creation_reason": {
+          "const": "resume_cancelled"
+        },
+        "parent_run_id": {
+          "$ref": "#/$defs/runId"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

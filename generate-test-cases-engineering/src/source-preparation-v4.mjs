@@ -1,11 +1,11 @@
+import { canonicalTopologyStructure } from './v4-system-context.mjs';
+import { discoverTopologyV4 } from './topology-discovery.mjs';
 import sourcePackSchema from '../skill/generate-test-cases/scripts/schemas/source-pack.schema.json' with { type: 'json' };
 import { sourceByteDigest } from './source-canonicalization.mjs';
 import { compileAuditedSource } from './source-compiler-v4.mjs';
 import { validateV4SourceLocators, validateV4SourceReviews } from './source-locators-v4.mjs';
 import { createCompilerSourceRuntimeV4 } from './source-runtime-registry-v4.mjs';
 import { validateAgainstSchema } from './schema-validator.mjs';
-import { canonicalTopologyStructure } from './v4-system-context.mjs';
-import { discoverTopologyV4 } from './topology-discovery.mjs';
 
 /** @param {unknown} value @param {string[]} keys */
 function only(value, keys) {

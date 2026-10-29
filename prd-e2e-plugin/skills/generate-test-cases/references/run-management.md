@@ -21,29 +21,12 @@ For every recovery or resume, invoke the runner on the same absolute directory f
 
 Treat only compiler-accepted events in the recovered checkpoint as submitted. Preserve accepted answers whose exact root version and scope still apply, preserve every pending part, and leave staging-only attempts unaccepted. If the root version, affected scope, or current presentation changed, retain the older answer for audit but do not replay or silently rebind it. Never submit the same accepted answer again merely because conversation context was lost.
 
-Use the latest installed compiler. New runs and upgraded continuations use
-`4.3.3/0.8.3`. The formal runner returns `VERSION_UPGRADE_REQUIRED` for exact
-`4.0.0/0.5.0`, `4.2.0/0.7.0`, `4.3.0/0.8.0`, `4.3.1/0.8.1`, and `4.3.2/0.8.2`
-identities. To continue, pass `{ parent_run_id, creation_reason: 'version_upgrade' }`
-to `createV4RunDirectory` using the parent's existing catalog root. Repeating
-that request resumes the same journaled successor. Never handwrite its ID,
-replace version fields in historical files, or use a cancellation reason for
-an upgrade.
-
-The upgrade helper validates original bytes, committed references and any
-delivery before preserving them in an audit snapshot. It stages source and
-Evidence for fresh validation and recomputes downstream design using the latest
-contract. Incomplete source acquisition may require recollection. Unknown or
-corrupt pairs stop without changing the parent; do not invoke an older generator.
-Completed deliveries can be viewed through `verifyCaseDocumentDeliveryV4` or
-`verifyExecutionPlanDeliveryV4` without creating a successor.
-
-Only the compiler may rebind a historical final answer after proving its
-source authority, business proposition, complete scope and root applicability.
-Temporary, unknown, deferred, or unprovable answers remain audit history and
-require fresh clarification. Do not recreate a user event to make an old answer
-appear current. Frozen source provider contracts remain verification inputs;
-new acquisition uses the latest compiler-owned registry.
+Use the current `4.3.3/0.8.3` protocol. An incompatible identity or artifact
+stops with a diagnostic; keep its bytes unchanged. No compatibility reader,
+version choice, upgrade, downgrade, or migration operation is available.
+Current task revisions, exact question bindings, external provider contracts,
+and source/collection digests remain mandatory. A change to those task inputs
+is not a change of skill protocol.
 
 ## Preserve append-only revisions
 
@@ -55,10 +38,10 @@ For a `4.3.2` acquired resource, the compiler keeps one private, digest-bound ac
 
 Before any revision that invalidates ready output, commit a current tombstone/stale state. A higher non-ready revision always dominates an older ready pointer. Crash recovery completes or rolls forward the journaled transition; it never restores old ready/current merely because those files still exist.
 
-For 4.3, a staging-only pending or completed independent review is not accepted
+A staging-only pending or completed independent review is not accepted
 recovery state. Reinvoke the runner: a pending review reproduces the same
 compiler-issued target/digest request, while a completed accepted review is
-valid only for the identical generated-content digest. A newer non-ready 4.3
+valid only for the identical generated-content digest. A newer non-ready
 revision revokes current authority even when an older ready manifest remains on
 disk.
 
@@ -66,9 +49,17 @@ disk.
 
 ## Repair without rewriting history
 
-Fix an unaccepted artifact in staging at the same candidate revision. For an accepted Agent artifact, append a digest-bound `artifact_repairs` record naming `base_source_revision`, semantic `stage`, exact accepted canonical artifact digest, and reason. Increment revision once, let the compiler carry forward safe predecessors, then regenerate the returned downstream stage. Never edit accepted/derived/output files.
+Fix an unaccepted artifact in staging at the same candidate revision. Accepted
+artifacts remain immutable. Current semantic answers use the advertised Decision
+append and recheck downstream stages.
 
-For `4.3.2` Case Document Evidence repair, stage the next Source Pack with exactly one `evidence_claims` repair and the next Evidence candidate together. The compiler validates both and commits the revision atomically; it does not require a new clarification answer for this repair.
+For current Case Document Evidence repair, stage the next Source Pack with
+exactly one digest-bound `evidence_claims` artifact repair and the next Evidence
+candidate together. The existing repair transaction validates and commits both
+atomically, without requiring a new business answer. Other accepted stages have
+no generic repair action; report that limitation with the last valid checkpoint
+instead of editing accepted files or fabricating an answer. Stage preparation is
+not authorization to submit an Evidence repair or bypass its controlled binding.
 
 An original source-byte change, new authoritative source, or material scope change is not a repair; it requires `NEW_RUN_REQUIRED`, preserving the old run and creating a linked sibling. A business answer is a Decision, never an artifact repair.
 
@@ -87,12 +78,7 @@ source request. It does not copy, mutate, or revive the cancelled journal.
 
 For changed source/scope, create and successfully identify the new run before atomically linking old `superseded_by` and new `supersedes` rows. For execution `reopen_semantic_question`, create the sibling Case Document durably before marking the execution run `superseded_by_semantic_reopen`. Concurrent replays converge on the same transaction/sibling; same identity with different payload is a conflict.
 
-Never reset, restore, delete, or repurpose another run. Preserve completed, failed, superseded, cancelled, and migrated histories for audit. A catalog disagreement with compiler identity is a process error; report it instead of selecting whichever directory looks newer.
-
-## Keep v3 migration read-only
-
-Legacy v3 bytes and digests never change. Migration creates one durable v4 sibling plus a bidirectional index; incomplete, unavailable, ambiguous, or mutated legacy input receives its explicit migration terminal status. A migrated v4 output comes only from that sibling. v3 remains readable for audit but is never a v4 workflow fallback.
-
+Never reset, restore, delete, or repurpose another run. Preserve completed, failed, superseded, and cancelled histories for audit. A catalog disagreement with compiler identity is a process error; report it instead of selecting whichever directory looks newer.
 
 ## Material verification followed by semantic rejection
 

@@ -18,22 +18,24 @@ const digestText = (value) => `sha256:${createHash('sha256').update(value, 'utf8
 
 /** @param {{second?:boolean,prior?:any,revision?:number,bytes?:Uint8Array,changedQuestion?:boolean}} [options] */
 function checkpoint(options = {}) {
-  const facts = [{ fact_id: 'FACT-ip', statement: 'IP 列业务含义不明确', claim_ids: ['CLM-ip'] }];
-  const claims = [{ claim_id: 'CLM-ip', value: 'IP 列业务含义不明确' }];
+  const facts = [{ status: 'ambiguous', fact_id: 'FACT-ip', statement: '附录 IP 示例未选定，必要列规则已确定', claim_ids: ['CLM-ip'] }];
+  const claims = [{ claim_id: 'CLM-ip', value: '附录 IP 示例未选定，必要列规则已确定' }];
   const diagnosticCandidates = [{
+    acceptance_impact: {classification:'noncritical',criteria:['does_not_change_required_acceptance'],rationale:'此决定重算夹具选择可选示例，必要结果已知。'},
     category: 'semantic_gap', code: 'IP_MEANING_UNRESOLVED', subject_fact_ids: ['FACT-ip'], missing_aspect: 'meaning',
     scope_ref: 'review.ip', question: options.changedQuestion ? 'IP 列最终业务含义是什么？' : 'IP 表示什么？',
-    why_needed: '需要确定业务含义。', decision_impact: '决定列值预期。', unresolved_outcome: '该列用例保持待确认。',
+    why_needed: '需要选择可选附录示例。', decision_impact: '仅改变附录示例，不改变必要列结果。', unresolved_outcome: '附录示例保持待确认。',
     answer_options: ['网络 IP', '定位城市'], risk_level: 'high', source_claim_ids: ['CLM-ip'],
     discovery_phase: 'pre_case', affected_test_point_ids: []
   }];
   if (options.second) {
-    facts.push({ fact_id: 'FACT-sort', statement: '排序方向不明确', claim_ids: ['CLM-sort'] });
+    facts.push({ status: 'ambiguous', fact_id: 'FACT-sort', statement: '排序方向不明确', claim_ids: ['CLM-sort'] });
     claims.push({ claim_id: 'CLM-sort', value: '排序方向不明确' });
     diagnosticCandidates.push({
-      category: 'semantic_gap', code: 'SORT_UNRESOLVED', subject_fact_ids: ['FACT-sort'], missing_aspect: 'ordering',
-      scope_ref: 'review.sort', question: '默认按什么方向排序？', why_needed: '需要确定默认顺序。',
-      decision_impact: '决定首屏顺序。', unresolved_outcome: '排序用例保持待确认。',
+      acceptance_impact: {classification:'noncritical',criteria:['does_not_change_required_acceptance'],rationale:'此决定重算夹具选择可选示例，必要结果已知。'},
+    category: 'semantic_gap', code: 'SORT_UNRESOLVED', subject_fact_ids: ['FACT-sort'], missing_aspect: 'ordering',
+      scope_ref: 'review.sort', question: '默认按什么方向排序？', why_needed: '需要选择可选的排序展示示例。',
+      decision_impact: '仅改变附录示例展示，不改变必要列表验收。', unresolved_outcome: '排序用例保持待确认。',
       answer_options: ['升序', '降序'], risk_level: 'high', source_claim_ids: ['CLM-sort'],
       discovery_phase: 'pre_case', affected_test_point_ids: []
     });
@@ -93,9 +95,9 @@ test('Decision Claim completes the ambiguous Fact through an auditable supersede
   const base = checkpoint(); const root = base.checkpoint.semantic_gap_ledger[0];
   const message = '用户回答：定位城市'; const accepted = apply(base, event(base, message, '定位城市'), [], [base.presentation], [message]);
   const evidence = {
-    schema_version: '4.0.0', source_revision: 0,
+    schema_version: '4.3.3', source_revision: 0,
     claims: [{ claim_id: 'CLM-ip', claim_form: 'direct', level: 'E3', kind: 'requirement', scope: 'review.ip',
-      value: 'IP 列业务含义不明确', source_locator_ids: ['LOC-prd'], source_id: 'SRC-prd', domain: 'business',
+      value: '附录 IP 示例未选定，必要列规则已确定', source_locator_ids: ['LOC-prd'], source_id: 'SRC-prd', domain: 'business',
       field_path: '/ip', document_level_claim: false,
       subject_descriptor: { scope_ref: 'review.ip', module_id: 'review', entity_type: 'row', entity_key: 'ip', field_path: '/ip', condition: {} },
       semantic_value: 'ambiguous' }],

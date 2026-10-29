@@ -61,7 +61,7 @@ test('T06 nested Fact and scope sets normalize only in the latest artifact snaps
   changed.scope_manifest.modules.reverse();
   assert.deepEqual(evidenceComponentDigests(changed), evidenceComponentDigests(e));
   assert.equal(digest(canonicalArtifactSnapshot(changed)), digest(canonicalArtifactSnapshot(e)));
-  const historical = { ...e, schema_version: '4.3.2' };
+  const historical = { ...e, schema_version: '4.3.3' };
   assert.equal(canonicalStringify(canonicalArtifactSnapshot(historical)), canonicalStringify(historical),
     'historical canonical bytes remain unchanged');
 });

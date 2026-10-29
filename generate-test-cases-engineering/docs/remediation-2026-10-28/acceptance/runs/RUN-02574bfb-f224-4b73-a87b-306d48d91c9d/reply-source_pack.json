@@ -1,0 +1,28 @@
+{
+  "status": "need_revision",
+  "stage": "evidence_claims",
+  "schema_ref": "evidence-claims.schema.json",
+  "phase": "requirements_analysis",
+  "run_id": "RUN-02574bfb-f224-4b73-a87b-306d48d91c9d",
+  "scope": {
+    "source_revision": 0,
+    "run_instance_id": "RUN-02574bfb-f224-4b73-a87b-306d48d91c9d"
+  },
+  "diagnostics": [],
+  "produced_artifacts": [],
+  "incomplete_reason": {
+    "code": "STAGE_ARTIFACT_REQUIRED",
+    "summary": "当前运行仍需要 evidence_claims 工件才能继续。"
+  },
+  "user_next_steps": [
+    {
+      "action": "write_stage_artifact",
+      "description": "按 evidence-claims.schema.json 写入当前候选 revision 的 evidence_claims。"
+    }
+  ],
+  "recovery": {
+    "mode": "write_staging_artifact",
+    "description": "保留已接受 revision，在同一运行目录写入所请求的候选工件后重调 runner。"
+  },
+  "non_blocking_diagnostics": []
+}

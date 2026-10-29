@@ -1,0 +1,38 @@
+TAP version 13
+# Subtest: AT-12: build rejects dangling references and divergence of external and embedded context contracts
+ok 1 - AT-12: build rejects dangling references and divergence of external and embedded context contracts
+  ---
+  duration_ms: 42.430042
+  type: 'test'
+  ...
+# Subtest: AT-14: schema boundary rejects versionless historical delivery pointers
+not ok 2 - AT-14: schema boundary rejects versionless historical delivery pointers
+  ---
+  duration_ms: 6.452167
+  type: 'test'
+  location: '/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-schema.test.mjs:18:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(validateAgainstSchema(historical,schemas.get('current-pointer.schema.json')).length)
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: 0
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-schema.test.mjs:22:9)
+    async Test.run (node:internal/test_runner/test:1332:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 97.420667

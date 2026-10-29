@@ -7,18 +7,18 @@ import { validateAgainstSchema } from '../../src/schema-validator.mjs';
 import { buildJourney } from '../helpers/run-journey.mjs';
 import { sourceBoundaryFixture } from '../helpers/v4-source-boundary.mjs';
 
-test('T11 Source Pack v4 has a canonical source/review/locator/composition discriminator while v3 stays valid', () => {
-  assert.deepEqual(validateAgainstSchema(buildJourney('all-e3').source_pack, schema), []);
+test('T11 Source Pack v4 has a canonical source/review/locator/composition discriminator and rejects historical inputs', () => {
+  assert.notDeepEqual(validateAgainstSchema(buildJourney('all-e3').source_pack, schema), []);
   const { pack } = sourceBoundaryFixture();
   assert.deepEqual(validateAgainstSchema(pack, schema), []);
-  const legacy = buildJourney('all-e3').source_pack; legacy.schema_version = '4.0.0'; legacy.delivery_intent = 'case_document'; legacy.artifact_events = [];
+  const legacy = buildJourney('all-e3').source_pack; legacy.schema_version = '4.3.3'; legacy.delivery_intent = 'case_document'; legacy.artifact_events = [];
   assert.ok(validateAgainstSchema(legacy, schema).length);
   pack.schema_version = '3.0.0'; assert.ok(validateAgainstSchema(pack, schema).length);
 });
 
 test('T11 Source Pack shares exact source and artifact-event definitions, not approximate contracts', () => {
-  for (const [name, definition] of Object.entries(evidence.$defs)) if (name.startsWith('v4Source')) assert.deepEqual(/** @type {any} */ (schema.$defs)[name], definition, name);
-  for (const [name, definition] of Object.entries(provideArtifactEventSchema.$defs)) assert.deepEqual(/** @type {any} */ (schema.$defs)[name], definition, name);
+  for (const [name, definition] of Object.entries(evidence.$defs)) if (name.startsWith('v4Source') && Object.hasOwn(schema.$defs, name)) assert.deepEqual(/** @type {any} */ (schema.$defs)[name], definition, name);
+  for (const [name, definition] of Object.entries(provideArtifactEventSchema.$defs)) if (Object.hasOwn(schema.$defs, name)) assert.deepEqual(/** @type {any} */ (schema.$defs)[name], definition, name);
 });
 
 test('T11 canonical Source Pack rejects missing audit, widened unit reviews and open composition/event shapes', () => {

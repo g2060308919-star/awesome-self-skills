@@ -30,9 +30,10 @@ function fixture() {
     'long_content', 'pagination', 'refresh', 'business_permission_boundary'
   ];
   return {
+    source_reading: candidateDeliveryInput().source_reading,
     run_id: 'RUN-delivery-v4', completed_at: '2026-09-09T00:00:00.000Z',
     bundle: {
-      schema_version: '4.0.0', compiler_version: '0.5.0', delivery_intent: 'case_document',
+      schema_version: '4.3.3', compiler_version: '0.8.3', delivery_intent: 'case_document',
       source_revision: 3, result_kind: 'delivered_cases', ordered_case_ids: ['CASE-review'],
       scope_manifest: {
         primary_surface: 'admin',
@@ -54,6 +55,8 @@ function fixture() {
         boundary: { reviewed_formal_test_point_count: 0, covered_formal_test_point_count: 0, not_applicable_formal_test_point_count: 0 },
         semantic_gap_count: 0, exploratory_count: riskKinds.length, not_applicable_count: 0
       },
+      design_assurance_summary: candidateDeliveryInput().bundle.design_assurance_summary,
+      independent_review_summary: candidateDeliveryInput().bundle.independent_review_summary,
       semantic_root_groups: [],
       exploratory: riskKinds.map(riskKind => ({
         exploratory_id: `EXP-${riskKind}`, module_id: 'admin', title: `${riskKind} 风险`, reason: '版本化风险目录建议探索检查'
@@ -83,7 +86,7 @@ function executionFixture(resultKind = 'execution_ready') {
       run_id: 'RUN-execution-v4', revision: 1, completed_at: '2026-09-09T01:00:00.000Z',
       case_document_ref: caseDocumentRef,
       execution_plan: {
-        schema_version: '4.0.0', compiler_version: '0.5.0', delivery_intent: 'execution_plan',
+        schema_version: '4.3.3', compiler_version: '0.8.3', delivery_intent: 'execution_plan',
         status: 'finished', result_kind: resultKind, case_document_ref: caseDocumentRef,
         items: [{ case_id: 'CASE-review', semantic_status: 'Grounded', disposition: resultKind === 'execution_ready' ? 'execute' : 'do_not_execute', ready: resultKind === 'execution_ready' }],
         runner_ready: resultKind === 'execution_ready',
@@ -119,50 +122,18 @@ test('T03/T12 final execution-plan artifact is closed and version-correct', asyn
   }
 });
 
-test('4.3 execution delivery rejects a manifest and bundle with mixed contract identities', async () => {
-  const currentInput = candidateDeliveryInput();
-  currentInput.bundle.schema_version = '4.3.0';
-  currentInput.bundle.compiler_version = '0.8.0';
-  currentInput.bundle.design_assurance_summary = {
-    status: 'complete', plan_revision: 1, batch_count: 1, rule_group_count: 1,
-    candidate_responsibility_count: 1,
-    candidate_disposition_counts: {
-      retained: 1, representative_value: 0, equivalent_merge: 0,
-      evidence_exclusion: 0, semantic_gap: 0, exploratory: 0
-    }
-  };
-  currentInput.bundle.independent_review_summary = {
-    status: 'completed', protocol_version: '1.0.0',
-    review_mode: 'independent_source_first', reviewer_identity_class: 'independent_context',
-    source_first_target_count: 1,
-    target_assessment_counts: { verified: 1, semantic_gap: 0, evidence_excluded: 0 },
-    finding_counts: { confirmed: 0, rejected: 0 },
-    review_target_digest: `sha256:${'9'.repeat(64)}`
-  };
-  const current = delivery.materializeCaseDocumentDeliveryV4(currentInput);
-  const legacyInput = fixture();
-  legacyInput.bundle.source_revision = current.manifest.revision;
-  const legacy = delivery.materializeCaseDocumentDeliveryV4(legacyInput);
+test('execution delivery rejects a historical protocol document without adapting it', async () => {
+  const current = delivery.materializeCaseDocumentDeliveryV4(candidateDeliveryInput());
+  const bundle = JSON.parse(current.bundle_bytes);
+  bundle.schema_version = '4.2.0'; bundle.compiler_version = '0.7.0';
+  const bundleBytes = canonicalStringify(bundle) + '\n';
   const manifest = structuredClone(current.manifest);
-  manifest.bundle.digest = legacy.manifest.bundle.digest;
-  const manifestBytes = `${canonicalStringify(manifest)}\n`;
+  manifest.bundle.digest = byteDigest(bundleBytes);
+  const manifestBytes = canonicalStringify(manifest) + '\n';
   const mixed = executionFixture();
-  mixed.input.case_document_ref = {
-    run_id: manifest.run_id, revision: manifest.revision,
-    manifest_digest: byteDigest(manifestBytes), bundle_digest: legacy.manifest.bundle.digest
-  };
-  mixed.input.execution_plan.schema_version = '4.3.0';
-  mixed.input.execution_plan.compiler_version = '0.8.0';
+  mixed.input.case_document_ref = {run_id:manifest.run_id,revision:manifest.revision,manifest_digest:byteDigest(manifestBytes),bundle_digest:manifest.bundle.digest};
   mixed.input.execution_plan.case_document_ref = structuredClone(mixed.input.case_document_ref);
-  await assert.rejects(
-    () => delivery.materializeExecutionPlanDeliveryV4(mixed.input, {
-      resolve_case_document: async () => ({
-        manifest_bytes: manifestBytes,
-        bundle_bytes: legacy.bundle_bytes
-      })
-    }),
-    /CASE_DOCUMENT_CONTRACT_MISMATCH/u
-  );
+  await assert.rejects(() => delivery.materializeExecutionPlanDeliveryV4(mixed.input, {resolve_case_document: async () => ({manifest_bytes:manifestBytes,bundle_bytes:bundleBytes})}), /CASE_DOCUMENT_(BUNDLE_SCHEMA_INVALID|CONTRACT_MISMATCH|MANIFEST_INVALID)/u);
 });
 
 test('T12 materializes JSON, Markdown and CSV from one canonical bundle and binds exact bytes', () => {
@@ -175,11 +146,15 @@ test('T12 materializes JSON, Markdown and CSV from one canonical bundle and bind
   assert.equal(result.markdown_bytes.endsWith('\n'), true);
   assert.equal(result.worksheet_bytes.endsWith('\n'), true);
   assert.deepEqual(result.manifest, {
-    run_id: 'RUN-delivery-v4', revision: 3, schema_version: '4.0.0', compiler_version: '0.5.0',
+    run_id: 'RUN-delivery-v4', revision: 3, schema_version: '4.3.3', compiler_version: '0.8.3',
     delivery_intent: 'case_document', authority: 'canonical', result_kind: 'delivered_cases',
     bundle: { path: 'output/r003/test-bundle.json', digest: result.manifest.bundle.digest },
     markdown: { path: 'output/r003/test-cases.md', digest: result.manifest.markdown.digest },
     execution_worksheet: { path: 'output/r003/execution-worksheet.csv', digest: result.manifest.execution_worksheet.digest, format: 'csv' },
+    html: {path:'output/r003/test-cases.html',digest:result.manifest.html.digest,format:'html'},
+    chat_table: {path:'output/r003/case-table.txt',digest:result.manifest.chat_table.digest,format:'commonmark-table'},
+    source_reading: {path:'output/r003/source-reading.json',digest:result.manifest.source_reading.digest,format:'json'},
+    primary_readable:'html',review_target_digest:fixture().bundle.independent_review_summary.review_target_digest,
     render_options: { include_audit_appendix: false }, case_count: 1, blocked_root_count: 0,
     closed_for_delivery_root_count: 0, not_applicable_count: 0, exploratory_count: 9,
     completed_at: '2026-09-09T00:00:00.000Z'
@@ -204,7 +179,7 @@ test('T12 publishes current.json only after all three artifacts survive exact re
   assert.deepEqual(current, result.manifest);
   assert.equal(result.reply.status, 'finished');
   assert.deepEqual(result.reply.produced_artifacts.map((/** @type {any} */ item) => item.kind), [
-    'case_document', 'business_markdown', 'execution_worksheet'
+    'case_document', 'business_markdown', 'execution_worksheet', 'business_html', 'case_table', 'source_reading_summary'
   ]);
   assert.equal(result.reply.incomplete_reason, null);
 });

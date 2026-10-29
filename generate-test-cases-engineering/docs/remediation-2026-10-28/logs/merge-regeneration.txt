@@ -1,0 +1,2 @@
+{"sample":"minimal","reviewed_projection_identical":true,"review_target_digest":"sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe","fresh_run_status":"pending_independent_review","new_review_attested":false}
+{"sample":"comprehensive","reviewed_projection_identical":true,"review_target_digest":"sha256:6d07530261a38d540010819ca304eb9ca7302b71ce6eb50659dfb08212d28293","fresh_run_status":"pending_independent_review","new_review_attested":false}

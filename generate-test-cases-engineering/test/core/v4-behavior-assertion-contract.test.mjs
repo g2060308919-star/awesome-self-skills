@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileCaseDocumentRevisionV4 } from '../../src/v4-pipeline.mjs';
-import { deriveV4SystemContext } from '../../src/v4-system-context.mjs';
+import { compileCaseDocumentRevisionV4, compilePreCaseArtifactsV4 } from '../../src/v4-pipeline.mjs';
+import { deriveV4SystemContext, deriveV4PreCaseSystemContext } from '../../src/v4-system-context.mjs';
 import { v4GeneralQualityFixture } from '../helpers/v4-general-quality-fixture.mjs';
 
 /** @param {(claim:any, evidence:any) => void} mutate */
@@ -69,13 +69,19 @@ test('4.3 behavior assertions reject duplicate and conflicting values for one Cl
   }
 });
 
-test('legacy 4.0 behavior assertion filtering remains byte-compatible', () => {
+test('historical behavior assertion protocols are rejected', () => {
   const fixture = v4GeneralQualityFixture();
   for (const artifact of Object.values(fixture.artifacts)) artifact.schema_version = '4.0.0';
-  delete fixture.artifacts.behavior_views.design_assurance;
-  delete fixture.artifacts.case_drafts.independent_review;
-  fixture.artifacts.evidence_claims.claims[0].semantic_value.behavior_assertions.push({ invalid: true });
-  const behavior = deriveV4SystemContext(fixture.artifacts).behavior_evidence;
-  assert.deepEqual(behavior.diagnostics, []);
-  assert.equal(behavior.claims[0].assertions.length, 3);
+  assert.throws(() => deriveV4SystemContext(fixture.artifacts), /V4_PRE_CASE_ARTIFACT_INVALID/u);
+});
+
+test('pre-case acceptance rejects the same malformed behavior assertions as final compilation', () => {
+  const fixture = v4GeneralQualityFixture();
+  const {source_pack, evidence_claims} = fixture.artifacts;
+  evidence_claims.claims[0].semantic_value.behavior_assertions = {};
+  const system = deriveV4PreCaseSystemContext(source_pack, evidence_claims);
+  const result = compilePreCaseArtifactsV4({source_pack, evidence_claims}, system);
+  assert.equal(result.status, 'need_revision');
+  assert.equal(result.stage, 'evidence_claims');
+  assert.ok(result.diagnostics.some((/** @type {any} */ item) => item.code === 'BEHAVIOR_ASSERTIONS_ARRAY_REQUIRED'));
 });

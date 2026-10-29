@@ -1,0 +1,25 @@
+✖ AT-12: build rejects dangling references and divergence of external and embedded context contracts (23.586958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 69.404167
+
+✖ failing tests:
+
+test at test/interface/remediation-schema.test.mjs:6:1
+✖ AT-12: build rejects dangling references and divergence of external and embedded context contracts (23.586958ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-schema.test.mjs:15:75)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /SCHEMA_CONTRACT/,
+    operator: 'throws',
+    diff: 'simple'
+  }

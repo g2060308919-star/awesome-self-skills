@@ -11,12 +11,12 @@ const load = relative => readFile(path.join(skillRoot, relative), 'utf8');
 
 test('v4 Skill makes Case Document the ordinary resource-independent path and Execution Plan an explicit downstream path', async () => {
   const skill = await load('SKILL.md');
-  assert.match(skill, /v4[\s\S]*only public|唯一公开[\s\S]*v4/iu);
+  assert.match(skill, /current protocol[\s\S]*CURRENT_PROTOCOL_REQUIRED/iu);
   assert.match(skill, /ordinary[\s\S]*`delivery_intent=case_document`[\s\S]*explicit/iu);
   assert.match(skill, /`delivery_intent=execution_plan`[\s\S]*only when the user explicitly asks/iu);
   assert.match(skill, /Case Document[\s\S]*(?:does not|must not)[\s\S]*(?:environment URL|account)[\s\S]*(?:observer|control)[\s\S]*resource/iu);
   assert.match(skill, /execution plan[\s\S]*immutable `case_document_ref`[\s\S]*manifest_digest[\s\S]*bundle_digest/iu);
-  assert.match(skill, /v3[\s\S]*legacy[\s\S]*read-only[\s\S]*(?:never|not)[\s\S]*fallback/iu);
+  assert.match(skill, /no protocol conversion, upgrade, downgrade, or migration entry/iu);
   assert.doesNotMatch(skill, /complete A[–-]G analysis before (?:asking|presenting) clarification/iu);
 });
 

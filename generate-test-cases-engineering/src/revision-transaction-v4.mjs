@@ -17,12 +17,10 @@ import { validateAgainstSchema } from './schema-validator.mjs';
 import { validateRevisionArtifactsV4 } from './revision-artifact-validation-v4.mjs';
 import { assertSemanticBundleDeliveryGateV4 } from './semantic-delivery-gate-v4.mjs';
 import {
-  LEGACY_V4_CONTRACT, isGeneralQualityV4Contract, isV4SchemaVersion,
+  RELIABILITY_V4_CONTRACT, isGeneralQualityV4Contract, isV4SchemaVersion,
   requireV4Contract, v4ContractForIdentity
 } from './v4-contract.mjs';
 
-const VERSION = '4.0.0';
-const COMPILER_VERSION = '0.5.0';
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const RUN_ID = /^RUN-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
@@ -33,26 +31,14 @@ const BASE_ARTIFACTS = Object.freeze([
 const POST_CASE_ARTIFACTS = Object.freeze([
   ...BASE_ARTIFACTS, 'behavior_views', 'test_obligations', 'case_drafts'
 ]);
-const FINAL_ARTIFACTS = Object.freeze([
-  ...POST_CASE_ARTIFACTS, 'bundle', 'markdown', 'worksheet', 'manifest'
-]);
 const CANDIDATE_FINAL_ARTIFACTS = Object.freeze([
   ...POST_CASE_ARTIFACTS, 'bundle', 'markdown', 'worksheet',
   'html', 'table', 'source_reading', 'manifest'
 ]);
-const LEGACY_PROFILE_ARTIFACTS = Object.freeze({
-  pre_case_pending: BASE_ARTIFACTS,
-  post_case_pending: POST_CASE_ARTIFACTS,
-  final: FINAL_ARTIFACTS
-});
-
 /** @param {string} schemaVersion */
 function profileArtifacts(schemaVersion) {
-  return ['4.2.0', '4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(schemaVersion) ? {
-    pre_case_pending: BASE_ARTIFACTS,
-    post_case_pending: POST_CASE_ARTIFACTS,
-    final: CANDIDATE_FINAL_ARTIFACTS
-  } : LEGACY_PROFILE_ARTIFACTS;
+  if (schemaVersion !== '4.3.3') throw new TypeError('CURRENT_PROTOCOL_REQUIRED');
+  return { pre_case_pending: BASE_ARTIFACTS, post_case_pending: POST_CASE_ARTIFACTS, final: CANDIDATE_FINAL_ARTIFACTS };
 }
 const PROFILE_RANK = Object.freeze({
   pre_case_pending: 0,
@@ -207,7 +193,7 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
   try {
     const requested = requireRecord(input, 'V4_RUN_INSTANCE_INPUT_INVALID');
     const requestedContract = requested.contract === undefined
-      ? LEGACY_V4_CONTRACT : requireV4Contract(requested.contract);
+      ? RELIABILITY_V4_CONTRACT : requireV4Contract(requested.contract);
     if (!['case_document', 'execution_plan'].includes(requested.delivery_intent)) {
       throw new TypeError('V4_DELIVERY_INTENT_INVALID');
     }
@@ -218,25 +204,6 @@ export async function ensureV4RunInstanceWithHeldLock(runDirectory, input, owner
     const existing = await readJsonIfPresent(runDirectory, target);
     if (existing) {
       const value = existing.value;
-      if (value?.schema_version === '3.0.0') {
-        if (validateAgainstSchema(value, runInstanceSchema).length
-          || (requested.run_id !== undefined && requested.run_id !== value.run_instance_id)
-          || await readTextIfPresent(runDirectory, path.join(runDirectory, 'checkpoint.json')) !== null
-          || await hasDurableEntries(runDirectory, 'accepted')
-          || await hasDurableEntries(runDirectory, 'derived')
-          || await hasDurableEntries(runDirectory, 'output')) {
-          throw new RunStoreIntegrityError('V3_BOOTSTRAP_NOT_ADOPTABLE');
-        }
-        const adopted = {
-          schema_version: VERSION, compiler_version: COMPILER_VERSION,
-          run_id: value.run_instance_id, delivery_intent: requested.delivery_intent,
-          created_at: value.created_at,
-          lineage: Object.hasOwn(requested, 'lineage') ? structuredClone(requested.lineage) : null
-        };
-        requireRunInstanceSchema(adopted, 'IMMUTABLE_V4_RUN_INSTANCE_INVALID');
-        await atomicWriteJson(runDirectory, target, adopted);
-        return adopted;
-      }
       requireRunInstanceSchema(value, 'IMMUTABLE_V4_RUN_INSTANCE_INVALID');
       if (value.delivery_intent !== requested.delivery_intent
         || (requested.run_id !== undefined && value.run_id !== requested.run_id)
@@ -512,6 +479,15 @@ async function verifyCommittedArtifacts(runDirectory, record) {
       throw new RunStoreIntegrityError('COMMITTED_REVISION_ARTIFACT_INVALID');
     }
   }
+}
+
+/** Read-only counterpart of the transaction integrity check. Preparation must
+ * not repair a torn transaction or trust edited accepted evidence.
+ * @param {string} runDirectory @param {number} revision */
+export async function verifyCommittedRevisionReadOnlyV4(runDirectory, revision) {
+  const record = await readCommittedRecord(runDirectory, revision);
+  await verifyCommittedArtifacts(runDirectory, record);
+  return record;
 }
 
 /** Validate a new transaction against the currently committed checkpoint.
@@ -886,6 +862,7 @@ export async function commitRevisionTransactionV4WithHeldLock(
       }
       await validatePendingBase(runDirectory, run, request, pending);
       if (request.commit_mode === 'profile_promotion') validateProfilePromotion(request, {
+        schema_version: run.schema_version,
         commit_profile: pending.previous_profile,
         semantic_digest: pending.previous_semantic_digest,
         artifact_digests: pending.previous_artifact_digests

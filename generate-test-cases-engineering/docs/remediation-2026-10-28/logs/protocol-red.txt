@@ -1,0 +1,30 @@
+✖ AT-14: obsolete identity is rejected without upgrade guidance or file mutation (330.967792ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 497.802208
+
+✖ failing tests:
+
+test at test/interface/remediation-context.test.mjs:137:1
+✖ AT-14: obsolete identity is rejected without upgrade guidance or file mutation (330.967792ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'VERSION_UPGRADE_REQUIRED'
+  - 'CURRENT_PROTOCOL_REQUIRED'
+
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-context.test.mjs:146:48)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'VERSION_UPGRADE_REQUIRED',
+    expected: 'CURRENT_PROTOCOL_REQUIRED',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

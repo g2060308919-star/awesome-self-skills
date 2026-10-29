@@ -1,0 +1,25 @@
+✖ AT-15: material scope change preserves the parent and links a fresh compiler-issued run through the Adapter catalog (2215.4795ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2349.761958
+
+✖ failing tests:
+
+test at test/interface/remediation-context.test.mjs:211:1
+✖ AT-15: material scope change preserves the parent and links a fresh compiler-issued run through the Adapter catalog (2215.4795ms)
+  AssertionError [ERR_ASSERTION]: {"status":"need_revision","stage":"case_drafts","schema_ref":"case-drafts.schema.json","phase":"case_design","run_id":"RUN-7673cc35-0305-422f-a94f-b8014b1c573c","scope":{"source_revision":0,"run_instance_id":"RUN-7673cc35-0305-422f-a94f-b8014b1c573c"},"diagnostics":[],"produced_artifacts":[],"incomplete_reason":{"code":"STAGE_ARTIFACT_REQUIRED","summary":"当前运行仍需要 case_drafts 工件才能继续。"},"user_next_steps":[{"action":"write_stage_artifact","description":"按 case-drafts.schema.json 写入当前候选 revision 的 case_drafts。"}],"recovery":{"mode":"write_staging_artifact","description":"保留已接受 revision，在同一运行目录写入所请求的候选工件后重调 runner。"},"non_blocking_diagnostics":[],"case_context":{"run_id":"RUN-7673cc35-0305-422f-a94f-b8014b1c573c","source_revision":0,"basis":{"source_pack_digest":"sha256:8950da0fb6ffb4351edb2c404a1b1dee666cc3eb0891987070408b40873533bf","evidence_claims_digest":"sha256:986359262802fb7d8cc8645c259a8d9fffce4916f0882dc9d713de3d8d089d2b","behavior_views_digest":"sha256:cfb3c97ceda7e4086e007314d6efe4dafda75caf672ba181478e2b137f701aec"},"facts":[{"acceptance_role":"primary_acceptance","claim_ids":["claim_checkout"],"fact_id":"fact_checkout","field_path":"/state","module_refs":["checkout"],"statement":"checkout accepted 订单进入已接受状态","status":"active"}],"fact_modules":[{"fact_id":"fact_checkout","module_id":"checkout"}],"modules":[{"claim_ids":["claim_checkout"],"module_id":"checkout","name":"checkout accepted 订单进入已接受状态","role":"primary"}],"outcomes":[{"outcome_id":"OUT-0641a50f4f5cd76485d57d6e5cfe175dc88d193f473cdd7ea6a074423952fbf8","fact_id":"fact_checkout","condition":{"submitted":true},"expected":"已接受","acceptance_role":"primary_acceptance","claim_ids":["claim_checkout"]}],"formal_test_points":[{"formal_test_point_id":"TP-62dc52d6b5acc38df938e182c7737a8961a69379861a00a8537e0dc2473e4a2a","outcome_id":"OUT-0641a50f4f5cd76485d57d6e5cfe175dc88d193f473cdd7ea6a074423952fbf8","semantic_gap_refs":[]}],"supporting_observations":[],"ordering_registry":{"business_flows":[],"page_actions":[],"dependency_rules":[]},"context_digest":"sha256:42a4de73f7d2e34f40c3555eabaca12d441d202ef183ce88d8fff7d676c5eb99"}}
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-context.test.mjs:219:9)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

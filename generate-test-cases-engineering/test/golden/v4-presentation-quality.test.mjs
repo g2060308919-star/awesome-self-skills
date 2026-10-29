@@ -39,6 +39,7 @@ function deliveredWithGap() {
   input.bundle.result_kind = 'delivered_with_gaps';
   input.bundle.coverage.semantic_gap_count = 1;
   input.bundle.semantic_root_groups = [{
+    root_version_digest:'sha256:'+'a'.repeat(64),acceptance_impact:{classification:'noncritical',criteria:['does_not_change_required_acceptance'],rationale:'仅为可选附录边界，不影响已确定的必要结果。'},critical_resolution_basis:null,
     root_issue_id: 'ROOT-window', status: 'closed_for_delivery', title: '撤回时间范围待确认',
     business_object: '本用例创建的评价', question: '允许撤回的时间范围是什么？',
     why_needed: '该边界决定撤回场景的数据条件。', decision_impact: '影响撤回用例的适用记录。',
@@ -60,6 +61,7 @@ function emptyDelivery(resultKind) {
   if (resultKind === 'blocked_only') {
     input.bundle.coverage.semantic_gap_count = 1;
     input.bundle.semantic_root_groups = [{
+      root_version_digest:'sha256:'+'b'.repeat(64),acceptance_impact:{classification:'noncritical',criteria:['does_not_change_required_acceptance'],rationale:'可选附录未知，不影响必要验收。'},critical_resolution_basis:null,
       root_issue_id: 'ROOT-blocked', status: 'closed_for_delivery', title: '结果规则待确认',
       business_object: '评价', question: '操作后的业务状态是什么？',
       why_needed: '缺少主要验收结果。', decision_impact: '影响正式用例判定。',
@@ -150,66 +152,7 @@ test('A20 blocked and no-applicable deliveries render distinct reports without p
   assert.doesNotMatch(notApplicable.html_bytes, /未决业务问题报告/u);
 });
 
-test('A21 frozen 4.2 presentation remains byte-exact and template families never mix', () => {
-  assert.equal(typeof presentation.renderLegacyCaseTableV42, 'function');
-  assert.equal(typeof presentation.renderLegacyBusinessHtmlV42, 'function');
-  assert.equal(typeof presentation.matchCasePresentationFamilyV42, 'function');
-
-  const input = candidateDeliveryInput();
-  const current = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
-  const canonicalSourceReading = JSON.parse(current.source_reading_bytes);
-  const view = presentation.buildCaseDocumentPresentationV4(
-    JSON.parse(current.bundle_bytes), input.render_options
-  );
-  const legacyTable = presentation.renderLegacyCaseTableV42(view);
-  const legacyHtml = presentation.renderLegacyBusinessHtmlV42(view, canonicalSourceReading);
-
-  assert.equal(hash(legacyTable), '17b53b5a40126de8c251a46d936699611e53bbfb912b92e134200382b19a8c42');
-  assert.equal(hash(legacyHtml), '6d591cac1afa5ff9c15dec50917c8bc5b67f0ef03ef8b848035a3c228bc07da4');
-  assert.equal(presentation.matchCasePresentationFamilyV42(view, canonicalSourceReading, {
-    html: legacyHtml, table: legacyTable
-  }), 'legacy-4.2');
-
-  assert.equal(presentation.matchCasePresentationFamilyV42(view, canonicalSourceReading, {
-    html: current.html_bytes, table: current.table_bytes
-  }), 'current-4.2');
-  assert.throws(() => presentation.matchCasePresentationFamilyV42(view, canonicalSourceReading, {
-    html: current.html_bytes, table: legacyTable
-  }), /CASE_PRESENTATION_FAMILY_INVALID/u);
-});
-
-test('A21 canonical read accepts a whole historical 4.2 family and rejects a digest-valid mixed family', async () => {
-  const input = candidateDeliveryInput();
-  const current = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
-  const canonicalSourceReading = JSON.parse(current.source_reading_bytes);
-  const view = presentation.buildCaseDocumentPresentationV4(
-    JSON.parse(current.bundle_bytes), input.render_options
-  );
-  const legacyHtml = presentation.renderLegacyBusinessHtmlV42(view, canonicalSourceReading);
-  const legacyTable = presentation.renderLegacyCaseTableV42(view);
-  const legacyManifest = structuredClone(current.manifest);
-  legacyManifest.html.digest = byteDigest(legacyHtml);
-  legacyManifest.chat_table.digest = byteDigest(legacyTable);
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v42-legacy-family-'));
-  const texts = {
-    bundle: current.bundle_bytes, markdown: current.markdown_bytes,
-    worksheet: current.worksheet_bytes, html: legacyHtml, table: legacyTable,
-    source_reading: current.source_reading_bytes
-  };
-  await writeDelivery(directory, legacyManifest, texts);
-  const verified = await verifyCaseDocumentDeliveryV4(directory);
-  assert.equal(verified.artifacts.html, legacyHtml);
-  assert.equal(verified.artifacts.table, legacyTable);
-
-  const mixedManifest = structuredClone(legacyManifest);
-  mixedManifest.html.digest = byteDigest(current.html_bytes);
-  await writeDelivery(directory, mixedManifest, { ...texts, html: current.html_bytes });
-  await assert.rejects(
-    () => verifyCaseDocumentDeliveryV4(directory), /CANONICAL_ARTIFACT_INVALID/u
-  );
-});
-
-test('A19/A21 audit mode remains canonical for current and historical 4.2 families', async () => {
+test('A19/A21 audit mode remains canonical for the current protocol', async () => {
   const input = candidateDeliveryInput();
   input.render_options.include_audit_appendix = true;
   const current = /** @type {any} */ (materializeCaseDocumentDeliveryV4(input));
@@ -222,9 +165,9 @@ test('A19/A21 audit mode remains canonical for current and historical 4.2 famili
   assert.match(current.html_bytes, /CASE-flow/u);
   assert.match(current.html_bytes, /TP-flow/u);
   assert.match(current.html_bytes, /FLOW-review/u);
-  assert.equal(presentation.matchCasePresentationFamilyV42(view, sourceReading, {
+  assert.equal(presentation.matchCasePresentationV4(view, sourceReading, {
     html: current.html_bytes, table: current.table_bytes
-  }), 'current-4.2');
+  }), 'current-4.3');
 
   const currentDirectory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v42-current-audit-'));
   await writeDelivery(currentDirectory, current.manifest, {
@@ -235,20 +178,4 @@ test('A19/A21 audit mode remains canonical for current and historical 4.2 famili
   const currentVerified = await verifyCaseDocumentDeliveryV4(currentDirectory);
   assert.match(currentVerified.artifacts.html, /<summary>审计标识<\/summary>/u);
 
-  const legacyHtml = presentation.renderLegacyBusinessHtmlV42(view, sourceReading);
-  const legacyTable = presentation.renderLegacyCaseTableV42(view);
-  const legacyManifest = structuredClone(current.manifest);
-  legacyManifest.html.digest = byteDigest(legacyHtml);
-  legacyManifest.chat_table.digest = byteDigest(legacyTable);
-  const legacyDirectory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v42-legacy-audit-'));
-  await writeDelivery(legacyDirectory, legacyManifest, {
-    bundle: current.bundle_bytes, markdown: current.markdown_bytes,
-    worksheet: current.worksheet_bytes, html: legacyHtml, table: legacyTable,
-    source_reading: current.source_reading_bytes
-  });
-  const legacyVerified = await verifyCaseDocumentDeliveryV4(legacyDirectory);
-  assert.match(legacyVerified.artifacts.html, /CASE-flow/u);
-  assert.equal(presentation.matchCasePresentationFamilyV42(view, sourceReading, {
-    html: legacyHtml, table: legacyTable
-  }), 'legacy-4.2');
 });

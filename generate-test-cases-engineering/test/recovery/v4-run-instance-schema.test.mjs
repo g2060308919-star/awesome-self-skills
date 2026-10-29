@@ -39,17 +39,17 @@ function semanticReopenLineage() {
   };
 }
 
-test('T10 run-instance schema is a closed v3/v4 discriminator for fresh, replay and reopen identities', async () => {
+test('T10 run-instance schema is a current closed discriminator for fresh, replay and reopen identities', async () => {
   const v3 = {
     schema_version: '3.0.0', run_instance_id: RUN_ID,
     created_at: '2026-09-09T00:00:00.000Z'
   };
   const fresh = {
-    schema_version: '4.0.0', compiler_version: '0.5.0', run_id: RUN_ID,
+    schema_version: '4.3.3', compiler_version: '0.8.3', run_id: RUN_ID,
     delivery_intent: 'case_document', created_at: '2026-09-09T00:00:00.000Z', lineage: null
   };
   const reopened = { ...fresh, lineage: semanticReopenLineage() };
-  assert.deepEqual(validateAgainstSchema(v3, runInstanceSchema), []);
+  assert.notDeepEqual(validateAgainstSchema(v3, runInstanceSchema), []);
   assert.deepEqual(validateAgainstSchema(fresh, runInstanceSchema), []);
   assert.deepEqual(validateAgainstSchema(reopened, runInstanceSchema), []);
   for (const invalid of [
@@ -74,10 +74,10 @@ test('T10 run-instance schema is a closed v3/v4 discriminator for fresh, replay 
   });
 });
 
-test('T10 migration and cancelled-resume siblings use the canonical v4 identity with typed lineage', () => {
-  for (const creationReason of ['migration_v3', 'resume_cancelled']) {
+test('T10 cancelled-resume siblings use the canonical v4 identity with typed lineage', () => {
+  for (const creationReason of ['resume_cancelled']) {
     const sibling = {
-      schema_version: '4.0.0', compiler_version: '0.5.0', run_id: RUN_ID,
+      schema_version: '4.3.3', compiler_version: '0.8.3', run_id: RUN_ID,
       delivery_intent: 'case_document', created_at: '2026-09-09T00:00:00.000Z',
       lineage: { creation_reason: creationReason, parent_run_id: PARENT_ID }
     };

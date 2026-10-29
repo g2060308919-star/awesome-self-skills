@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import { ensureV4RunInstance } from './revision-transaction-v4.mjs';
 import { createResumeCancelledSiblingV4 } from './run-cancellation-v4.mjs';
-import { createVersionUpgradeSiblingV4 } from './version-upgrade-v4.mjs';
 import { latestV4Contract } from './v4-contract.mjs';
 
 const fsPromises = /** @type {any} */ (await import('node:fs/promises'));
@@ -15,13 +14,10 @@ const { lstat, mkdir, realpath } = fsPromises;
  * remains `advanceStrict(absoluteRunDirectory)`, while callers never mint a run
  * ID or move a directory after its durable identity has been established.
  * @param {string} submittedCatalogRoot
- * @param {'case_document'|'execution_plan'|{parent_run_id:string,creation_reason:'resume_cancelled'|'version_upgrade'}} request
+ * @param {'case_document'|'execution_plan'|{parent_run_id:string,creation_reason:'resume_cancelled'}} request
  * @param {undefined} [unexpected]
  */
 export async function createV4RunDirectory(submittedCatalogRoot, request, unexpected) {
-  const versionUpgrade = Boolean(request) && typeof request === 'object'
-    && !Array.isArray(request) && Object.keys(request).length === 2
-    && typeof request.parent_run_id === 'string' && request.creation_reason === 'version_upgrade';
   const resumeCancelled = Boolean(request) && typeof request === 'object'
     && !Array.isArray(request)
     && Object.keys(request).length === 2
@@ -30,7 +26,7 @@ export async function createV4RunDirectory(submittedCatalogRoot, request, unexpe
   const ordinary = typeof request === 'string'
     && ['case_document', 'execution_plan'].includes(request);
   if (typeof submittedCatalogRoot !== 'string' || !path.isAbsolute(submittedCatalogRoot)
-    || (!ordinary && !resumeCancelled && !versionUpgrade) || unexpected !== undefined) {
+    || (!ordinary && !resumeCancelled) || unexpected !== undefined) {
     throw new TypeError('V4_RUN_BOOTSTRAP_INPUT_INVALID');
   }
   const resumeLineage = resumeCancelled ? {
@@ -54,7 +50,6 @@ export async function createV4RunDirectory(submittedCatalogRoot, request, unexpe
     || canonicalRuns !== runsDirectory || path.dirname(canonicalRuns) !== catalogRoot) {
     throw new TypeError('V4_RUNS_DIRECTORY_INVALID');
   }
-  if (versionUpgrade) return createVersionUpgradeSiblingV4(catalogRoot, { parent_run_id: request.parent_run_id });
   const runId = `RUN-${randomUUID()}`;
   const runDirectory = path.join(canonicalRuns, runId);
   if (resumeLineage) {

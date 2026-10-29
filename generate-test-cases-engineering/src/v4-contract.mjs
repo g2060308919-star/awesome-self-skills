@@ -1,35 +1,9 @@
-export const LEGACY_V4_CONTRACT = Object.freeze({
-  schema_version: '4.0.0', compiler_version: '0.5.0', candidate: false
-});
-
-export const CANDIDATE_V4_CONTRACT = Object.freeze({
-  schema_version: '4.2.0', compiler_version: '0.7.0', candidate: true
-});
-
-export const GENERAL_QUALITY_V4_CONTRACT = Object.freeze({
-  schema_version: '4.3.0', compiler_version: '0.8.0', candidate: true,
-  strict_semantic_delivery: true
-});
-
-export const SOURCE_RELIABILITY_V4_CONTRACT = Object.freeze({
-  schema_version: '4.3.1', compiler_version: '0.8.1', candidate: true,
-  strict_semantic_delivery: true
-});
-
-export const SOURCE_BINDING_V4_CONTRACT = Object.freeze({
-  schema_version: '4.3.2', compiler_version: '0.8.2', candidate: true,
-  strict_semantic_delivery: true
-});
-
 export const RELIABILITY_V4_CONTRACT = Object.freeze({
   schema_version: '4.3.3', compiler_version: '0.8.3', candidate: true,
   strict_semantic_delivery: true
 });
 
-const CONTRACTS = Object.freeze([
-  LEGACY_V4_CONTRACT, CANDIDATE_V4_CONTRACT, GENERAL_QUALITY_V4_CONTRACT,
-  SOURCE_RELIABILITY_V4_CONTRACT, SOURCE_BINDING_V4_CONTRACT, RELIABILITY_V4_CONTRACT
-]);
+const CONTRACTS = Object.freeze([RELIABILITY_V4_CONTRACT]);
 
 export function latestV4Contract() {
   return RELIABILITY_V4_CONTRACT;
@@ -65,7 +39,7 @@ export function isCandidateV4SchemaVersion(schemaVersion) {
 
 /** @param {unknown} value */
 export function isGeneralQualityV4Contract(value) {
-  return ['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(v4ContractForIdentity(value)?.schema_version ?? '');
+  return ['4.3.3'].includes(v4ContractForIdentity(value)?.schema_version ?? '');
 }
 
 /** @param {unknown} value */

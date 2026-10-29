@@ -1,0 +1,109 @@
+{
+  "status": "passed",
+  "recorded_at_utc": "2026-10-29T02:07:29.911165+00:00",
+  "source_remediation_commit": "7c247ebd7bb6595342b461548488e551fde93151",
+  "remote_main_base": "0f8a3c2e412786e145de31885298984d03d11166",
+  "integration_branch": "codex/merge-gtc-compiler-remediation",
+  "protocol": {
+    "schema_version": "4.3.3",
+    "compiler_version": "0.8.3"
+  },
+  "commands": [
+    {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "logs/merge-build.txt"
+    },
+    {
+      "command": "npm run check",
+      "exit_code": 0,
+      "log": "logs/merge-final-check.txt",
+      "metrics": {
+        "tests": 898,
+        "pass": 898,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "command": "GTC_RECOVERY_RUNNER=\"$PWD/../generate-test-cases/scripts/test-compiler.mjs\" node --test test/interface/remediation-evidence-repair-helper.test.mjs",
+      "exit_code": 0,
+      "tests": 3,
+      "pass": 3,
+      "log": "logs/merge-bundle-repair.txt"
+    },
+    {
+      "command": "node test/acceptance/verify-regeneration.mjs",
+      "exit_code": 0,
+      "log": "logs/merge-regeneration.txt"
+    },
+    {
+      "command": "node test/acceptance/verify-recorded-deliveries.mjs",
+      "exit_code": 0,
+      "log": "logs/merge-delivery.txt"
+    },
+    {
+      "command": "node test/acceptance/no-progress.mjs",
+      "exit_code": 0,
+      "log": "logs/merge-no-progress.txt"
+    },
+    {
+      "command": "npx tsc --noEmit -p jsconfig.json (after final fixture changes)",
+      "exit_code": 0
+    },
+    {
+      "command": "node build/build.mjs --check",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --cached --check",
+      "exit_code": 0
+    }
+  ],
+  "initial_merge_test_run": {
+    "exit_code": 1,
+    "tests": 893,
+    "pass": 848,
+    "fail": 45,
+    "log": "logs/merge-initial-check.txt",
+    "resolved_by": "merge-validation.md"
+  },
+  "precase_regression": {
+    "before": "logs/merge-precase-red.txt",
+    "after": "logs/merge-precase-green.txt",
+    "green_tests": 6
+  },
+  "real_review": {
+    "original_review_records_preserved": true,
+    "verified_formal_deliveries": 4,
+    "tampered_projection_rejected": true,
+    "regenerated_sample_projections_identical": [
+      "minimal",
+      "comprehensive"
+    ],
+    "temporary_runs_finalized": false,
+    "new_review_attestations_manufactured": false
+  },
+  "published_package": {
+    "three_packages_byte_identical": true,
+    "file_count_per_package": 29,
+    "bundle_sha256": "1f01cc8b634c536e47c23a9c27d0a7de8607480df62065fd2fa86b4e23bada57"
+  },
+  "scope": {
+    "only_generator_engineering_and_three_distributions": true,
+    "canonical_identity_source_unchanged_from_remote_main": true
+  },
+  "acceptance_record": "acceptance-record.md",
+  "integration_and_three_self_checks": "merge-validation.md",
+  "unresolved_findings": 0,
+  "not_executed_out_of_scope": [
+    "external MCP or original business PRD",
+    "business system or browser E2E",
+    "production actions",
+    "other operating systems",
+    "historical protocol upgrade or migration",
+    "benchmark/public-pilot"
+  ]
+}

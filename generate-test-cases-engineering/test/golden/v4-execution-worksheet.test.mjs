@@ -10,7 +10,7 @@ const surfaces = ['ui', 'request', 'response', 'persistence', 'event', 'callback
 /** @returns {any} */
 function fixture() {
   return {
-    schema_version: '4.0.0', compiler_version: '0.5.0', delivery_intent: 'case_document', source_revision: 4,
+    schema_version: '4.3.3', compiler_version: '0.8.3', delivery_intent: 'case_document', source_revision: 4,
     scope_manifest: { modules: [
       { module_id: 'admin', name: '评价“中台”,管理', role: 'primary' },
       { module_id: 'content', name: '内容服务', role: 'upstream' }

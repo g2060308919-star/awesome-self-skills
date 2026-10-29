@@ -150,7 +150,7 @@ test('AT07 exclusion and semantic-gap disposition require current evidence refer
   assert.notDeepEqual(validateDesignAssuranceV4(gap.assurance, gap.context).diagnostics, []);
 });
 
-test('4.3 pipeline requires design assurance while 4.2 keeps its frozen artifact shape', () => {
+test('current pipeline requires design assurance and rejects historical shapes', () => {
   const current = v4GeneralQualityFixture();
   delete current.artifacts.behavior_views.design_assurance;
   const rejected = compileCaseDocumentRevisionV4(current.artifacts, current.system);
@@ -161,5 +161,5 @@ test('4.3 pipeline requires design assurance while 4.2 keeps its frozen artifact
   for (const artifact of Object.values(legacy.artifacts)) artifact.schema_version = '4.2.0';
   delete legacy.artifacts.behavior_views.design_assurance;
   delete legacy.artifacts.case_drafts.independent_review;
-  assert.equal(compileCaseDocumentRevisionV4(legacy.artifacts, legacy.system).status, 'compiled');
+  assert.equal(compileCaseDocumentRevisionV4(legacy.artifacts, legacy.system).status, 'need_revision');
 });

@@ -2,6 +2,8 @@ import { persistableSourceValues } from './source-compiler-v4.mjs';
 import { createCompilerSourceRuntimeV4 } from './source-runtime-registry-v4.mjs';
 import { prepareSourceAcquisitionCandidateV4, reconcileSourceAcquisitionV4 } from './source-acquisition-v4.mjs';
 import { assertCheckpointAnswerTargetsV4, clarificationTargetDiagnosticV4 } from './clarification-targets-v4.mjs';
+import { verifyCommittedRevisionReadOnlyV4 } from './revision-transaction-v4.mjs';
+import { compileBoundCaseContext } from './case-context-v4.mjs';
 import path from 'node:path';
 
 import {
@@ -24,7 +26,7 @@ import {
   replayCancelledRunV4WithHeldLock
 } from './run-cancellation-v4.mjs';
 import { compileCaseDocumentRevisionV4, compilePreCaseArtifactsV4 } from './v4-pipeline.mjs';
-import { deriveV4PreCaseSystemContext, deriveV4SystemContext } from './v4-system-context.mjs';
+import { deriveV4AuthoringSystemContext, deriveV4PreCaseSystemContext, deriveV4SystemContext } from './v4-system-context.mjs';
 import {
   advanceSourceAcquisitionV4, loadSourceAcquisitionCompilerStateV4,
   replaySourceAcquisitionStopV4, sourceAcquisitionStatePathV4
@@ -48,7 +50,6 @@ import {
 } from './v4-contract.mjs';
 import { loadV4SourceReadingSummary } from './prd-source-collection-v4.mjs';
 import { DiagnosticErrorV4, safeDiagnosticsV4 } from './diagnostic-error-v4.mjs';
-import { applyVersionUpgradeAnswersV4 } from './version-upgrade-v4.mjs';
 
 const STAGES = /** @type {const} */ (['source_pack', 'evidence_claims', 'behavior_views', 'case_drafts']);
 
@@ -104,6 +105,7 @@ function revisionReply(
     ...(typeof item.path === 'string' ? { path: item.path } : {}),
     message: String(item.message ?? 'The submitted v4 artifact failed deterministic validation.')
   })));
+  const newRunRequired = stable.some(item => item.code === 'NEW_RUN_REQUIRED');
   return {
     status: route.status, stage, schema_ref: AGENT_STAGE_SCHEMA[stage], source_revision: sourceRevision,
     artifact_path: stagingPath(runDirectory, stage), artifact_digest: digest(artifact),
@@ -113,10 +115,14 @@ function revisionReply(
       code: stable[0]?.code ?? 'ARTIFACT_INVALID',
       summary: stable[0]?.message ?? '候选工件未通过确定性校验。'
     },
-    user_next_steps: [{ action: 'revise_artifact', description: `修正 ${stage} 后在同一运行重试。` }],
+    user_next_steps: [{ action: 'revise_artifact', description: newRunRequired
+      ? '来源或范围已变化；保留当前运行，通过 createV4RunDirectory 创建新运行并在 Adapter catalog 记录关联。'
+      : `修正 ${stage} 后在同一运行重试。` }],
     recovery: {
       mode: 'retry_current_run',
-      description: '保留已接受 revision，只替换尚未接受的 staging 候选工件。'
+      description: newRunRequired
+        ? '候选未提交，已接受前缀与原交付保持不变。新来源或范围必须在新运行验证；不能修改原运行身份或追加旧日志。'
+        : '保留已接受 revision，只替换尚未接受的 staging 候选工件。'
     },
     ...(reviewRequest ? { review_request: structuredClone(reviewRequest) } : {}),
     non_blocking_diagnostics: sortNonBlockingDiagnosticsV4(nonBlockingDiagnostics)
@@ -146,10 +152,9 @@ function semanticQuestionReply(runId, presentation, nonBlockingDiagnostics = [])
 
 /** @param {any} sourcePack @param {any} evidence @param {string} runId
  * @param {any|null} priorCheckpoint @param {Uint8Array|null} committedCheckpointBytes
- * @param {any|null} migrationSeed */
+ */
 function compilePreCaseClarification(
-  sourcePack, evidence, runId, priorCheckpoint = null, committedCheckpointBytes = null,
-  migrationSeed = null
+  sourcePack, evidence, runId, priorCheckpoint = null, committedCheckpointBytes = null
 ) {
   const contract = v4ContractForSchema(sourcePack.schema_version);
   if (!contract) throw new TypeError('V4_CONTRACT_UNSUPPORTED');
@@ -163,15 +168,6 @@ function compilePreCaseClarification(
     schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, genesis: true
   })}\n`);
-  const initialRootDispositions = migrationSeed
-    ? migrationSeed.clarification_mapping
-      .filter((/** @type {any} */ item) => item.root_issue_id !== null
-        && ['presented', 'deferred_by_user', 'unknown_by_user', 'closed_for_delivery']
-          .includes(item.status))
-      .map((/** @type {any} */ item) => ({
-        root_issue_id: item.root_issue_id, status: item.status
-      }))
-    : undefined;
   return compileSemanticClarificationCheckpointV4({
     schema_version: contract.schema_version, compiler_version: contract.compiler_version,
     run_id: runId, committed_revision: sourcePack.source_revision,
@@ -184,7 +180,7 @@ function compilePreCaseClarification(
       (/** @type {any} */ gap) => gap.discovery_phase === 'pre_case'
     ),
     prior_checkpoint: priorCheckpoint,
-    ...(initialRootDispositions === undefined ? {} : { initial_root_dispositions: initialRootDispositions })
+
   });
 }
 
@@ -434,6 +430,40 @@ function sourceAcquisitionCancellation(source, runId, revision) {
   return expected;
 }
 
+/** Compare original material only. User-statement history is checked by the
+ * existing append/replay validation and must not be mistaken for a new source.
+ * @param {any} prior @param {any} candidate */
+function sourceChangeDiagnostics(prior, candidate) {
+  /** @type {any[]} */ const changed = [];
+  /** @param {string} field */
+  const problem = field => changed.push({
+    category: 'traceability', code: 'NEW_RUN_REQUIRED', path: field,
+    message: `Original source/scope changed at ${field}. No candidate was committed. Preserve this run and create a new run; link it through the Adapter catalog.`
+  });
+  for (const field of ['run_scope', 'source_assets']) {
+    if (!same(prior[field], candidate[field])) problem(`/${field}`);
+  }
+  const before = new Map(prior.sources.map((/** @type {any} */ source) => [source.source_id, source]));
+  const after = new Map(candidate.sources.map((/** @type {any} */ source) => [source.source_id, source]));
+  if (before.size !== after.size || [...before.keys()].some(id => !after.has(id))) {
+    problem('/sources');
+    return changed;
+  }
+  /** @param {any} source */
+  const original = source => {
+    const copy = structuredClone(source);
+    delete copy.semantic_digest;
+    copy.semantic_projection.structure = copy.semantic_projection.structure.filter(
+      (/** @type {any} */ unit) => unit.type !== 'user_statement'
+    );
+    return copy;
+  };
+  candidate.sources.forEach((/** @type {any} */ source, /** @type {number} */ index) => {
+    if (!same(original(before.get(source.source_id)), original(source))) problem(`/sources/${index}`);
+  });
+  return changed;
+}
+
 /** A clarification revision may add only compiler-verifiable user-statement
  * units/locators/reviews and append semantic events. Original PRD bytes,
  * policy, assets, scope and execution history remain immutable.
@@ -649,9 +679,9 @@ export function withClarificationState(system, checkpoint, decisionRecords = [])
 }
 
 /** @param {Record<string,any>} artifacts @param {string} runId @param {any|null} checkpoint
- * @param {any|null} migrationSeed @param {any[]} [nonBlockingDiagnostics] */
+ * @param {any[]} [nonBlockingDiagnostics] */
 async function replayPreCasePresentation(
-  artifacts, runId, checkpoint = null, migrationSeed = null,
+  artifacts, runId, checkpoint = null,
   nonBlockingDiagnostics = []
 ) {
   if (!artifacts.source_pack || !artifacts.evidence_claims || artifacts.behavior_views) return null;
@@ -669,7 +699,7 @@ async function replayPreCasePresentation(
       : null;
   }
   const compiled = compilePreCaseClarification(
-    artifacts.source_pack, artifacts.evidence_claims, runId, null, null, migrationSeed
+    artifacts.source_pack, artifacts.evidence_claims, runId, null, null
   );
   return compiled.presentation ? semanticQuestionReply(runId, compiled.presentation) : null;
 }
@@ -759,42 +789,15 @@ async function consumeSemanticAcquisitionCancellation(
   }
 }
 
-/** Consume only an Evidence generation repair. This dispatch happens before
- * clarification and before any completed delivery is replayed.
+/** Reuse the runner's repair validation without committing or reconciling.
+ * Read-only callers verify existing material ownership instead of preparing it.
  * @param {string} runDirectory @param {any} registry @param {Record<string,any>} artifacts
- * @param {number} revision @param {string} runId @param {unknown} lockOwnership */
-async function consumeEvidenceRepair(
-  runDirectory, registry, artifacts, revision, runId, lockOwnership
+ * @param {number} revision @param {string} runId @param {any} candidate @param {boolean} [readOnly]
+ * @returns {Promise<any>} */
+async function inspectEvidenceRepairCandidate(
+  runDirectory, registry, artifacts, revision, runId, candidate, readOnly = false
 ) {
-  if (!artifacts.source_pack || !artifacts.evidence_claims) return { kind: 'none' };
-  if (!['4.3.2', '4.3.3'].includes(artifacts.source_pack.schema_version)) return { kind: 'none' };
-  const candidate = await stagedArtifact(runDirectory, 'source_pack');
-  if (!candidate) return { kind: 'none' };
-  if (candidate.parse_diagnostics.length) return {
-    kind: 'reply', reply: revisionReply(
-      runDirectory, 'source_pack', revision + 1, candidate.value,
-      candidate.parse_diagnostics, runId
-    )
-  };
   const prior = artifacts.source_pack;
-  const proposedRepairs = candidate.value?.artifact_repairs;
-  const repairChanged = Object.hasOwn(candidate.value ?? {}, 'artifact_repairs')
-    && !same(proposedRepairs, prior.artifact_repairs ?? []);
-  const evidenceRepair = appendedRepair(prior, candidate.value)?.stage === 'evidence_claims'
-    || (repairChanged && (!Array.isArray(proposedRepairs)
-      || proposedRepairs.some((/** @type {any} */ repair) => repair?.stage === 'evidence_claims')));
-  if (!evidenceRepair) {
-    // The previous commit may have completed before staging cleanup.
-    if (candidate.value?.source_revision === revision && same(candidate.value, prior)) {
-      await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
-      const stagedEvidence = await stagedArtifact(runDirectory, 'evidence_claims');
-      if (stagedEvidence && stagedEvidence.value?.source_revision === revision
-        && same(stagedEvidence.value, artifacts.evidence_claims)) {
-        await discardStagingSnapshot(runDirectory, 'evidence_claims', stagedEvidence);
-      }
-    }
-    return { kind: 'none' };
-  }
   const reject = (/** @type {typeof STAGES[number]} */ stage, /** @type {any} */ value, /** @type {any[]} */ issues) => ({
     kind: 'reply', reply: revisionReply(runDirectory, stage, revision + 1, value, issues, runId)
   });
@@ -835,8 +838,8 @@ async function consumeEvidenceRepair(
   );
   let system;
   try {
-    await prepareSourceAcquisitionCandidateV4(runDirectory, source);
-    system = await preCaseSystem(runDirectory, source, evidence);
+    if (!readOnly) await prepareSourceAcquisitionCandidateV4(runDirectory, source);
+    system = await preCaseSystem(runDirectory, source, evidence, readOnly);
   }
   catch (error) { return reject('source_pack', source, [{
     category: 'traceability', code: error instanceof Error ? error.message : 'V4_PRE_CASE_CONTEXT_INVALID',
@@ -845,7 +848,7 @@ async function consumeEvidenceRepair(
   const gate = compilePreCaseArtifactsV4({ source_pack: source, evidence_claims: evidence }, system);
   if (gate.status === 'need_revision') return reject(resultStage(gate),
     resultStage(gate) === 'source_pack' ? source : evidence, gate.diagnostics ?? []);
-  if (!['pre_case_ready', 'need_user_answers'].includes(gate.status)) return {
+  if (!['pre_case', 'need_user_answers'].includes(gate.status)) return {
     kind: 'reply', reply: qualityFailure(runId, 'requirements_analysis',
       gate.reason_code ?? 'V4_PRE_CASE_QUALITY_FAILURE',
       gate.diagnostics?.[0]?.message ?? 'The repaired Evidence failed the pre-case quality gate.')
@@ -863,6 +866,50 @@ async function consumeEvidenceRepair(
       error instanceof Error ? error.message : 'SEMANTIC_PRESENTATION_INVALID',
       'Repaired Evidence cannot form a recoverable pre-case checkpoint.')
   }; }
+  return { kind: 'candidate', source, evidence, clarification, stagedEvidence };
+}
+
+/** Consume only an Evidence generation repair. This dispatch happens before
+ * clarification and before any completed delivery is replayed.
+ * @param {string} runDirectory @param {any} registry @param {Record<string,any>} artifacts
+ * @param {number} revision @param {string} runId @param {unknown} lockOwnership */
+async function consumeEvidenceRepair(
+  runDirectory, registry, artifacts, revision, runId, lockOwnership
+) {
+  if (!artifacts.source_pack || !artifacts.evidence_claims) return { kind: 'none' };
+  if (!['4.3.3'].includes(artifacts.source_pack.schema_version)) return { kind: 'none' };
+  const candidate = await stagedArtifact(runDirectory, 'source_pack');
+  if (!candidate) return { kind: 'none' };
+  if (candidate.parse_diagnostics.length) return {
+    kind: 'reply', reply: revisionReply(
+      runDirectory, 'source_pack', revision + 1, candidate.value,
+      candidate.parse_diagnostics, runId
+    )
+  };
+  const prior = artifacts.source_pack;
+  const proposedRepairs = candidate.value?.artifact_repairs;
+  const repairChanged = Object.hasOwn(candidate.value ?? {}, 'artifact_repairs')
+    && !same(proposedRepairs, prior.artifact_repairs ?? []);
+  const evidenceRepair = appendedRepair(prior, candidate.value)?.stage === 'evidence_claims'
+    || (repairChanged && (!Array.isArray(proposedRepairs)
+      || proposedRepairs.some((/** @type {any} */ repair) => repair?.stage === 'evidence_claims')));
+  if (!evidenceRepair) {
+    // The previous commit may have completed before staging cleanup.
+    if (candidate.value?.source_revision === revision && same(candidate.value, prior)) {
+      await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
+      const stagedEvidence = await stagedArtifact(runDirectory, 'evidence_claims');
+      if (stagedEvidence && stagedEvidence.value?.source_revision === revision
+        && same(stagedEvidence.value, artifacts.evidence_claims)) {
+        await discardStagingSnapshot(runDirectory, 'evidence_claims', stagedEvidence);
+      }
+    }
+    return { kind: 'none' };
+  }
+  const inspected = await inspectEvidenceRepairCandidate(
+    runDirectory, registry, artifacts, revision, runId, candidate
+  );
+  if (inspected.kind === 'reply') return inspected;
+  const { source, evidence, clarification, stagedEvidence } = inspected;
   try {
     await commitRevisionTransactionV4WithHeldLock(
       runDirectory, preCaseTransaction(runId, source, evidence, clarification.checkpoint, revision),
@@ -1124,39 +1171,8 @@ async function consumeSemanticAppend(
   };
 }
 
-/** Read an optional regenerated post-case artifact. If none was staged, carry
- * its semantic content forward and update only the compiler-owned revision
- * binding before the whole candidate is recompiled.
- * @param {string} runDirectory @param {any} registry
- * @param {'behavior_views'|'case_drafts'} stage @param {any} prior
- * @param {number} nextRevision @param {string} runId */
-async function postCaseArtifactCandidate(
-  runDirectory, registry, stage, prior, nextRevision, runId
-) {
-  const snapshot = await stagedArtifact(runDirectory, stage);
-  const value = snapshot ? snapshot.value : {
-    ...structuredClone(prior), source_revision: nextRevision
-  };
-  const stageDiagnostics = snapshot?.parse_diagnostics.length
-    ? snapshot.parse_diagnostics
-    : diagnostics(value, registry.schemas.get(AGENT_STAGE_SCHEMA[stage]));
-  if (stageDiagnostics.length || !record(value)
-    || value.schema_version !== prior.schema_version || value.source_revision !== nextRevision) {
-    return {
-      kind: 'reply', reply: revisionReply(
-        runDirectory, stage, nextRevision, value,
-        stageDiagnostics.length ? stageDiagnostics : [{
-          category: 'traceability', code: 'SOURCE_REVISION_MISMATCH', path: '/source_revision',
-          message: 'A regenerated post-case artifact must bind the candidate source revision.'
-        }], runId
-      )
-    };
-  }
-  return { kind: 'candidate', value, snapshot };
-}
-
-/** Consume a post-case semantic event and atomically recompile the complete
- * Source/Evidence/Views/Obligations/Cases profile at the next revision.
+/** Commit a post-case answer as the next accepted Source/Evidence prefix.
+ * Views and cases are then rechecked through the existing stages against that prefix.
  * @param {string} runDirectory @param {any} registry @param {Record<string,any>} artifacts
  * @param {number} revision @param {string} runId @param {unknown} lockOwnership */
 async function consumePostCaseAppend(
@@ -1330,73 +1346,23 @@ async function consumePostCaseAppend(
       runDirectory, 'source_pack', nextRevision, candidate.value, baseDiagnostics, runId
     )
   };
-  const behaviorCandidate = await postCaseArtifactCandidate(
-    runDirectory, registry, 'behavior_views', artifacts.behavior_views, nextRevision, runId
-  );
-  if (behaviorCandidate.kind === 'reply') return behaviorCandidate;
-  const caseCandidate = await postCaseArtifactCandidate(
-    runDirectory, registry, 'case_drafts', artifacts.case_drafts, nextRevision, runId
-  );
-  if (caseCandidate.kind === 'reply') return caseCandidate;
-  const nextArtifacts = {
-    source_pack: nextSource, evidence_claims: nextEvidence,
-    behavior_views: behaviorCandidate.value, case_drafts: caseCandidate.value
-  };
-  let system; let result;
-  try {
-    system = withClarificationState(
-      await completeSystem(runDirectory, nextArtifacts), applied.checkpoint,
-      nextArtifacts.source_pack.decision_records
-    );
-    result = compileCaseDocumentRevisionV4(nextArtifacts, system);
-  } catch (error) {
-    return {
-      kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', nextRevision, nextEvidence, [{
-        category: 'adapter_revision',
-        code: error instanceof Error ? error.message : 'V4_SYSTEM_CONTEXT_INVALID', path: '/',
-        message: 'The post-case candidate cannot reproduce the compiler-owned context.'
-      }], runId)
-    };
-  }
-  if (result.status === 'need_revision') return {
-    kind: 'reply', reply: revisionReply(
-      runDirectory, resultStage(result), nextRevision,
-      /** @type {Record<string,any>} */ (nextArtifacts)[resultStage(result)],
-      result.diagnostics ?? [], runId, [], result.review_request ?? null
-    )
-  };
-  if (result.status === 'need_artifact') return { kind: 'reply', reply: result };
-  if (result.status === 'fatal' || !['need_user_answers', 'compiled'].includes(result.status)
-    || !record(result.obligations)) return {
-    kind: 'reply', reply: qualityFailure(
-      runId, 'case_design', result.reason_code ?? 'V4_CASE_DOCUMENT_QUALITY_FAILURE',
-      result.diagnostics?.[0]?.message ?? 'The post-case quality gate did not close.'
-    )
-  };
-
+  // Do not carry cases forward by changing only their revision: their context
+  // and independent review bind the previous accepted semantic content.
   let clarification;
   try {
-    clarification = compilePostCaseClarification(
-      nextSource, nextEvidence, behaviorCandidate.value, caseCandidate.value,
-      runId, applied.checkpoint, new TextEncoder().encode(committed.text)
+    clarification = compilePreCaseClarification(
+      nextSource, nextEvidence, runId, applied.checkpoint,
+      new TextEncoder().encode(committed.text)
     );
-    const semanticDigest = semanticRevisionDigest(nextSource, nextEvidence, clarification.checkpoint);
     await commitRevisionTransactionV4WithHeldLock(
       runDirectory,
-      postCaseTransaction(
-        runId, nextSource, nextEvidence, behaviorCandidate.value, result.obligations,
-        caseCandidate.value, clarification.checkpoint, revision, semanticDigest,
+      preCaseTransaction(
+        runId, nextSource, nextEvidence, clarification.checkpoint, revision,
         appendedEvents.map((/** @type {any} */ event) => event.event_id)
       ),
       lockOwnership
     );
     await discardStagingSnapshot(runDirectory, 'source_pack', candidate);
-    if (behaviorCandidate.snapshot) await discardStagingSnapshot(
-      runDirectory, 'behavior_views', behaviorCandidate.snapshot
-    );
-    if (caseCandidate.snapshot) await discardStagingSnapshot(
-      runDirectory, 'case_drafts', caseCandidate.snapshot
-    );
   } catch (error) {
       if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return { kind: 'reply', reply: revisionReply(runDirectory, 'evidence_claims', revision + 1, nextEvidence, [clarificationTargetDiagnosticV4(error)], runId) };
 
@@ -1412,8 +1378,9 @@ async function consumePostCaseAppend(
     )
   };
   return {
-    kind: 'advanced', revision: nextRevision, artifacts: nextArtifacts,
-    checkpoint: clarification.checkpoint, result,
+    kind: 'advanced', revision: nextRevision,
+    artifacts: { source_pack: nextSource, evidence_claims: nextEvidence },
+    checkpoint: clarification.checkpoint,
     non_blocking_diagnostics: applied.non_blocking_diagnostics
   };
 }
@@ -1446,9 +1413,9 @@ function resultStage(result) {
   return STAGES.includes(result?.stage) ? result.stage : 'case_drafts';
 }
 
-/** @param {string} runDirectory @param {any} sourcePack @param {any} evidence */
-async function preCaseSystem(runDirectory, sourcePack, evidence) {
-  const acquisition = await loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack);
+/** @param {string} runDirectory @param {any} sourcePack @param {any} evidence @param {boolean} [readOnly] */
+async function preCaseSystem(runDirectory, sourcePack, evidence, readOnly = false) {
+  const acquisition = await loadSourceAcquisitionCompilerStateV4(runDirectory, sourcePack, { read_only: readOnly });
   return deriveV4PreCaseSystemContext(
     sourcePack, evidence, acquisition
   );
@@ -1596,10 +1563,9 @@ async function acceptedPrefix(runDirectory, revision, registry, runInstance) {
  * @param {any} registry
  * @param {{schema_version:string,compiler_version:string,run_instance_id?:string,run_id?:string,created_at:string,delivery_intent?:string}} runInstance
  * @param {unknown} lockOwnership
- * @param {any|null} migrationSeed
  */
 async function advanceStrictV4Operation(
-  runDirectory, registry, runInstance, lockOwnership, migrationSeed = null
+  runDirectory, registry, runInstance, lockOwnership
 ) {
   const runId = runInstance.run_instance_id ?? runInstance.run_id;
   if (typeof runId !== 'string') throw new TypeError('V4_RUN_ID_INVALID');
@@ -1634,6 +1600,22 @@ async function advanceStrictV4Operation(
   } catch (error) {
     return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
       error instanceof Error ? error.message : 'Accepted v4 artifacts failed deterministic replay.');
+  }
+
+  // Source/scope changes never become same-run repairs, including while the
+  // caller is writing cases or recovering a finished delivery. The existing
+  // Adapter creates and links the fresh run; this guard only rejects the append.
+  if (artifacts.source_pack) {
+    const candidate = await stagedArtifact(runDirectory, 'source_pack');
+    if (candidate && !candidate.parse_diagnostics.length && record(candidate.value)
+      && candidate.value.run_instance_id === runId
+      && candidate.value.source_revision === revision + 1
+      && !diagnostics(candidate.value, registry.schemas.get(AGENT_STAGE_SCHEMA.source_pack)).length) {
+      const changed = sourceChangeDiagnostics(artifacts.source_pack, candidate.value);
+      if (changed.length) return revisionReply(
+        runDirectory, 'source_pack', revision + 1, candidate.value, changed, runId
+      );
+    }
   }
 
   if (runInstance.schema_version === '4.3.3' && !await stagedArtifact(runDirectory, 'source_pack')) {
@@ -1695,7 +1677,7 @@ async function advanceStrictV4Operation(
 
   try {
     const replay = await replayPreCasePresentation(
-      artifacts, runId, semanticCheckpoint, migrationSeed, advancedDiagnostics
+      artifacts, runId, semanticCheckpoint, advancedDiagnostics
     );
     if (replay) return replay;
     if (artifacts.case_drafts && semanticCheckpoint?.clarification_state?.presentation) {
@@ -1784,10 +1766,7 @@ async function advanceStrictV4Operation(
       return qualityFailure(runId, 'requirements_analysis', 'RUN_INTEGRITY_ERROR',
         error instanceof Error ? error.message : 'The v4 durable run identity could not be established.');
     }
-    // A fresh directory is bootstrapped with a legacy-compatible identity
-    // before its first v4 Source Pack exists. Once that Source Pack declares
-    // execution_plan, route the same staged bytes through the execution state
-    // machine in this invocation; never advertise a case-document stage first.
+    // The explicit delivery intent selects the existing execution state machine.
     if (establishedRunInstance.delivery_intent === 'execution_plan') {
       return advanceExecutionRunV4Locked(
         runDirectory, registry, establishedRunInstance, lockOwnership
@@ -1836,14 +1815,10 @@ async function advanceStrictV4Operation(
       ? canonicalArtifactSnapshot(candidate.value) : candidate.value
   });
   if (nextStage === 'evidence_claims') {
-    const probe = {
-      ...prospective,
-      behavior_views: { invalid: true }, case_drafts: { invalid: true }
-    };
     let result;
     try {
-      result = compileCaseDocumentRevisionV4(
-        probe, await preCaseSystem(
+      result = compilePreCaseArtifactsV4(
+        prospective, await preCaseSystem(
           runDirectory, prospective.source_pack, prospective.evidence_claims
         )
       );
@@ -1854,12 +1829,12 @@ async function advanceStrictV4Operation(
         message: 'Evidence Claims cannot reproduce the compiler-owned source and scope state.'
       }], runId, advancedDiagnostics);
     }
-    if (result.status === 'need_revision' && result.stage !== 'behavior_views') return revisionReply(
+    if (result.status === 'need_revision') return revisionReply(
       runDirectory, resultStage(result), revision, prospective[resultStage(result)],
       result.diagnostics ?? [], runId, advancedDiagnostics, result.review_request ?? null
     );
     if (result.status === 'need_artifact') return result;
-    if (result.status === 'fatal') return qualityFailure(
+    if (!['pre_case', 'need_user_answers'].includes(result.status)) return qualityFailure(
       runId, 'requirements_analysis',
       result.reason_code ?? 'V4_PRE_CASE_QUALITY_FAILURE',
       result.diagnostics?.[0]?.message ?? 'The pre-case quality gate did not close.',
@@ -1869,11 +1844,9 @@ async function advanceStrictV4Operation(
     try {
       clarification = compilePreCaseClarification(
         prospective.source_pack, prospective.evidence_claims, runId,
-        null, null, migrationSeed
+        null, null
       );
-      clarification = await applyVersionUpgradeAnswersV4(
-        runDirectory, prospective.source_pack, prospective.evidence_claims, clarification
-      );
+
     } catch (error) {
       if (error instanceof Error && /^CLARIFICATION_(TARGET|WRITE)_/u.test(error.message)) return revisionReply(runDirectory, 'evidence_claims', revision, prospective.evidence_claims, [clarificationTargetDiagnosticV4(error)], runId);
 
@@ -1898,6 +1871,12 @@ async function advanceStrictV4Operation(
     return artifactRequest(runDirectory, 'behavior_views', revision, runId, advancedDiagnostics);
   }
   if (nextStage === 'case_drafts') {
+    const current = await authoringContext(runDirectory, prospective, semanticCheckpoint, runId);
+    if (current.status !== 'authoring') return contextFailure(runDirectory, prospective, revision, runId, current, advancedDiagnostics);
+    if (candidate.value.case_context_digest !== current.context.context_digest) return revisionReply(
+      runDirectory, 'case_drafts', revision, candidate.value, [{ code: 'CASE_CONTEXT_STALE',
+        path: '/case_context_digest', message: 'Candidate basis no longer matches this run. Recheck affected semantics against the current case context before preparing again.' }], runId, advancedDiagnostics
+    );
     let system;
     try {
       system = withClarificationState(
@@ -1972,33 +1951,10 @@ async function advanceStrictV4Operation(
   // that is currently possible. This prevents promotion of a structurally valid
   // artifact whose compiler-owned projection is already known to be invalid.
   if (nextStage === 'behavior_views') {
-    const probe = {
-      ...prospective,
-      case_drafts: {
-        schema_version: prospective.source_pack.schema_version,
-        source_revision: revision, cases: []
-      }
-    };
-    try {
-      const result = compileCaseDocumentRevisionV4(
-        probe, withClarificationState(
-          await completeSystem(runDirectory, probe), semanticCheckpoint,
-          prospective.source_pack.decision_records
-        )
-      );
-      if (result.status === 'need_revision' && result.stage !== 'case_drafts') return revisionReply(
-        runDirectory, resultStage(result), revision, prospective[resultStage(result)],
-        result.diagnostics ?? [], runId, advancedDiagnostics
-      );
-      // Post-case gaps become authoritative only after the submitted Case
-      // Drafts have compiled. The empty probe here may discover candidates,
-      // but it must not present or reject them before that stage exists.
-    } catch (error) {
-      return revisionReply(runDirectory, nextStage, revision, candidate.value, [{
-        category: 'adapter_revision', code: error instanceof Error ? error.message : 'V4_BEHAVIOR_CONTEXT_INVALID',
-        path: '/', message: 'Behavior Views could not be deterministically compiled.'
-      }], runId, advancedDiagnostics);
-    }
+    const result = await authoringContext(runDirectory, prospective, semanticCheckpoint, runId);
+    if (result.status !== 'authoring') return contextFailure(
+      runDirectory, prospective, revision, runId, result, advancedDiagnostics
+    );
   }
 
   await promoteArtifact(runDirectory, revision, nextStage, candidate.value, candidate);
@@ -2008,12 +1964,78 @@ async function advanceStrictV4Operation(
   );
 }
 
-/** The material projection follows the result of the existing semantic revision
- * transaction. It has no power to accept a Source, Decision or Evidence artifact.
- * @param {string} runDirectory @param {any} registry @param {any} runInstance
- * @param {unknown} lockOwnership @param {any|null} [migrationSeed] */
-export async function advanceStrictV4Locked(runDirectory, registry, runInstance, lockOwnership, migrationSeed = null) {
-  const reply = await advanceStrictV4Operation(runDirectory, registry, runInstance, lockOwnership, migrationSeed);
-  if (runInstance.schema_version === '4.3.3') await reconcileSourceAcquisitionV4(runDirectory, reply);
-  return reply;
+/** Read-only derivation; used both inside the runner lock and by preparation.
+ * @param {string} runDirectory @param {any} artifacts @param {any} checkpoint @param {string} runId */
+async function authoringContext(runDirectory, artifacts, checkpoint, runId) {
+  try {
+    const acquisition = await loadSourceAcquisitionCompilerStateV4(runDirectory, artifacts.source_pack, { read_only: true });
+    const system = withClarificationState(deriveV4AuthoringSystemContext(
+      artifacts.source_pack, artifacts.evidence_claims, acquisition), checkpoint, artifacts.source_pack.decision_records);
+    return compileBoundCaseContext(artifacts, system, runId);
+  } catch (error) {
+    return { status: 'fatal', reason_code: 'CASE_CONTEXT_COMPILATION_FAILED', diagnostics: [{
+      code: 'CASE_CONTEXT_COMPILATION_FAILED', path: '/behavior_views',
+      message: error instanceof Error ? error.message : 'Authoring context could not be compiled.'
+    }] };
+  }
+}
+
+/** @param {string} directory @param {any} artifacts @param {number} revision @param {string} runId @param {any} result @param {any[]} [extra] */
+function contextFailure(directory, artifacts, revision, runId, result, extra = []) {
+  if (result.status === 'need_revision') return revisionReply(directory, resultStage(result), revision,
+    artifacts[resultStage(result)], result.diagnostics, runId, extra);
+  if (result.status === 'need_artifact') return result;
+  const details = result.diagnostics?.length ? result.diagnostics.map((/** @type {any} */ item) =>
+    `${item.code ?? 'CASE_CONTEXT_COMPILATION_FAILED'} at ${item.path ?? '/behavior_views'}: ${item.message ?? 'Authoring context failed.'}`
+  ).join('; ') : `Unexpected authoring status: ${String(result.status)}.`;
+  const failure = qualityFailure(runId, 'case_design', result.reason_code ?? 'CASE_CONTEXT_COMPILATION_FAILED',
+    `behavior_views: ${details} No candidate was committed.`, extra);
+  failure.recovery.description = '当前候选未提交，已接受前缀保持不变。先修复所列编译故障，再从已提交检查点重试；不要重答已接受业务规则。';
+  return failure;
+}
+
+/** @param {string} directory @param {any} registry @returns {Promise<any>} */
+export async function readStagePreparationState(directory, registry) {
+  const identity = (await readJson(directory, path.join(directory, 'run-instance.json'))).value;
+  identity.run_instance_id ??= identity.run_id;
+  const revisions = await acceptedSourceRevisions(directory);
+  if (revisions.some((revision, index) => revision !== index)) throw new TypeError('RUN_INTEGRITY_ERROR');
+  const revision = revisions.at(-1) ?? 0;
+  const artifacts = revisions.length ? await acceptedPrefix(directory, revision, registry, identity) : {};
+  const checkpoint = artifacts.evidence_claims
+    ? (await committedSemanticCheckpoint(directory, identity.run_instance_id, revision)).value : null;
+  const cancelled = await readJsonIfPresent(directory, path.join(directory, 'state', 'cancellation.json'));
+  if (artifacts.evidence_claims) await verifyCommittedRevisionReadOnlyV4(directory, revision);
+  const context = artifacts.behavior_views
+    ? await authoringContext(directory, artifacts, checkpoint, identity.run_instance_id) : null;
+  return { identity, revision, artifacts, checkpoint, cancelled, context,
+    nextStage: STAGES[Object.keys(artifacts).length] };
+}
+
+/** Validate the exact pending repair reply against the runner's current read-only
+ * result. A request cannot authorize another revision or a different repair base.
+ * @param {string} directory @param {any} registry @param {any} state @param {any} reply
+ * @returns {Promise<any|null>} */
+export async function readPendingEvidenceRepairPreparation(directory, registry, state, reply) {
+  if (state.cancelled || !state.artifacts.source_pack || !state.artifacts.evidence_claims) return null;
+  const candidate = await stagedArtifact(directory, 'source_pack');
+  if (!candidate) return null;
+  const inspected = await inspectEvidenceRepairCandidate(
+    directory, registry, state.artifacts, state.revision, state.identity.run_instance_id, candidate, true
+  );
+  if (inspected.kind !== 'reply' || inspected.reply.stage !== 'evidence_claims'
+    || !same(inspected.reply, reply)) return null;
+  return { source: candidate.value, revision: state.revision + 1 };
+}
+
+/** The caller holds the existing lock throughout computation, promotion and reply binding.
+ * @param {string} directory @param {any} registry @param {any} identity @param {any} lock */
+export async function advanceStrictV4Locked(directory, registry, identity, lock) {
+  const reply = await advanceStrictV4Operation(directory, registry, identity, lock);
+  await reconcileSourceAcquisitionV4(directory, reply);
+  if (reply.status !== 'need_revision' || reply.stage !== 'case_drafts') return reply;
+  const state = await readStagePreparationState(directory, registry);
+  if (state.context?.status !== 'authoring') return contextFailure(directory, state.artifacts,
+    state.revision, identity.run_instance_id, state.context ?? {status:'fatal'});
+  return { ...reply, case_context: state.context.context };
 }

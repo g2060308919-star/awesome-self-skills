@@ -1,3 +1,4 @@
+import { bindDesignAssuranceFixture, bindGeneralQualityFixture } from '../../../helpers/v4-quality-binder.mjs';
 import { readFile } from 'node:fs/promises';
 
 import { digest } from '../../../../src/canonical.mjs';
@@ -292,7 +293,7 @@ export async function bendReviewJourneyFixture(
     source_claim_ids: [`CLM-${key}`], discovery_phase: 'pre_case', affected_test_point_ids: []
   }));
   const evidenceClaims = {
-    schema_version: '4.0.0', source_revision: revision, claims, fact_ledger: factLedger,
+    schema_version: '4.3.3', source_revision: revision, claims, fact_ledger: factLedger,
     semantic_gaps: semanticGaps, topology_discovery: topologyDiscovery,
     topology_review: topologyReview, topology_dispositions: dispositions,
     scope_manifest: scopeManifest,
@@ -400,7 +401,7 @@ export async function bendReviewJourneyFixture(
     acceptance_role: fact.acceptance_role, parent_entity_ids: [], role_basis_claim_ids: fact.claim_ids
   }));
   const behaviorViews = {
-    schema_version: '4.0.0', source_revision: revision,
+    schema_version: '4.3.3', source_revision: revision,
     views: elements.map(element => ({
       view_id: `VIEW-${element.element_id.slice(3)}`, module_id: 'review-admin',
       type: element.kind === 'input_domain' ? 'input-domain' : 'state', scope: 'review-platform',
@@ -422,6 +423,7 @@ export async function bendReviewJourneyFixture(
       assertions: structuredClone(claim.semantic_value.behavior_assertions)
     })).filter(claim => claim.assertions.length)
   };
+  bindDesignAssuranceFixture({artifacts:{behavior_views:behaviorViews}});
   const compiledOutcomes = compileBusinessOutcomesV4(behaviorViews, behaviorEvidence);
   if (compiledOutcomes.kind !== 'compiled') {
     throw new TypeError(`BEND_FIXTURE_OUTCOME_INVALID:${JSON.stringify(compiledOutcomes)}`);
@@ -443,7 +445,7 @@ export async function bendReviewJourneyFixture(
     ['baseline', { candidate_version: true }, '其余筛选项和列保持当前线上一致', '在相同业务条件下比较当前线上与待测版本', '除明确变更外，其他筛选项、列、内容分类、标记、质量和相关性保持一致', ['CLM-baseline']]
   ];
   const caseDrafts = {
-    schema_version: '4.0.0', source_revision: revision,
+    schema_version: '4.3.3', source_revision: revision,
     cases: caseSpecs.map(([key, condition, title, action, expected, oracleClaimIds]) => {
       const outcome = outcomeByCondition.get(JSON.stringify(condition));
       if (!outcome) throw new TypeError(`BEND_FIXTURE_OUTCOME_MISSING:${key}`);
@@ -472,7 +474,7 @@ export async function bendReviewJourneyFixture(
     })
   };
   const sourcePack = {
-    schema_version: '4.0.0', source_revision: revision, run_instance_id: runInstanceId,
+    schema_version: '4.3.3', source_revision: revision, run_instance_id: runInstanceId,
     run_scope: 'review-platform', delivery_intent: 'case_document', output_language: 'zh-CN',
     sources: [source], locators: canonicalLocatorOrder, source_reviews: sourceReviews,
     source_policy: { rules: [{
@@ -483,12 +485,12 @@ export async function bendReviewJourneyFixture(
     decision_records: [], clarification_events: structuredClone(clarificationEvents),
     execution_events: [], source_assets: [], artifact_events: []
   };
-  return {
+  return bindGeneralQualityFixture({
     artifacts: { source_pack: sourcePack, evidence_claims: evidenceClaims, behavior_views: behaviorViews, case_drafts: caseDrafts },
     raw: { content, input, providerRegistry, expiryRegistry },
     expectations: {
       module_ids: moduleIds, case_titles: caseSpecs.map(item => item[2]), gap_keys: ['IP', '空值', '排序'],
       formal_test_point_ids: compiledOutcomes.formal_test_points.map((/** @type {any} */ point) => point.formal_test_point_id)
     }
-  };
+  });
 }

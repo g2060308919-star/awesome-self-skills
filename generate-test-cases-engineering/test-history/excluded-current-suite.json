@@ -1,0 +1,347 @@
+{
+  "scope": "REQ-08 current protocol only; these original historical files remain unchanged",
+  "excluded": [
+    {
+      "file": "test/core/behavior-views.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/case-compiled-scenario.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/case-semantics.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/core-execution-closure.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/core-journey.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/coverage.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-coverage-conservation.test.mjs",
+        "test/core/v4-risk-review-ledger.test.mjs",
+        "test/core/v4-critical-delivery-gate.test.mjs",
+        "test/fixtures/remediation/adversarial-review.md"
+      ]
+    },
+    {
+      "file": "test/core/deduplication.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/evidence.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/execution-markdown.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/execution-schema.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/final-status.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/generality-clarification.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/generality-document.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/generality-obligations.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/generality-source-audit.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/interaction-matrix.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/metamorphic.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/obligation-ledger.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/obligations-decision.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/obligations-flow.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/obligations-input-role.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/obligations-state.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/obligations-timing-integration.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/v4-pipeline.test.mjs",
+        "test/core/v4-case-quality-protection.test.mjs"
+      ]
+    },
+    {
+      "file": "test/core/schema-validator.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/core/current-schema-validator.test.mjs",
+        "test/core/v4-schema-dialect.test.mjs",
+        "test/interface/remediation-schema.test.mjs"
+      ]
+    },
+    {
+      "file": "test/golden/canonical-bundles.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/golden/markdown.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/execution-closure-runner.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/execution-closure-skill.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/full-journey.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/g1b-routes.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/g1c-twise-oracle.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/g1d-reply-contract.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/g1d-runner-protocol.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/g1d-stage-progression.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/generality-adapter.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/generality-workflow.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/obligation-inputs.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/runner-protocol.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/interface/stage-progression.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/interface/v4-reliability-full-flow.test.mjs",
+        "test/interface/v4-installed-action-adapter.test.mjs"
+      ]
+    },
+    {
+      "file": "test/recovery/checkpoint-recovery.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/recovery/v4-materialized-recovery.test.mjs",
+        "test/recovery/v4-revision-transaction.test.mjs",
+        "test/recovery/v4-semantic-reopen-transaction.test.mjs"
+      ]
+    },
+    {
+      "file": "test/recovery/g1d-source-revision.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/recovery/v4-materialized-recovery.test.mjs",
+        "test/recovery/v4-revision-transaction.test.mjs",
+        "test/recovery/v4-semantic-reopen-transaction.test.mjs"
+      ]
+    },
+    {
+      "file": "test/recovery/source-revision.test.mjs",
+      "reason": "Frozen V3 artifact/runner contract; not a current-protocol acceptance test. Shared mechanism coverage is retained in the current tests below.",
+      "current_coverage": [
+        "test/recovery/v4-materialized-recovery.test.mjs",
+        "test/recovery/v4-revision-transaction.test.mjs",
+        "test/recovery/v4-semantic-reopen-transaction.test.mjs"
+      ]
+    }
+  ]
+}

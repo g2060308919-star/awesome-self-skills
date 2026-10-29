@@ -1,0 +1,16 @@
+TAP version 13
+# Subtest: [reliability T12/T14] formal CLI preserves partial answers and resolves a distinct post-case issue before finished
+ok 1 - [reliability T12/T14] formal CLI preserves partial answers and resolves a distinct post-case issue before finished
+  ---
+  duration_ms: 12897.133917
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13011.815708

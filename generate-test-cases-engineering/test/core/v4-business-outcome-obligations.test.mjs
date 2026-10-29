@@ -1,3 +1,4 @@
+import { v4GeneralQualityFixture as currentFixture } from '../helpers/v4-general-quality-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -14,7 +15,7 @@ function fixture() {
     partitions: [{ kind: 'enum', value: 500, expected: '推荐' }, { kind: 'enum', value: 1, expected: '常规' }, { kind: 'enum', value: 0, expected: '不推荐' }],
     evidence_bindings: [{ field_path: '/business_outcome', claim_ids: ['CLM-star'] },
       ...[0, 1, 2].flatMap(index => ['value', 'expected'].map(field => ({ field_path: `/partitions/${index}/${field}`, claim_ids: ['CLM-star'] })))] };
-  const artifact = { schema_version: '4.0.0', source_revision: 0,
+  const artifact = { schema_version: '4.3.3', source_revision: 0, design_assurance: currentFixture().artifacts.behavior_views.design_assurance,
     views: [{ view_id: 'VIEW-star', module_id: 'admin', type: 'input-domain', scope: 'admin.review', source_claim_ids: ['CLM-star'], elements: [element], relations: [] }],
     interaction_matrix: [], interaction_candidates: [], obligation_inputs: { view_contexts: [], terminal_fact_routes: [], custom_responsibilities: [], combination_requests: [] } };
   return { artifact, evidence: evidenceFor(element) };

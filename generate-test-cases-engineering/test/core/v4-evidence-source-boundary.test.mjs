@@ -13,7 +13,7 @@ const textDigest = value => sourceByteDigest(new TextEncoder().encode(value));
 function registry() { return createSourceSubjectRegistry({ scope_refs: ['checkout'], module_ids: ['checkout'], entity_types: ['order'] }); }
 function fixture() {
   const r = buildJourney('all-e3'); const pack = r.source_pack; const claims = r.evidence_claims;
-  pack.schema_version = claims.schema_version = '4.0.0'; claims.semantic_gaps = [];
+  pack.schema_version = claims.schema_version = '4.3.3'; claims.semantic_gaps = [];
   const scopeEnvelope = sourceBoundaryFixture().evidence;
   for (const field of [
     'fact_ledger', 'topology_discovery', 'topology_review', 'topology_dispositions',

@@ -9,8 +9,8 @@ function v4() {
   return sourceBoundaryFixture().evidence;
 }
 
-test('T11 evidence Schema preserves the strict v3 branch and accepts typed closed v4 source metadata', () => {
-  assert.deepEqual(validateAgainstSchema(buildJourney('all-e3').evidence_claims, schema), []);
+test('T11 evidence Schema rejects historical inputs and accepts typed closed current metadata', () => {
+  assert.notDeepEqual(validateAgainstSchema(buildJourney('all-e3').evidence_claims, schema), []);
   const current = v4(); assert.deepEqual(validateAgainstSchema(current, schema), []);
   const legacy = buildJourney('all-e3').evidence_claims; legacy.claims[0].domain = 'business';
   assert.notDeepEqual(validateAgainstSchema(legacy, schema), []);

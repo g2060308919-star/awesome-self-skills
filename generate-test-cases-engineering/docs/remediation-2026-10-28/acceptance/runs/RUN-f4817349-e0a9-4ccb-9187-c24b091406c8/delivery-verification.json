@@ -1,0 +1,111 @@
+{
+  "reply": {
+    "status": "finished",
+    "phase": "delivery",
+    "run_id": "RUN-f4817349-e0a9-4ccb-9187-c24b091406c8",
+    "delivery_intent": "case_document",
+    "result_kind": "delivered_cases",
+    "produced_artifacts": [
+      {
+        "kind": "case_document",
+        "path": "output/r000/test-bundle.json",
+        "digest": "sha256:f8ebb259c67d4f2e7058aae3c179aba97e60ff6565f436c560acadc76b829132"
+      },
+      {
+        "kind": "business_markdown",
+        "path": "output/r000/test-cases.md",
+        "digest": "sha256:4abcc538f405dbc558c2ec70cb384581222deda9391b2d5da01395994ea62bbe"
+      },
+      {
+        "kind": "execution_worksheet",
+        "path": "output/r000/execution-worksheet.csv",
+        "digest": "sha256:04a8de14c3ba8ec1a72e2f0e84c215d59ae6ac8394aeef47e07a42be31b566d2"
+      },
+      {
+        "kind": "business_html",
+        "path": "output/r000/test-cases.html",
+        "digest": "sha256:3b20b0804e272a870eab379e92ae8d8d875567f31bdf005474a9662383bf8e78"
+      },
+      {
+        "kind": "case_table",
+        "path": "output/r000/case-table.txt",
+        "digest": "sha256:042f61a478d93621c422f8ece81e07d30cedf6df93c755313f7e737f1763f095"
+      },
+      {
+        "kind": "source_reading_summary",
+        "path": "output/r000/source-reading.json",
+        "digest": "sha256:3803e281b05b8e964ff59950284d1fd3f354988be1862d5601b34f1d68d3a6d9"
+      }
+    ],
+    "incomplete_reason": null,
+    "user_next_steps": [
+      {
+        "action": "read_artifact",
+        "description": "优先查看 HTML 人工功能测试用例；对话 Table、JSON、CSV 与 Markdown 来自同一规范投影。"
+      }
+    ],
+    "recovery": {
+      "mode": "create_new_run",
+      "description": "原始资料或实质范围改变时创建新运行；当前 canonical 交付保持不可变。"
+    },
+    "non_blocking_diagnostics": []
+  },
+  "verification": {
+    "passed": true,
+    "manifest": {
+      "authority": "canonical",
+      "blocked_root_count": 0,
+      "bundle": {
+        "digest": "sha256:f8ebb259c67d4f2e7058aae3c179aba97e60ff6565f436c560acadc76b829132",
+        "path": "output/r000/test-bundle.json"
+      },
+      "case_count": 17,
+      "chat_table": {
+        "digest": "sha256:042f61a478d93621c422f8ece81e07d30cedf6df93c755313f7e737f1763f095",
+        "format": "commonmark-table",
+        "path": "output/r000/case-table.txt"
+      },
+      "closed_for_delivery_root_count": 0,
+      "compiler_version": "0.8.3",
+      "completed_at": "2026-10-28T16:06:01.943Z",
+      "delivery_intent": "case_document",
+      "execution_worksheet": {
+        "digest": "sha256:04a8de14c3ba8ec1a72e2f0e84c215d59ae6ac8394aeef47e07a42be31b566d2",
+        "format": "csv",
+        "path": "output/r000/execution-worksheet.csv"
+      },
+      "exploratory_count": 9,
+      "html": {
+        "digest": "sha256:3b20b0804e272a870eab379e92ae8d8d875567f31bdf005474a9662383bf8e78",
+        "format": "html",
+        "path": "output/r000/test-cases.html"
+      },
+      "markdown": {
+        "digest": "sha256:4abcc538f405dbc558c2ec70cb384581222deda9391b2d5da01395994ea62bbe",
+        "path": "output/r000/test-cases.md"
+      },
+      "not_applicable_count": 0,
+      "primary_readable": "html",
+      "render_options": {
+        "include_audit_appendix": false
+      },
+      "result_kind": "delivered_cases",
+      "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+      "revision": 0,
+      "run_id": "RUN-f4817349-e0a9-4ccb-9187-c24b091406c8",
+      "schema_version": "4.3.3",
+      "source_reading": {
+        "digest": "sha256:3803e281b05b8e964ff59950284d1fd3f354988be1862d5601b34f1d68d3a6d9",
+        "format": "json",
+        "path": "output/r000/source-reading.json"
+      }
+    }
+  },
+  "attestation": {
+    "sample": "minimal",
+    "run_id": "RUN-f4817349-e0a9-4ccb-9187-c24b091406c8",
+    "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+    "completion_file": "/Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/fixtures/remediation/minimal-review-completion.json",
+    "completion_bytes_sha256": "7be08270230260b1fcbe8fc50049202a7eaf969786dd7ad78819c4078d50ea1d"
+  }
+}

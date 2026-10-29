@@ -103,11 +103,13 @@ test('source review and locator binding errors cannot be hidden by topology cons
   }
 });
 
-test('supported V4 source snapshots retain the same topology contract', () => {
+test('only the current source protocol reaches topology construction', () => {
+  const current = fixture();
+  assert.deepEqual(api.constructV4TopologyEvidence(current.pack, current.claims, current.review).scope_manifest,
+    current.evidence.scope_manifest);
   for (const version of ['4.0.0', '4.2.0', '4.3.0']) {
     const f = fixture(); f.pack.schema_version = version;
-    const result = api.constructV4TopologyEvidence(f.pack, f.claims, f.review);
-    assert.deepEqual(result.scope_manifest, f.evidence.scope_manifest);
+    assert.throws(() => api.constructV4TopologyEvidence(f.pack, f.claims, f.review), /TOPOLOGY_SOURCE_PACK_INVALID/u);
   }
 });
 

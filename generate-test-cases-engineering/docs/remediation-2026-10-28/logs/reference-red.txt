@@ -1,0 +1,30 @@
+✖ AT-09/21: helper and final compiler reject every dangling Case reference and duplicate local ID (1867.456375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1978.335291
+
+✖ failing tests:
+
+test at test/interface/remediation-context.test.mjs:170:1
+✖ AT-09/21: helper and final compiler reject every dangling Case reference and duplicate local ID (1867.456375ms)
+  AssertionError [ERR_ASSERTION]: ORACLE_STEP_UNRESOLVED
+  + actual - expected
+
+  + 'prepared'
+  - 'invalid'
+
+      at TestContext.<anonymous> (file:///Users/zhangxudong/codes/awesome-self-skills/generate-test-cases-engineering/test/interface/remediation-context.test.mjs:184:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'prepared',
+    expected: 'invalid',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

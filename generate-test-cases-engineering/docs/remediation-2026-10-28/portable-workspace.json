@@ -1,0 +1,8 @@
+{
+  "directory": "/var/folders/2q/wn9f5xcs6m39xhj0dt60bwvc0000gn/T/gtc-portable-acceptance-lSfzHY",
+  "runner": "/var/folders/2q/wn9f5xcs6m39xhj0dt60bwvc0000gn/T/gtc-portable-acceptance-lSfzHY/package/scripts/test-compiler.mjs",
+  "catalog": "/var/folders/2q/wn9f5xcs6m39xhj0dt60bwvc0000gn/T/gtc-portable-acceptance-lSfzHY/acceptance",
+  "review_status": "real_independent_review_and_formal_verification_passed",
+  "archived_catalog": "acceptance/portable",
+  "verification_record": "delivery-verification.json"
+}

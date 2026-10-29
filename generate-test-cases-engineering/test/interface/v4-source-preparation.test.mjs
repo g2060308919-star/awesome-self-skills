@@ -1,3 +1,4 @@
+import {prepareCaseFixture} from '../helpers/v4-stage-construction.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -188,13 +189,10 @@ test('unknown credential keys and unregistered signed hosts remain quarantined',
   }
 });
 
-test('historical source runtime keeps the old Cooper host contract', () => {
+test('current source runtime retains the external Cooper host contract', () => {
   const signed = 'https://s3-ep-inter.didistatic.com/doc/image.png?X-Amz-Signature=TEST_ONLY_CANARY';
-  const oldRuntime = createCompilerSourceRuntimeV4('4.3.0');
-  const newRuntime = createCompilerSourceRuntimeV4('4.3.1');
-  assert.equal(oldRuntime.registry_version, 'source-runtime-v1');
+  const newRuntime = createCompilerSourceRuntimeV4('4.3.3');
   assert.equal(newRuntime.registry_version, 'source-runtime-v2');
-  assert.equal(canonicalizeSourceUrl(signed, oldRuntime.provider_registry).status, 'need_artifact');
   assert.equal(canonicalizeSourceUrl(signed, newRuntime.provider_registry).status, 'canonical');
   assert.throws(() => createCompilerSourceRuntimeV4('4.9.0'), /SOURCE_RUNTIME_SCHEMA_UNSUPPORTED/u);
 });
@@ -368,6 +366,7 @@ test('initial CLI request and safe source_assets enter existing pending and resu
     assert.doesNotMatch(JSON.stringify(resumed), /TEST_ONLY_CANARY/u);
     let final = resumed;
     for (const stage of ['evidence_claims', 'behavior_views', 'case_drafts']) {
+      if(stage==='case_drafts')fixture.artifacts.case_drafts=await prepareCaseFixture(directory,fixture.artifacts.case_drafts);
       await writeFile(path.join(directory, `staging/${stage.replaceAll('_', '-')}.json`),
         `${canonicalStringify(fixture.artifacts[stage])}\n`);
       final = await advanceStrict(directory);

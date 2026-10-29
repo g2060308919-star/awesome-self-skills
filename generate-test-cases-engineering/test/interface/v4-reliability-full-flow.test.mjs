@@ -282,6 +282,12 @@ async function acceptedSource(directory, revision) {
 async function design(directory, fixture, revision) {
   for (const stage of /** @type {const} */ (['behavior_views', 'case_drafts'])) {
     fixture.artifacts[stage].source_revision = revision;
+    if(stage === 'case_drafts') {
+      const {schema_version,source_revision,case_context_digest,...payload}=fixture.artifacts[stage];
+      const prepared=await adapter.prepareStageArtifact(directory,await cli(directory),{stage,payload});
+      assert.equal(prepared.status,'prepared',JSON.stringify(prepared));
+      fixture.artifacts[stage]=prepared.artifact;
+    }
     await stageRaw(directory, stage, fixture.artifacts[stage]);
     const reply = await cli(directory);
     if (stage === 'behavior_views') assert.equal(reply.stage, 'case_drafts', JSON.stringify(reply));
@@ -540,10 +546,25 @@ test('[reliability T12/T14] formal CLI preserves partial answers and resolves a 
   await noDelivery(directory);
   await stageRaw(directory, 'source_pack', sourceAppend(await acceptedSource(directory, 2), [answer(post, /排序/u, '降序')]));
   let finished = await cli(directory);
-  if (finished.review_request) {
-    fixture.artifacts.case_drafts.source_revision = 3;
-    finished = await completeReview(directory, fixture, finished);
-  }
+  // A validated answer changes upstream basis. Persist the answer first and
+  // re-enter the existing design stages; old drafts must not be auto-rebound.
+  assert.equal(finished.stage, 'behavior_views', JSON.stringify(finished));
+  const oldContextDigest=fixture.artifacts.case_drafts.case_context_digest;
+  fixture.artifacts.behavior_views.source_revision=3;
+  await stageRaw(directory,'behavior_views',fixture.artifacts.behavior_views);
+  const current=await cli(directory);
+  assert.equal(current.case_context.source_revision,3);
+  fixture.artifacts.case_drafts.source_revision=3;
+  await stageRaw(directory,'case_drafts',fixture.artifacts.case_drafts);
+  const staleContext=await cli(directory);
+  assert.equal(staleContext.incomplete_reason.code,'CASE_CONTEXT_STALE');
+  assert.notEqual(current.case_context.context_digest,oldContextDigest);
+  const {schema_version,source_revision,case_context_digest,...payload}=fixture.artifacts.case_drafts;
+  const prepared=await adapter.prepareStageArtifact(directory,current,{stage:'case_drafts',payload});
+  assert.equal(prepared.status,'prepared',JSON.stringify(prepared));
+  fixture.artifacts.case_drafts=prepared.artifact;
+  await stageRaw(directory,'case_drafts',prepared.artifact);
+  finished=await completeReview(directory,fixture,await cli(directory));
   await verifyDelivery(directory, finished);
   const accepted3 = await acceptedSource(directory, 3);
   assert.equal(accepted3.decision_records.length, 3);
@@ -590,7 +611,7 @@ test('[reliability T13] critical unknown, deferred and temporary answers never p
 });
 
 test('[reliability T21] current compiler preserves the business projection captured from unmodified 4.3.2/0.8.2 code', () => {
-  const outputs = ['4.3.2', contract.schema_version].map(schema => {
+  const outputs = ['4.3.3', contract.schema_version].map(schema => {
     const fixture = v4GeneralQualityFixture(schema);
     const result = compileCaseDocumentRevisionV4(fixture.artifacts, fixture.system);
     assert.equal(result.status, 'compiled', JSON.stringify(result));

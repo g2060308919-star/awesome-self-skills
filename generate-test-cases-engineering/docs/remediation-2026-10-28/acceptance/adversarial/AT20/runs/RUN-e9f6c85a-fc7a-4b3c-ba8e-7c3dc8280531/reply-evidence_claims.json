@@ -1,0 +1,72 @@
+{
+  "status": "need_user_answers",
+  "phase": "requirements_analysis",
+  "run_id": "RUN-e9f6c85a-fc7a-4b3c-ba8e-7c3dc8280531",
+  "produced_artifacts": [],
+  "incomplete_reason": {
+    "code": "SEMANTIC_GAP",
+    "summary": "需求中仍有会改变业务预期的语义问题，需要逐项决定。"
+  },
+  "user_next_steps": [
+    {
+      "action": "answer_question_part",
+      "description": "回答、暂缓、标记未知，或明确按当前结果交付展示的问题。"
+    }
+  ],
+  "recovery": {
+    "mode": "append_clarification_event",
+    "description": "从已提交检查点追加展示中允许的澄清事件。"
+  },
+  "semantic_presentation": {
+    "schema_version": "4.3.3",
+    "presentation_id": "PRES-a3691c7acaaaf69f6d6dbac1a25dc8f22d9db5ac2ef4fa82ee2bbae4136007af",
+    "phase": "requirements_analysis",
+    "supersedes_presentation_id": null,
+    "answered_part_ids": [],
+    "remaining_part_ids": [
+      "QP-af08b87ed7194a2b04fa1edbd51b2e261d9e0b547f2ddd23df7b6554cc0c3954"
+    ],
+    "cycle_digest": "sha256:06354060804a60b0c63fd8c9fe51226abdf8fb9946de76ab52b9ac94a6a1deb1",
+    "run_actions": [
+      "cancel_run"
+    ],
+    "recovery": {
+      "mode": "append_clarification_event",
+      "run_id": "RUN-e9f6c85a-fc7a-4b3c-ba8e-7c3dc8280531",
+      "committed_revision": 0,
+      "committed_checkpoint_digest": "sha256:58f5a91e33fd508dd2b5bbe5eabda0d5900a19ce43c247285a04e63db70419d0",
+      "after_partial_answer": "issue_successor_for_remaining_parts"
+    },
+    "question_parts": [
+      {
+        "question_part_id": "QP-af08b87ed7194a2b04fa1edbd51b2e261d9e0b547f2ddd23df7b6554cc0c3954",
+        "root_issue_id": "ROOT-31cb69492b855c333fe501e02d1a91092f0e0a510ac7f09d82ba96268e5a2cab",
+        "root_version_digest": "sha256:67fba397a06410fe3e93b7cb36092c1c12323dfff72dba32066d55e68503153b",
+        "question": "保存请求失败时弹窗和已填名称如何处理，是否允许再次保存？",
+        "why_needed": "本地材料只规定成功结果，失败后的可观察行为没有定义。",
+        "decision_impact": "无法确定失败场景的预期与恢复步骤。",
+        "unresolved_outcome": "失败恢复用例无法确定。",
+        "affected_facts": [
+          "保存失败后的弹窗、输入内容和再次保存行为未定义"
+        ],
+        "answer_options": [
+          "当前无法确定",
+          "说明失败后的弹窗、输入与重试规则"
+        ],
+        "risk_level": "high",
+        "available_actions": [
+          "answer_question_part",
+          "defer_question_part",
+          "mark_question_unknown"
+        ],
+        "action_context": {
+          "presentation_id": "PRES-a3691c7acaaaf69f6d6dbac1a25dc8f22d9db5ac2ef4fa82ee2bbae4136007af",
+          "question_part_id": "QP-af08b87ed7194a2b04fa1edbd51b2e261d9e0b547f2ddd23df7b6554cc0c3954",
+          "root_issue_id": "ROOT-31cb69492b855c333fe501e02d1a91092f0e0a510ac7f09d82ba96268e5a2cab",
+          "root_version_digest": "sha256:67fba397a06410fe3e93b7cb36092c1c12323dfff72dba32066d55e68503153b"
+        }
+      }
+    ]
+  },
+  "non_blocking_diagnostics": []
+}

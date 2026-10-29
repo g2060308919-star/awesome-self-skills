@@ -1,3 +1,4 @@
+import {prepareCaseFixture,completeProtocolReviewFixture} from '../helpers/v4-stage-construction.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -5,7 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 
 import replySchema from '../../skill/generate-test-cases/scripts/schemas/reply.schema.json' with { type: 'json' };
-import { advanceStrict } from '../../src/advance-strict.mjs';
+import { advanceStrict as advanceCurrent } from '../../src/advance-strict.mjs';
+import { stageCollection } from '../helpers/v4-reliability-fixture.mjs';
 import { constructV4Action } from '../../src/agent-action-adapter-v4.mjs';
 import { canonicalStringify, digest } from '../../src/canonical.mjs';
 import { validateAgainstSchema } from '../../src/schema-validator.mjs';
@@ -23,6 +25,37 @@ import { ensureV4RunInstance } from '../../src/revision-transaction-v4.mjs';
 import { STAGE_FILES } from '../../src/run-store.mjs';
 import { bendReviewJourneyFixture } from '../fixtures/v4/bend-review-platform/journey-fixture.mjs';
 import { v4PipelineFixture } from '../helpers/v4-pipeline-fixture.mjs';
+
+// Current protocol requires an explicit bootstrap and observed source acquisition.
+// Fixtures mutate staged candidates after the audited semantic source was read.
+// The observation records those original source bytes, never the injected signed URL.
+const observedDirectories = new Set();
+const initialReplies = new Map();
+/** @param {string} directory */
+async function advanceStrict(directory) {
+  await ensureV4RunInstance(directory,{delivery_intent:'case_document'});
+  if (!observedDirectories.has(directory)) {
+    const staged=await readFile(path.join(directory,'staging/source-pack.json'),'utf8').catch(()=>null);
+    if(staged) {
+      const pack=JSON.parse(staged);
+      if(pack.source_revision===0 && pack.delivery_intent==='case_document') {
+        const original=structuredClone(pack);
+        for(const source of original.sources) source.content=source.semantic_projection.content;
+        let initial=initialReplies.get(directory);
+        if(!initial) {
+          await rm(path.join(directory,'staging/source-pack.json'));
+          initial=await advanceCurrent(directory);
+          await writeFile(path.join(directory,'staging/source-pack.json'),staged);
+        }
+        await stageCollection(directory,initial,original);
+        observedDirectories.add(directory);
+      }
+    }
+  }
+  const reply=await advanceCurrent(directory);
+  if(reply.stage==='source_pack' && reply.scope?.source_revision===0) initialReplies.set(directory,reply);
+  return reply;
+}
 
 const providerRegistry = createSourceProviderRegistry([]);
 const cooperProviderRegistry = createSourceProviderRegistry([{
@@ -90,6 +123,7 @@ async function files(root) {
 
 /** @param {string} directory @param {keyof typeof STAGE_FILES} stageName @param {any} value */
 async function stage(directory, stageName, value) {
+  if(stageName==='case_drafts') value=await prepareCaseFixture(directory,value);
   await mkdir(path.join(directory, 'staging'), { recursive: true });
   await writeFile(
     path.join(directory, 'staging', STAGE_FILES[stageName]),
@@ -111,7 +145,7 @@ async function startSemanticQuestion(directory, runId) {
 }
 
 /** @param {any} reply @param {RegExp} pattern @param {string} answer */
-function answerRequest(reply, pattern, answer) {
+function answerRequest(reply, pattern, answer, final = false) {
   const matches = reply.semantic_presentation.question_parts.filter(
     (/** @type {any} */ part) => pattern.test(part.question)
   );
@@ -120,8 +154,8 @@ function answerRequest(reply, pattern, answer) {
   return {
     event: constructV4Action(reply, {
       action: 'answer_question_part', question_part_id: matches[0].question_part_id,
-      answer, user_message: userMessage, resolution: 'temporary',
-      origin_type: 'user_statement'
+      answer, user_message: userMessage, resolution: final ? 'final' : 'temporary',
+      origin_type: final ? 'authorized_confirmation' : 'user_statement'
     }),
     userMessage
   };
@@ -202,7 +236,7 @@ test('v4 runner quarantines an unknown signed source before any credential-beari
   }
 });
 
-test('BR-13 pre-case clarification quarantines a signed answer before r+1 promotion and resumes one safe semantic event', { timeout: 60_000 }, async () => {
+test('BR-13 pre-case clarification quarantines a signed answer before r+1 promotion and rejects an unrelated replacement through material recovery', { timeout: 60_000 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-source-pre-case-answer-'));
   const runId = 'RUN-31313131-3131-4313-8313-313131313131';
   try {
@@ -231,23 +265,12 @@ test('BR-13 pre-case clarification quarantines a signed answer before r+1 promot
     const material = new TextEncoder().encode(
       safeRevision.artifacts.source_pack.sources[0].semantic_projection.content
     );
-    await stageSafeSemanticResume(
-      directory, blocked, safeRevision.artifacts.source_pack, material
-    );
-
-    const resumed = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(resumed.status, 'need_user_answers', JSON.stringify(resumed));
-    assert.equal(resumed.phase, 'requirements_analysis');
-    const accepted = JSON.parse(await readFile(
-      path.join(directory, 'accepted/r001/source-pack.json'), 'utf8'
-    ));
-    assert.deepEqual(accepted.clarification_events, [safe.event]);
-    assert.equal(accepted.decision_records.length, 1);
-    assert.equal(accepted.decision_records[0].answer, '发布者提交评价时的 IP 归属地');
-    assert.deepEqual(await advanceStrict(directory), resumed,
-      'recovery must replay the accepted semantic event instead of appending it twice');
-    const durableText = (await Promise.all((await files(directory)).map(file => readFile(file, 'utf8')))).join('\n');
-    assert.doesNotMatch(durableText, /PRE_CASE_ANSWER_SECRET|signature=|id=17/iu);
+    // Current material recovery binds the original semantic candidate. Replacing a
+    // business answer is not a mechanical acquisition action (frozen 4.0 allowed it).
+    await assert.rejects(stageSafeSemanticResume(directory,blocked,safeRevision.artifacts.source_pack,material),/ARTIFACT_SOURCE_CANDIDATE_INVALID/u);
+    await assert.rejects(readFile(path.join(directory,'accepted/r001/source-pack.json')),{code:'ENOENT'});
+    const resumed = await advanceStrict(directory);
+    assert.deepEqual(resumed, blocked, 'rejected replacement must retain the original acquisition stop');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -286,7 +309,7 @@ test('BR-13 clarification acquisition stop remains cancellable without reviving 
   }
 });
 
-test('BR-13 post-case clarification quarantines a signed answer and resumes the same pending root exactly once', { timeout: 60_000 }, async () => {
+test('BR-13 post-case clarification quarantines a signed answer and forbids business replacement through the acquisition action', { timeout: 60_000 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-source-post-case-answer-'));
   const runId = 'RUN-32323232-3232-4323-8323-323232323232';
   try {
@@ -302,6 +325,7 @@ test('BR-13 post-case clarification quarantines a signed answer and resumes the 
       await stage(directory, stageName, fixture.artifacts[stageName]);
       var pending = /** @type {any} */ (await advanceStrict(directory));
     }
+    if(pending.review_request) pending=await completeProtocolReviewFixture(directory,pending,fixture.artifacts.case_drafts);
     assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
     assert.equal(pending.phase, 'case_design');
 
@@ -327,21 +351,10 @@ test('BR-13 post-case clarification quarantines a signed answer and resumes the 
     const material = new TextEncoder().encode(
       safeRevision.artifacts.source_pack.sources[0].semantic_projection.content
     );
-    await stageSafeSemanticResume(
-      directory, blocked, safeRevision.artifacts.source_pack, material
-    );
-    const resumed = /** @type {any} */ (await advanceStrict(directory));
-
-    assert.equal(resumed.status, 'finished', JSON.stringify(resumed));
-    const accepted = JSON.parse(await readFile(
-      path.join(directory, 'accepted/r001/source-pack.json'), 'utf8'
-    ));
-    assert.deepEqual(accepted.clarification_events, [safe.event]);
-    assert.equal(accepted.decision_records.length, 1);
-    assert.equal(accepted.decision_records[0].answer, '发布者提交评价时的 IP 归属地');
-    assert.deepEqual(await advanceStrict(directory), resumed);
-    const durableText = (await Promise.all((await files(directory)).map(file => readFile(file, 'utf8')))).join('\n');
-    assert.doesNotMatch(durableText, /POST_CASE_ANSWER_SECRET|signature=|id=23/iu);
+    await assert.rejects(stageSafeSemanticResume(directory,blocked,safeRevision.artifacts.source_pack,material),/ARTIFACT_SOURCE_CANDIDATE_INVALID/u);
+    await assert.rejects(readFile(path.join(directory,'accepted/r001/source-pack.json')),{code:'ENOENT'});
+    const resumed = await advanceStrict(directory);
+    assert.deepEqual(resumed, blocked, 'rejected replacement must retain the original acquisition stop');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -364,7 +377,7 @@ test('BR-13 acquired capture receipts allow only verified user-statement append 
       fixture.artifacts.source_pack.sources[0].semantic_projection.content
     );
     await stageSafeSemanticResume(
-      directory, blocked, fixture.artifacts.source_pack, material
+      directory, blocked, unsafeSource, material
     );
     const evidenceRequest = /** @type {any} */ (await advanceStrict(directory));
     assert.equal(evidenceRequest.stage, 'evidence_claims', JSON.stringify(evidenceRequest));
@@ -375,33 +388,17 @@ test('BR-13 acquired capture receipts allow only verified user-statement append 
     const pending = /** @type {any} */ (await advanceStrict(directory));
     assert.equal(pending.status, 'need_user_answers', JSON.stringify(pending));
 
-    const unsafe = answerRequest(
-      pending, /IP/u,
-      'https://unknown.example.invalid/decision?id=41&signature=SECOND_ACQUISITION_SECRET'
-    );
-    const unsafeRevision = await bendReviewJourneyFixture(
-      runId, 1, [unsafe.event], { clarification_messages: [unsafe.userMessage] }
-    );
-    unsafeRevision.artifacts.source_pack.artifact_events = structuredClone(acquiredR0.artifact_events);
-    await stage(directory, 'source_pack', unsafeRevision.artifacts.source_pack);
-    const appendBlocked = /** @type {any} */ (await advanceStrict(directory));
-    assert.equal(appendBlocked.status, 'need_artifact', JSON.stringify(appendBlocked));
-    assert.equal(appendBlocked.phase, 'source_acquisition');
-    await assert.rejects(readFile(path.join(directory, 'accepted/r001/source-pack.json')), { code: 'ENOENT' });
-
     const answers = [
-      answerRequest(pending, /IP/u, '发布者提交评价时的 IP 归属地'),
-      answerRequest(pending, /空值/u, '—'),
-      answerRequest(pending, /排序/u, '降序')
+      answerRequest(pending, /IP/u, '发布者提交评价时的 IP 归属地',true),
+      answerRequest(pending, /空值/u, '—',true),
+      answerRequest(pending, /排序/u, '降序',true)
     ];
     const revision1 = await bendReviewJourneyFixture(
       runId, 1, answers.map(item => item.event),
       { clarification_messages: answers.map(item => item.userMessage) }
     );
     revision1.artifacts.source_pack.artifact_events = structuredClone(acquiredR0.artifact_events);
-    await stageSafeSemanticResume(
-      directory, appendBlocked, revision1.artifacts.source_pack, material
-    );
+    await stage(directory, 'source_pack', revision1.artifacts.source_pack);
     const behaviorRequest = /** @type {any} */ (await advanceStrict(directory));
     assert.equal(behaviorRequest.status, 'need_revision', JSON.stringify(behaviorRequest));
     assert.equal(behaviorRequest.stage, 'behavior_views');

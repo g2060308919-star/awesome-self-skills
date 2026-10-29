@@ -1,0 +1,1 @@
+{"layer":"Agent/Adapter","code":"PIPELINE_NO_PROGRESS","same_root_count":4}

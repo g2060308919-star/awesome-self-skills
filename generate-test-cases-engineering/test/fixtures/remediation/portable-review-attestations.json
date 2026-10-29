@@ -1,0 +1,18 @@
+{
+  "attestations": [
+    {
+      "sample": "minimal",
+      "run_id": "RUN-a0cc0f92-93e4-40ca-a973-0d9a79733af5",
+      "review_target_digest": "sha256:c604a4273d48ff873ddd552b4fb220c158708f5ec6ab0a6fce54533e61b294fe",
+      "completion_file": "portable-minimal-review-completion.json",
+      "completion_bytes_sha256": "2bf0ebad4830659e1cc7ff1b0271a5d2cfa93325ae4c2c8dae7692990e0590ff"
+    },
+    {
+      "sample": "comprehensive",
+      "run_id": "RUN-dd8ccfed-82e0-4047-afbe-e298e3a07b82",
+      "review_target_digest": "sha256:6d07530261a38d540010819ca304eb9ca7302b71ce6eb50659dfb08212d28293",
+      "completion_file": "portable-comprehensive-review-completion.json",
+      "completion_bytes_sha256": "9af593496b3ea0fc800bff2386127d0220512e9b2b01bcc1e107a340ccf3f576"
+    }
+  ]
+}

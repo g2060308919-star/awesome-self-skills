@@ -1,0 +1,11 @@
+✔ Evidence repair helper prepares the requested next revision read-only and supports a rejected Evidence correction (5009.227ms)
+✔ Evidence repair helper rejects missing or invalid repair bases and forged requests without writes (3766.091708ms)
+✔ Evidence repair preparation reuses acquired material without deleting staged private bytes (4235.675084ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13186.741875

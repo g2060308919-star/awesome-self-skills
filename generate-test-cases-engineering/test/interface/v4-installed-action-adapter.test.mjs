@@ -1,3 +1,4 @@
+import {prepareCaseFixture} from '../helpers/v4-stage-construction.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -73,7 +74,7 @@ function bindFixtureContract(fixture, schemaVersion) {
   for (const artifact of Object.values(fixture.artifacts)) {
     artifact.schema_version = schemaVersion;
   }
-  if (!['4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(schemaVersion)) return fixture;
+  if (!['4.3.3', '4.3.3', '4.3.3', '4.3.3'].includes(schemaVersion)) return fixture;
   const bound = bindGeneralQualityFixture(fixture, schemaVersion);
   const completed = bound.artifacts.case_drafts.independent_review;
   bound.artifacts.case_drafts.independent_review = {
@@ -94,7 +95,7 @@ async function stageCandidateCollection(installed, directory, reply, fixture) {
   const identity = JSON.parse(await readFile(path.join(directory, 'run-instance.json'), 'utf8'));
   const schemaVersion = identity.schema_version;
   bindFixtureContract(fixture, schemaVersion);
-  if (!['4.2.0', '4.3.0', '4.3.1', '4.3.2', '4.3.3'].includes(schemaVersion)) return schemaVersion;
+  if (!['4.3.3', '4.3.3', '4.3.3', '4.3.3', '4.3.3'].includes(schemaVersion)) return schemaVersion;
   const source = fixture.artifacts.source_pack.sources[0];
   const bytes = new TextEncoder().encode(source.content);
   await installed.stageV4PrdCollectionObservation(directory, reply, {
@@ -228,6 +229,7 @@ async function deliverInstalledCaseDocument(installed, catalog) {
   fixture.artifacts.evidence_claims.semantic_gaps = [];
   let reply;
   for (const stageName of /** @type {Array<keyof typeof STAGE_FILES>} */ (Object.keys(STAGE_FILES))) {
+    if(stageName==='case_drafts')fixture.artifacts.case_drafts=await prepareCaseFixture(directory,fixture.artifacts.case_drafts,installed);
     await stage(directory, stageName, fixture.artifacts[stageName]);
     reply = await installed.advanceStrict(directory);
   }
@@ -405,6 +407,44 @@ test('installed private action seam submits all-DNE and final confirmation to th
     ));
     assert.equal(current.runner_ready, false);
     assert.deepEqual(current.runner_projection.case_ids, []);
+  } finally {
+    await rm(catalog, { recursive: true, force: true });
+  }
+});
+
+test('installed private action seam cancels final confirmation and replays the terminal result', async () => {
+  const installed = /** @type {any} */ (await import(pathToFileURL(bundlePath).href));
+  const catalog = await mkdtemp(path.join(os.tmpdir(), 'gtc-v4-installed-execution-submit-'));
+  try {
+    const document = await deliverInstalledCaseDocument(installed, catalog);
+    const execution = await installed.createV4RunDirectory(catalog, 'execution_plan');
+    const executionDirectory = execution.run_directory;
+    const executionRunId = execution.run_id;
+    const source = executionSourcePack(executionRunId, document.caseDocumentRef, [], 0);
+    await stage(executionDirectory, 'source_pack', source);
+    const pending = await installed.advanceStrict(executionDirectory);
+    assert.equal(pending.phase, 'execution_closure', JSON.stringify(pending));
+    assert.ok(pending.execution_presentation, JSON.stringify(pending));
+    const events = pending.execution_presentation.items
+      .filter((/** @type {any} */ item) => item.available_actions.includes('set_execution_disposition'))
+      .map((/** @type {any} */ item) => installed.constructV4Action(pending, {
+        action: 'set_execution_disposition', action_context: item.action_context,
+        disposition: 'do_not_execute'
+      }));
+    assert.ok(events.length > 0);
+    await stage(executionDirectory, 'source_pack', executionSourcePack(
+      executionRunId, document.caseDocumentRef, events, 1
+    ));
+    const confirmation = await installed.advanceStrict(executionDirectory);
+    assert.equal(confirmation.phase, 'final_confirmation', JSON.stringify(confirmation));
+    const confirm = installed.constructV4Action(confirmation, { action: 'cancel_run' });
+    await stage(executionDirectory, 'source_pack', executionSourcePack(
+      executionRunId, document.caseDocumentRef, [...events, confirm], 2
+    ));
+    const finished = await installed.advanceStrict(executionDirectory);
+    assert.equal(finished.status, 'cancelled', JSON.stringify(finished));
+    assert.equal(finished.phase, 'final_confirmation');
+    assert.deepEqual(await installed.advanceStrict(executionDirectory), finished);
   } finally {
     await rm(catalog, { recursive: true, force: true });
   }

@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "node build/build.mjs",
-    "test": "node --test --test-concurrency=1 test/core/*.test.mjs test/golden/*.test.mjs test/interface/*.test.mjs test/recovery/*.test.mjs && node --test test/repeatability/*.repeat.mjs",
+    "test": "node test/current-suite.mjs",
     "test:benchmark": "node --test --test-concurrency=1 test/benchmark/*.test.mjs",
     "check": "tsc --noEmit -p jsconfig.json && node build/build.mjs --check && npm test",
     "benchmark": "node benchmark/single-system-gate.mjs benchmark/release/v1/manifest.json",
-    "public-pilot": "node benchmark/public-pilot/validate.mjs benchmark/public-pilot/v1/catalog.json"
+    "public-pilot": "node benchmark/public-pilot/validate.mjs benchmark/public-pilot/v1/catalog.json",
+    "test:acceptance": "node --test --test-reporter=tap test/interface/remediation-*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

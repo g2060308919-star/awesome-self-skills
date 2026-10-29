@@ -1,3 +1,4 @@
+import {v4GeneralQualityFixture} from '../helpers/v4-general-quality-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -28,8 +29,8 @@ function logicalCase() {
 /** @param {any} value */
 function errors(value) { return validateAgainstSchema(value, caseDraftSchema); }
 
-test('v4 Case Draft admits only the closed logical CaseSpec and retains the v3 branch', () => {
-  const artifact = { schema_version: '4.0.0', source_revision: 4, cases: [logicalCase()] };
+test('v4 Case Draft admits only the closed logical CaseSpec and rejects historical formats', () => {
+  const artifact = { schema_version: '4.3.3', source_revision: 4, case_context_digest:'sha256:'+'0'.repeat(64), independent_review:v4GeneralQualityFixture().artifacts.case_drafts.independent_review, cases: [logicalCase()] };
   assert.deepEqual(errors(artifact), []);
   for (const forbidden of ['testability_profile', 'post_state', 'cleanup', 'execution_effects', 'runner_case_ids', 'depends_on_case_ids']) {
     const candidate = structuredClone(artifact);
@@ -42,7 +43,7 @@ test('v4 Case Draft admits only the closed logical CaseSpec and retains the v3 b
 });
 
 test('v4 Case Draft closes baseline, effect, value-origin and step-oracle unions', () => {
-  const artifact = { schema_version: '4.0.0', source_revision: 4, cases: [logicalCase()] };
+  const artifact = { schema_version: '4.3.3', source_revision: 4, case_context_digest:'sha256:'+'0'.repeat(64), independent_review:v4GeneralQualityFixture().artifacts.case_drafts.independent_review, cases: [logicalCase()] };
   artifact.cases[0].baseline_spec = {
     baseline_id: 'BASELINE-existing-filters', kind: 'declared_reference', acquisition: 'capture_at_execution',
     reference: '当前线上评价中台', claim_ids: ['CLM-baseline'],

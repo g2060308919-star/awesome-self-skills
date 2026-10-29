@@ -133,7 +133,7 @@ test('T10 semantic reopen creates one sibling, freezes inherited digests and sup
     assert.equal(await readFile(path.join(fixture.caseDirectory, 'output/current.json'), 'utf8'), parentManifest);
     assert.equal(await readFile(path.join(fixture.caseDirectory, 'checkpoint.json'), 'utf8'), parentCheckpoint);
     assert.deepEqual(await readJson(path.join(fixture.executionDirectory, 'state/lifecycle.json')), {
-      schema_version: '4.0.0', run_id: EXECUTION_RUN_ID, delivery_intent: 'execution_plan',
+      schema_version: '4.3.3', run_id: EXECUTION_RUN_ID, delivery_intent: 'execution_plan',
       status: 'superseded_by_semantic_reopen', version: 2,
       superseded_by: result.sibling_run_id, semantic_reopen_txn_id: result.txn_id
     });
@@ -238,7 +238,7 @@ test('T10 reopened evidence removes suspended Decision Claims and restores direc
   const targetFact = `FACT-${'e'.repeat(64)}`;
   const otherFact = `FACT-${'f'.repeat(64)}`;
   const evidence = {
-    schema_version: '4.0.0', source_revision: 0,
+    schema_version: '4.3.3', source_revision: 0,
     claims: [
       { claim_id: directClaim, claim_form: 'direct', superseded_by: decisionClaim1 },
       {
