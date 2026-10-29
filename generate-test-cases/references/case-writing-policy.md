@@ -32,6 +32,38 @@ Do not deduplicate Cases by title, copied wording, shared error text, or shared 
 
 不得新增 Case 类型、流程引擎或状态机。Use only the existing CaseSpec, existing compiler-owned ordering refs, and source-backed views. If the source signals a path but its object linkage, ordering, start, or terminal result is ambiguous, route that business ambiguity through the existing pre-case or post-case clarification phase.
 
+## Project Cases from formal Test Points
+
+Project `case_drafts` from formal Test Points that already exist. `exploratory` records, unclosed semantic gaps, deferred items, and unknowns produce no formal Case.
+
+1. Each single-point formal Test Point has exactly one single-point Case. That Case's `primary_test_point_id` points at that Test Point. The title, the condition written in the preconditions, and `oracles[].expected` cover only that Test Point's one result.
+2. Do not write a second single-point Case for the same Test Point. Do not give different titles one shared `expected` that contains several propositions.
+3. A complete-path Case backed by source evidence may share the terminal Test Point with the terminal single-point Case. Keep that single-point Case. The complete-path Case's primary `expected` equals only that terminal result. It does not join another field's validation result with a comma or with 「并且」. Every other result that can fail independently still has its own single-point Case.
+4. When the Case to write is not represented by a current Test Point, stop drafting that result. Add the Fact or the clarification first, then project again.
+
+When one role may perform an action and another role may not, write two single-point Cases. Neither Case's `expected` states both the allow and the deny.
+
+## Fill the existing Case slots
+
+Every v4 formal Case, single-point and complete-path, contains every row below. Do not add field names. Schema-required fields remain required, including `ordering`, `acceptance_role`, and `supporting_observation_ids`. This rule constrains the writing. A complete-path Case's primary `expected` is still only the terminal result. Intermediate steps may record the actions required to reach that terminal result.
+
+| Slot | Write into | Required form |
+| --- | --- | --- |
+| Role | one `business_preconditions[].description` | When the source names a role, write `当前操作者是{角色}。` When it names none, write `来源未指定操作角色。` |
+| Entry state | another `business_preconditions[].description` | Write `已处于{入口或对象状态}。` |
+| Rule basis | another `business_preconditions[].description` | Start with `规则依据：`. For a requirement, write `规则依据：需求文档「{读者可定位的章节或表名}」规定{这一结果}。` For a user confirmation, write `规则依据：用户确认{这一结果}。` Include no internal ID. Do not write this sentence as `steps[].action`. The sentence only restates the source this Case's Claim already carries. It adds no product condition and does not require another Claim. |
+| Input | at least one `data_conditions[].description` | Name the field and the value, and mark it as a specified value or a replaceable example. A replaceable example states the distinguishing condition a replacement must keep. When the result needs no extra input, write `本结果不依赖额外输入数据。` |
+| Action | `steps[].action` | Serve only this result. |
+| Observation surface | `oracles[].surface` | Use one enumeration the Schema already defines. |
+| Single expectation | `oracles[].expected` | State only this result as the business observation at the observation location. Leave out `规则依据`, the question text, unselected options, and any other result that can fail independently. |
+| Trace | `fact_ids` and that oracle's `claim_ids` | Point at this result's Fact and Claim. |
+
+The title is `{业务对象}：{单一条件}时{单一结果}`. Its condition and result are the same condition and result as `expected`.
+
+When the source requires particular words to appear, `expected` requires those words verbatim. When the source states only a business rule, `expected` states that business result and states that the interface wording may differ while those business facts hold. An example value is written only in the input and in the `test_values` `example` branch. It is not the only value `expected` must match.
+
+Several `surface` values may observe the same result. Each `expected` still describes only that result. The rendered business text shows the role sentence or `来源未指定操作角色`, the entry state, the `规则依据：` sentence, the input description, the action, and the single-result expectation, without internal IDs.
+
 ## Use only the closed v4 CaseSpec
 
 Every Case supplies:
@@ -101,7 +133,7 @@ Apply an explicit user priority policy when one exists. Otherwise use a stable f
 
 ## Complete the 4.3 source-first review in the same stage
 
-For schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, `case_drafts.independent_review` is required. It is review
+For schema `4.3.3`, `case_drafts.independent_review` is required. It is review
 metadata inside the existing fourth artifact, not business evidence, a fifth
 truth ledger, or another workflow stage.
 
@@ -140,5 +172,3 @@ Display a shared semantic root once with all affected business items. Default bu
 Coverage wording is exactly bounded as “已审阅 formal test-point 覆盖” (or a faithful localized equivalent). Name primary and boundary counts and separately show semantic gap, Exploratory, and NotApplicable counts. Never use a bare risk tuple or claim “requirements are 100% covered”.
 
 `blocked_only` titles the output as an unresolved report and must not claim Cases were generated. `no_applicable_cases` requires evidence-backed exclusions for every reviewed applicable lane. A canonical failure permits diagnostics only; it never permits a hand-written Markdown, spreadsheet, or test-case fallback.
-
-Legacy v3 Cases remain readable for validation/migration. Their obligation-oracle, execution-signature, support-review, and Testability shapes are v3-only and must never become a fallback when a v4 artifact fails.

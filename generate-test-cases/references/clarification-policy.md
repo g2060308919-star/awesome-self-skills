@@ -32,7 +32,7 @@ Converge without erasing uncertainty: preserve accepted answers, keep explicit u
 
 When the user explicitly adopts a recommendation, use `constructV4Action` only if the latest validated compiler presentation contains the exact current semantic-gap question and action binding for that recommendation and scope. If no such binding exists, do not attach the answer to a similar root or forge an event. Treat the explicitly scoped adopted rule as newly authoritative user input and use the existing source-change/new-run path; if the public interface cannot express that path, stop the affected item and report the compatibility limitation without weakening the rule or silently restarting.
 
-For schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, every in-scope semantic gap also carries the exact closed
+For schema `4.3.3`, every in-scope semantic gap also carries the exact closed
 `acceptance_impact` shape from `evidence-claims.schema.json`. Classify it
 `critical` only when an answer changes core acceptance, a required branch, or
 makes a required result undecidable; cite one or more corresponding criteria.
@@ -41,6 +41,32 @@ Classify it `noncritical` only with
 missing execution resources, or the number of affected Cases does not decide
 criticality. If impact cannot yet be classified, fail closed and complete the
 analysis rather than defaulting it to noncritical.
+
+## Dispose in-scope observations before Behavior Views
+
+Before Behavior Views, dispose every object below that actually exists in the accepted source. Use the existing semantic-gap path. Present the current answerable gaps together, and keep each part independently answerable. Do not reduce a batch to one question.
+
+Check only these objects:
+
+- the initial value of an input control that exists in the source;
+- whether an existing submit can be triggered again while its request is unfinished;
+- whether that same submit can be sent again with the original content after failure;
+- what an existing close or back action does when unsaved content is present;
+- whether an existing asynchronous result must handle a stale or mismatched response;
+- the authorized result and the unauthorized result of an existing permission boundary;
+- the nine existing risks on each primary module. Close each risk with one existing destination: `formal`, `semantic_gap`, `exploratory`, or evidence-backed `not_applicable`.
+
+The unfinished-request observation and the after-failure observation are two results. Decide each checked item in this order:
+
+1. The source already states the observation: write only an atomic Fact. Do not ask that question again.
+2. The object or action exists, and the necessary observation is missing: open one semantic gap. Keep it out of `exploratory`. That part asks only for this one observation, and names the scenario, the missing result, and the effect on the formal Case. Label any offered suggestion as a suggestion. A suggestion is not a Fact.
+3. Leave an operation or state that is absent from scope unasked.
+4. A nine-kind risk that existing policy treats as an optional investigation stays `exploratory` and produces no formal Case. Absence of requirement text does not make a nine-kind risk, or a necessary observation from step 2, `not_applicable`. A step-2 necessary gap stays out of `exploratory`.
+5. After `answer_question_part` selects one option, the Fact's result sentence restates only that option: under that condition, at that observation location, that result occurs. Leave out the question text, the suggestion's reason, unselected options, and any implementation mechanism the user did not state.
+6. `defer_question_part` and `mark_question_unknown` produce no formal Fact and no formal Case for that result.
+7. When one user message holds several independent conclusions, bind each conclusion separately under the existing answer rules. One conclusion adopts one option; it does not adopt mutually exclusive options together.
+
+When the source has a save action and states neither whether it can be triggered again while the request is unfinished, nor whether the original content can be submitted again after failure, open two separate semantic gaps and write no formal Case for either result. When the user selects only the first observation, write one formal Case for that observation. Its `expected` does not contain the second observation. Its rule-basis precondition starts with `规则依据：用户确认`, using the sentence in `references/case-writing-policy.md`.
 
 ## Keep answer targets separate from known context
 
@@ -125,5 +151,3 @@ upgrade. The diagnostic names the actual roots, Facts, statuses and Claims.
 During execution closure, `reopen_semantic_question` is the only route back to business clarification. It supersedes the current execution run and creates a sibling Case Document run bound to the immutable parent `case_document_ref`, semantic root/version refs, `parent_execution_run_id`, and `creation_reason=reopen_semantic_question`. It never edits the execution run or reactivates suspended old Decisions.
 
 After the sibling recompiles, present every fresh root it returns. A new answer must bind the reopened root version. The old Decision remains auditable as suspended; it cannot silently regain effect. After a new Case Document is delivered, a future execution plan must be a new run referencing that new immutable manifest.
-
-For legacy v3 input, migration is read-only. A v3 part that was automatically `suppressed_deferred` only because it was omitted becomes pending in the v4 sibling; an explicitly deferred part stays deferred. v3 is never used as a live v4 fallback.

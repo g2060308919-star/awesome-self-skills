@@ -35,8 +35,9 @@ test('progressive references keep truth, execution disposition, and Case atomici
   ]);
   assert.match(closure, /Grounded.*Execute/isu);
   assert.match(closure, /Conditional.*Blocked.*NotApplicable.*Exploratory.*(?:cannot|不得).*Execute/isu);
-  assert.match(closure, /post-ready-preview-request\.json/u);
-  assert.match(closure, /preview_epoch/u);
+  assert.doesNotMatch(closure, /For legacy v3 ready results/u);
+  assert.doesNotMatch(closure, /post-ready-preview-request\.json/u);
+  assert.doesNotMatch(closure, /preview_epoch/u);
   assert.match(evidence, /execution decision|执行决定/iu);
   assert.match(evidence, /(?:not evidence|不是.*证据)/iu);
   assert.match(clarification, /pending/iu);

@@ -28,6 +28,8 @@ Every evidence binding points to the exact element field (for example `/business
 
 Before drafting Cases, identify each source-backed对象、条件、触发动作 and 独立业务结果. Split outcomes by independently decidable result, not punctuation, keyword count, shared click, or number of steps. A closed enumeration, permission allow/deny branch, or explicitly separate input/result mapping produces its own precise outcome inputs and expectations when the source requires them. Multiple observation surfaces that prove the same result remain supporting observations of one outcome.
 
+An element's `business_outcome` and `expected` come from one atomic Fact and state only one result that can fail independently. Leave propositions that are already split, or that must be split, as separate expectations. Do not rejoin them with `、`, a comma, or 「并且」. Several observation surfaces of that same result remain supporting observations, not extra primary results. When Case design finds a new independently failing result or a new necessary gap, return to the Fact or to the existing post-case clarification. Leave that result out of the View's expected sentence until the Fact or clarification owns it.
+
 Read related rules together for the same object and action. Preserve whether conditions are simultaneous (AND), alternatives (OR), prerequisites, or exceptions; select combinations that distinguish those meanings without generating a Cartesian product. Converge role, state, field, timing, and integration rules before Case writing. For example, preserve “role AND state” when both are required, scope duplicate detection to the evidenced workspace, and keep separate workspaces independent when the source says they are. The same rejection copy does not merge independently failing restrictions, while an evidence-backed impossible combination is excluded rather than invented as a negative path.
 
 A formal Test Point corresponds to one independently decidable business outcome, not each technical surface. A Fact may produce several outcomes when each has a different expected result (for example separate enum values). UI/API/storage observations of the same outcome are supporting observations, not extra primary Test Points.
@@ -48,7 +50,7 @@ For v4 Case ordering, the Adapter later references compiler registry IDs or null
 
 ## Close the 4.3 design-assurance ledger
 
-For a `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3` artifact, populate the Schema-defined `design_assurance` member of
+For a `4.3.3` artifact, populate the Schema-defined `design_assurance` member of
 the same `behavior_views` artifact. It is an auditable design record, not a
 business fact, evidence source, fifth artifact, or new stage. Use the exact
 closed branches in `behavior-views.schema.json`; do not infer fields from this
@@ -95,5 +97,3 @@ Wrong basis/ref combinations or extra fields are invalid. “The PRD does not me
 ## Preserve terminal accounting
 
 Every applicable formal Fact has exactly one final route to outcomes/Test Points or a typed semantic gap. Missing meaning, condition, expected result, authority, or Oracle stays visible. NotApplicable needs independent exclusion evidence; Exploratory does not satisfy formal coverage. Final reconciliation, not an early view-shape check, proves route completeness.
-
-Legacy v3 view/interaction/obligation-input shapes remain readable for validation and migration only. A v3 validation success is never a fallback when a v4 sparse model fails.
