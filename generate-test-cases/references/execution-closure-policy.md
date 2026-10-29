@@ -67,5 +67,3 @@ Across source acquisition, semantic clarification, execution closure, and final 
 This Skill only confirms the plan. It does not automatically start E2E tests or call any downstream executor. Execution results, observations, screenshots, logs, and defects belong downstream. Each downstream record binds the delivered bundle digest plus stable Case ID and is never written back into the canonical Case Document or Execution Plan.
 
 The Case Document's `execution-worksheet.csv` is a blank human worksheet initialized with `execution_status=not_run`; it is not proof of execution. JSON, Markdown, and CSV remain mechanical views of one canonical Case Document bundle.
-
-For legacy v3 ready results, preview/replay remains read-only and may use the private `post-ready-preview-request.json`/`preview_epoch` protections defined by that version. It is not a v4 public fallback or a route to mutate a v4 Case Document.

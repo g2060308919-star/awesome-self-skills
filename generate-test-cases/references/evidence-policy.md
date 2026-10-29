@@ -110,11 +110,25 @@ A design or implementation recommendation remains unadopted and routes to a sema
 
 Split by independent business meaning, not punctuation. Each Claim preserves the exact object, property, condition, trigger, result, and requirement strength that make the proposition independently true or false. For example, “priority is required, defaults to 0, accepts nonnegative integers, has no maximum, and rejects empty input” contains separate propositions rather than one paragraph-level rule. Duplicate descriptions of the same subject may share evidence, but a source-unit ID is not subject identity. Distinguish requirements, descriptions, examples, and diagnostics. A sentence saying a capability is unsupported and out of scope normally creates two Claims: the behavior fact and independent exclusion proof. NotApplicable requires the latter; “PRD did not mention it” is not exclusion evidence.
 
+Before submitting `evidence_claims`, split each source proposition into results that can fail independently: one result can be false while the other still holds. A Fact's statement, and that Fact's `/business_outcome` and `/expected`, contain one condition and one observed result. Leave a sibling Fact's condition and result out of this Fact.
+
+On the same field, empty-value rejection, length or range rejection, format rejection, and the initial value are separate Facts. When one field is required (必填), allows at most N characters, and has an empty initial value (默认值为空), write three Facts. Each Fact projects to its own single-point Case: save is rejected when the value is empty; save is rejected when the value exceeds N characters; the initial value is empty. The empty-rejection Case's `expected` does not mention the N-character limit or the empty initial value. The initial-value Case's `expected` does not mention empty rejection or length rejection.
+
+Allow and deny under different roles, or visible and invisible under different roles, are separate Facts. Different terminal states of the same action are separate Facts. What the product does while a request is unfinished, and whether the original content can be submitted again after failure, are separate Facts.
+
+Several Facts may cite the same source locator. Each Fact still keeps its own object, action, condition, and result.
+
+When a default-value cell's entire content is `-`, `—`, blank, `无`, or `N/A`, the source has not stated an initial value. Those characters are not a result the interface must display, so there is no formal expectation that the page shows them. When that initial value is still a necessary observation and the source states no result, record a semantic gap and do not create a formal Fact.
+
+A value introduced by 建议, 例如, 如, or 示例 is an `example` and is replaceable. It is not the only product result that `/expected` must equal.
+
+Module names, role names, field names, and result sentences use the source's business words, without Markdown, asterisks, or HTML markup.
+
 A final clarification replaces only the proposition and scope it answers. Preserve unchanged sibling propositions and their evidence routes. Do not mark an entire source paragraph non-normative because one clause was superseded. If an earlier coarse Claim combined siblings, repair `evidence_claims` first and then regenerate and re-review the affected downstream artifacts.
 
 Every Fact carries `acceptance_role` (`primary_acceptance`, `dependency_contract`, or `context_only`) and precise Claim ancestry. Mark unresolved meaning, outcome, condition, authority, or Oracle as a typed `semantic_gap`; do not guess or delete it. Keep each explicitly named unresolved in-scope scenario separate so it can produce its own formal Test Point or gap.
 
-For exact schema `4.3.0`, `4.3.1`, `4.3.2`, or `4.3.3`, every semantic-gap input includes the closed
+For exact schema `4.3.3`, every semantic-gap input includes the closed
 `acceptance_impact` record described in `clarification-policy.md`. This record is
 analysis metadata, not E3 evidence and not a user answer. It participates in
 the semantic-root version, so changing its classification, criteria, or
@@ -126,5 +140,3 @@ Before handing facts to modeling, perform both trace directions. From each effec
 Test-process and output-format instructions are diagnostic context, not product behavior. Environment/resource readiness is execution-plan context, not a Case Document Fact. Product behavior remains formal even when execution resources are unavailable.
 
 Complete the nine-kind `risk_review_ledger` for every primary module: `null_or_missing`, `unknown_enum`, `api_failure`, `loading_failure`, `sync_delay`, `long_content`, `pagination`, `refresh`, and `business_permission_boundary`. Each item ends as formal, semantic_gap, exploratory, or evidence-backed not_applicable with its exact branch-specific `review_basis` and linked IDs. Never use missing PRD text alone as not-applicable proof.
-
-Legacy v3 sources keep their original `content_digest` and locator bindings for read-only validation/migration. They are not converted in place and are never used as a live v4 fallback.
